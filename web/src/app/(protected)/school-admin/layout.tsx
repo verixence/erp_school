@@ -21,7 +21,7 @@ const navigation = [
   { name: 'Students', href: '/school-admin/students', icon: GraduationCap },
   { name: 'Teachers', href: '/school-admin/teachers', icon: UserCheck },
   { name: 'Parents', href: '/school-admin/parents', icon: Users },
-  { name: 'Classes', href: '/school-admin/classes', icon: Building2 },
+  { name: 'Sections', href: '/school-admin/sections', icon: Building2 },
 ];
 
 export default function SchoolAdminLayout({
