@@ -1,29 +1,45 @@
-import { useEffect } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
-import { router } from 'expo-router';
-import { useAuth } from '@erp/common';
+import { useEffect } from 'react';
+import { useRouter } from 'expo-router';
+import { supabase } from '@erp/common';
 
 export default function Index() {
-  const { data: authData, isLoading } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading) {
-      if (authData?.isAuthenticated && authData?.user?.role === 'teacher') {
-        router.replace('/(tabs)/dashboard');
-      } else {
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          // Get user role from users table
+          const { data: userData } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (userData?.role === 'teacher') {
+            router.replace('/(tabs)/dashboard');
+          } else {
+            router.replace('/login');
+          }
+        } else {
+          router.replace('/login');
+        }
+      } catch (error) {
+        console.error('Auth check error:', error);
         router.replace('/login');
       }
-    }
-  }, [authData, isLoading]);
+    };
 
-  if (isLoading) {
-    return (
-      <View className="flex-1 justify-center items-center bg-gray-50">
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text className="mt-4 text-gray-600">Loading...</Text>
-      </View>
-    );
-  }
+    checkAuth();
+  }, []);
 
-  return null;
+  return (
+    <View className="flex-1 justify-center items-center bg-white">
+      <ActivityIndicator size="large" color="#4F46E5" />
+      <Text className="mt-4 text-gray-600">Loading...</Text>
+    </View>
+  );
 } 
