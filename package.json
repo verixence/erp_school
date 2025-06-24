@@ -1,0 +1,24 @@
+{
+  "name": "erp-school-monorepo",
+  "private": true,
+  "workspaces": [
+    "db",
+    "common", 
+    "web",
+    "mobile"
+  ],
+  "scripts": {
+    "dev:web": "pnpm -C web dev",
+    "db:start": "supabase start",
+    "db:migrate": "supabase db push",
+    "db:migrate:next": "supabase db diff --schema public --file db/migrations/next.sql",
+    "db:seed": "tsx db/seed.ts",
+    "build:web": "pnpm -C web build",
+    "install:all": "pnpm install --recursive"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.1",
+    "typescript": "^5.3.3"
+  },
+  "packageManager": "pnpm@8.15.1"
+} 
