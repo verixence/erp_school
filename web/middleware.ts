@@ -12,28 +12,33 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Get session from cookies
-  const accessToken = request.cookies.get('sb-access-token')?.value;
-  
-  if (!accessToken) {
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
-
   try {
+    // Create Supabase client with cookie-based auth
     const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPA_URL!,
-      process.env.NEXT_PUBLIC_SUPA_ANON_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          storage: {
+            getItem: (key: string) => {
+              return request.cookies.get(key)?.value || null;
+            },
+            setItem: () => {
+              // Not needed for middleware
+            },
+            removeItem: () => {
+              // Not needed for middleware
+            },
+          },
+        },
+      }
     );
 
-    // Verify the session with the token
-    const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+    // Get the current user
+    const { data: { user }, error } = await supabase.auth.getUser();
     
     if (error || !user) {
-      // Clear invalid cookies
-      const response = NextResponse.redirect(new URL('/login', request.url));
-      response.cookies.delete('sb-access-token');
-      response.cookies.delete('sb-refresh-token');
-      return response;
+      return NextResponse.redirect(new URL('/login', request.url));
     }
 
     // Get user role from our database for protected routes
@@ -65,10 +70,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   } catch (error) {
     console.error('Middleware error:', error);
-    const response = NextResponse.redirect(new URL('/login', request.url));
-    response.cookies.delete('sb-access-token');
-    response.cookies.delete('sb-refresh-token');
-    return response;
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 }
 

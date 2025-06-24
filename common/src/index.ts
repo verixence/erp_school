@@ -35,15 +35,7 @@ export interface User {
   created_at: string;
 }
 
-export interface Student {
-  id: string;  
-  school_id: string;
-  full_name: string | null;
-  grade: string | null;
-  section: string | null;
-  parent_id: string | null;
-  created_at: string;
-}
+// Student interface moved to api/types.ts
 
 export interface Class {
   id: string;
@@ -75,4 +67,7 @@ export const featureDescriptions: Record<FeatureKey, string> = {
   chat: "Internal messaging system",
   lib: "Library book management",
   transport: "School bus and transport management"
-}; 
+};
+
+// Export API functionality
+export * from './api'; 

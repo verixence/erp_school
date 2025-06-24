@@ -13,7 +13,8 @@ import {
   Settings,
   ChevronRight,
   School2,
-  LogOut
+  LogOut,
+  Calendar
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,6 +38,9 @@ interface DashboardStats {
     time: string; 
     user: string; 
   }>;
+  hasAttendanceData: boolean;
+  hasActivityData: boolean;
+  attendanceRate: number;
 }
 
 export default function SchoolAdminDashboard() {
@@ -80,24 +84,80 @@ export default function SchoolAdminDashboard() {
         ? Object.keys(school.enabled_features).length 
         : 0;
 
-      // Generate mock attendance data for the last 30 days
-      const attendanceData = Array.from({ length: 30 }, (_, i) => {
-        const date = new Date();
-        date.setDate(date.getDate() - (29 - i));
-        return {
-          date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          percentage: Math.floor(Math.random() * 20) + 80, // 80-100% attendance
-        };
+      // Fetch real attendance data for the last 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const { data: attendanceStats } = await supabase
+        .rpc('get_attendance_stats', {
+          start_date: thirtyDaysAgo.toISOString().split('T')[0],
+          end_date: new Date().toISOString().split('T')[0],
+          school_id_param: user.school_id
+        });
+
+      // Get daily attendance data for chart
+      const { data: dailyAttendance } = await supabase
+        .from('attendance_records')
+        .select('date, status')
+        .eq('school_id', user.school_id)
+        .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
+        .order('date');
+
+      // Process daily attendance data
+      const attendanceMap = new Map();
+      dailyAttendance?.forEach(record => {
+        const date = record.date;
+        if (!attendanceMap.has(date)) {
+          attendanceMap.set(date, { present: 0, total: 0 });
+        }
+        const dayData = attendanceMap.get(date);
+        dayData.total++;
+        if (record.status === 'present' || record.status === 'late') {
+          dayData.present++;
+        }
       });
 
-      // Mock recent activity
-      const recentActivity = [
-        { action: 'Added', entity: 'student', time: '2 minutes ago', user: 'Sarah Johnson' },
-        { action: 'Updated', entity: 'class schedule', time: '15 minutes ago', user: 'Michael Brown' },
-        { action: 'Created', entity: 'announcement', time: '1 hour ago', user: 'Emily Davis' },
-        { action: 'Added', entity: 'teacher', time: '2 hours ago', user: 'Admin' },
-        { action: 'Updated', entity: 'student profile', time: '3 hours ago', user: 'Lisa Wilson' },
-      ];
+      const attendanceData = Array.from(attendanceMap.entries()).map(([date, data]) => ({
+        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        percentage: data.total > 0 ? Math.round((data.present / data.total) * 100) : 0
+      }));
+
+      // Fetch recent audit logs for activity
+      const { data: auditLogs } = await supabase
+        .from('audit_logs')
+        .select(`
+          action,
+          table_name,
+          created_at,
+          users:user_id (
+            email
+          )
+        `)
+        .eq('school_id', user.school_id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      // Process recent activity
+      const recentActivity = auditLogs?.map(log => {
+        const timeAgo = new Date(log.created_at);
+        const now = new Date();
+        const diffMinutes = Math.floor((now.getTime() - timeAgo.getTime()) / (1000 * 60));
+        
+        let timeString = '';
+        if (diffMinutes < 1) timeString = 'Just now';
+        else if (diffMinutes < 60) timeString = `${diffMinutes} minutes ago`;
+        else if (diffMinutes < 1440) timeString = `${Math.floor(diffMinutes / 60)} hours ago`;
+        else timeString = `${Math.floor(diffMinutes / 1440)} days ago`;
+
+        return {
+          action: log.action,
+          entity: log.table_name,
+          time: timeString,
+          user: (log.users as any)?.email?.split('@')[0] || 'System'
+        };
+      }) || [];
+
+              const attendanceRate = attendanceStats?.[0]?.attendance_rate ? Math.round(attendanceStats[0].attendance_rate) : 0;
 
       return {
         students: studentsCount || 0,
@@ -108,6 +168,9 @@ export default function SchoolAdminDashboard() {
         totalModules: totalModules,
         attendanceData,
         recentActivity,
+        hasAttendanceData: (attendanceData.length > 0),
+        hasActivityData: (recentActivity.length > 0),
+        attendanceRate,
       };
     },
     enabled: !!user?.school_id,
@@ -129,20 +192,30 @@ export default function SchoolAdminDashboard() {
       color: 'bg-green-500',
     },
     {
-      title: 'Create Class',
-      description: 'Set up new classes',
+      title: 'Manage Sections',
+      description: 'Set up new sections',
       icon: BookOpen,
-      href: '/school-admin/classes',
+      href: '/school-admin/sections',
       color: 'bg-purple-500',
     },
     {
-      title: 'Bulk Import',
-      description: 'Import student data',
-      icon: FileText,
-      href: '/school-admin/import',
+      title: 'Mark Attendance',
+      description: 'Record daily attendance',
+      icon: Calendar,
+      href: '/school-admin/attendance',
       color: 'bg-orange-500',
     },
   ];
+
+  const NoDataIllustration = ({ title, description }: { title: string; description: string }) => (
+    <div className="flex flex-col items-center justify-center py-8 text-center">
+      <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
+        <FileText className="w-8 h-8 text-muted-foreground" />
+      </div>
+      <h3 className="text-lg font-medium text-foreground mb-2">{title}</h3>
+      <p className="text-sm text-muted-foreground max-w-sm">{description}</p>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -179,7 +252,7 @@ export default function SchoolAdminDashboard() {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -244,13 +317,13 @@ export default function SchoolAdminDashboard() {
           >
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Classes</CardTitle>
+                <CardTitle className="text-sm font-medium">Sections</CardTitle>
                 <BookOpen className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats?.classes || 0}</div>
                 <p className="text-xs text-muted-foreground">
-                  Active classes
+                  Active sections
                 </p>
               </CardContent>
             </Card>
@@ -260,6 +333,25 @@ export default function SchoolAdminDashboard() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
+          >
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Attendance</CardTitle>
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats?.attendanceRate || 0}%</div>
+                <p className="text-xs text-muted-foreground">
+                  This month's rate
+                </p>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
           >
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -295,21 +387,28 @@ export default function SchoolAdminDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={stats?.attendanceData || []}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis domain={[75, 100]} />
-                      <Tooltip />
-                      <Area
-                        type="monotone"
-                        dataKey="percentage"
-                        stroke="hsl(var(--primary))"
-                        fill="hsl(var(--primary))"
-                        fillOpacity={0.2}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  {stats?.hasAttendanceData ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={stats.attendanceData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="date" />
+                        <YAxis domain={[0, 100]} />
+                        <Tooltip />
+                        <Area
+                          type="monotone"
+                          dataKey="percentage"
+                          stroke="hsl(var(--primary))"
+                          fill="hsl(var(--primary))"
+                          fillOpacity={0.2}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <NoDataIllustration
+                      title="No Attendance Data"
+                      description="Start recording daily attendance to see trends and analytics here."
+                    />
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -330,34 +429,41 @@ export default function SchoolAdminDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {stats?.recentActivity.map((activity, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.8 + index * 0.1 }}
-                      className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-                          <TrendingUp className="w-4 h-4 text-primary" />
+                  {stats?.hasActivityData ? (
+                    stats.recentActivity.map((activity, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.8 + index * 0.1 }}
+                        className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+                            <TrendingUp className="w-4 h-4 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">
+                              {activity.action} {activity.entity}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              by {activity.user}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-sm">
-                            {activity.action} {activity.entity}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            by {activity.user}
-                          </p>
+                        <div className="text-right">
+                          <Badge variant="outline" className="text-xs">
+                            {activity.time}
+                          </Badge>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <Badge variant="outline" className="text-xs">
-                          {activity.time}
-                        </Badge>
-                      </div>
-                    </motion.div>
-                  ))}
+                      </motion.div>
+                    ))
+                  ) : (
+                    <NoDataIllustration
+                      title="No Recent Activity"
+                      description="System activities and user actions will appear here once you start using the platform."
+                    />
+                  )}
                 </div>
               </CardContent>
             </Card>

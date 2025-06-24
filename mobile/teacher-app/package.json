@@ -1,0 +1,42 @@
+{
+  "name": "@erp/teacher-app",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "build": "expo build",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@erp/common": "file:../../common",
+    "@expo/vector-icons": "^14.0.0",
+    "@react-navigation/native": "^6.1.9",
+    "@react-navigation/stack": "^6.3.20",
+    "@react-navigation/bottom-tabs": "^6.5.11",
+    "@supabase/supabase-js": "^2.39.0",
+    "@tanstack/react-query": "^5.0.0",
+    "expo": "~50.0.0",
+    "expo-file-system": "~16.0.0",
+    "expo-image-picker": "~14.7.1",
+    "expo-router": "~3.4.0",
+    "expo-status-bar": "~1.11.1",
+    "nativewind": "^2.0.11",
+    "react": "18.2.0",
+    "react-native": "0.73.4",
+    "react-native-safe-area-context": "4.8.2",
+    "react-native-screens": "~3.29.0",
+    "react-native-gesture-handler": "~2.14.0",
+    "react-native-reanimated": "~3.6.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0",
+    "@types/react": "~18.2.45",
+    "@types/react-native": "~0.73.0",
+    "tailwindcss": "3.3.2",
+    "typescript": "^5.3.3"
+  }
+} 

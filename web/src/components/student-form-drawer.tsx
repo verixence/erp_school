@@ -56,7 +56,7 @@ const studentSchema = z.object({
   admission_no: z.string().min(1, 'Admission number is required'),
   grade: z.string().min(1, 'Grade is required'),
   section: z.string().min(1, 'Section is required').max(10, 'Section too long'),
-  parent_ids: z.array(z.string()).default([]),
+  parent_id: z.string().optional(),
   student_email: z.string().email('Invalid email').optional().or(z.literal('')),
   student_phone: z.string().optional(),
 });
