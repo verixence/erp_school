@@ -1,0 +1,300 @@
+'use client';
+
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Upload, Download, AlertCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+
+interface CSVUploadModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  entity: 'sections' | 'students' | 'teachers' | 'parents';
+  onUpload: (data: any[]) => Promise<void>;
+}
+
+const CSV_TEMPLATES = {
+  sections: {
+    filename: 'sections_template.csv',
+    headers: ['grade', 'section', 'capacity', 'teacher_email'],
+    example: [
+      'Grade,Section,Capacity,Teacher Email',
+      '1,A,30,john.doe@school.com',
+      '1,B,30,jane.smith@school.com',
+      '2,A,25,bob.wilson@school.com'
+    ]
+  },
+  students: {
+    filename: 'students_template.csv',
+    headers: ['full_name', 'admission_no', 'grade', 'section', 'date_of_birth', 'gender', 'parent_emails', 'student_email', 'student_phone'],
+    example: [
+      'Full Name,Admission No,Grade,Section,Date of Birth,Gender,Parent Emails,Student Email,Student Phone',
+      'Alice Johnson,STU001,1,A,2018-05-15,female,alice.parent@email.com;bob.parent@email.com,alice@school.com,',
+      'Bob Smith,STU002,1,A,2018-03-22,male,smith.parent@email.com,,',
+      'Carol Wilson,STU003,2,A,2017-08-10,female,carol.parent@email.com,carol@school.com,123-456-7890'
+    ]
+  },
+  teachers: {
+    filename: 'teachers_template.csv',
+    headers: ['first_name', 'last_name', 'email', 'phone', 'subjects'],
+    example: [
+      'First Name,Last Name,Email,Phone,Subjects',
+      'John,Doe,john.doe@school.com,123-456-7890,Mathematics;Physics',
+      'Jane,Smith,jane.smith@school.com,098-765-4321,English;Literature',
+      'Bob,Wilson,bob.wilson@school.com,555-123-4567,Science;Chemistry'
+    ]
+  },
+  parents: {
+    filename: 'parents_template.csv',
+    headers: ['first_name', 'last_name', 'email', 'phone', 'relation', 'children_admission_nos'],
+    example: [
+      'First Name,Last Name,Email,Phone,Relation,Children Admission Nos',
+      'Alice,Parent,alice.parent@email.com,123-456-7890,mother,STU001',
+      'Bob,Parent,bob.parent@email.com,098-765-4321,father,STU001',
+      'Carol,Parent,carol.parent@email.com,555-123-4567,mother,STU003'
+    ]
+  }
+};
+
+export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CSVUploadModalProps) {
+  const [file, setFile] = useState<File | null>(null);
+  const [csvData, setCsvData] = useState<any[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
+  const queryClient = useQueryClient();
+
+  const template = CSV_TEMPLATES[entity];
+
+  const downloadTemplate = () => {
+    const csvContent = template.example.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = template.filename;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const parseCSV = (text: string): any[] => {
+    const lines = text.trim().split('\n');
+    if (lines.length < 2) return [];
+
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+    const data = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim());
+      if (values.length !== headers.length) continue;
+
+      const row: any = {};
+      headers.forEach((header, index) => {
+        row[header] = values[index];
+      });
+      data.push(row);
+    }
+
+    return data;
+  };
+
+  const validateData = (data: any[]): string[] => {
+    const errors: string[] = [];
+    
+    if (data.length === 0) {
+      errors.push('No valid data rows found');
+      return errors;
+    }
+
+    data.forEach((row, index) => {
+      const rowNum = index + 2; // +2 because index starts at 0 and we skip header
+
+      switch (entity) {
+        case 'sections':
+          if (!row.grade) errors.push(`Row ${rowNum}: Grade is required`);
+          if (!row.section) errors.push(`Row ${rowNum}: Section is required`);
+          if (!row.capacity || isNaN(Number(row.capacity))) errors.push(`Row ${rowNum}: Valid capacity number is required`);
+          break;
+
+        case 'students':
+          if (!row.full_name) errors.push(`Row ${rowNum}: Full name is required`);
+          if (!row.admission_no) errors.push(`Row ${rowNum}: Admission number is required`);
+          if (!row.grade) errors.push(`Row ${rowNum}: Grade is required`);
+          if (!row.section) errors.push(`Row ${rowNum}: Section is required`);
+          if (!row.date_of_birth) errors.push(`Row ${rowNum}: Date of birth is required`);
+          if (!['male', 'female', 'other'].includes(row.gender?.toLowerCase())) {
+            errors.push(`Row ${rowNum}: Gender must be male, female, or other`);
+          }
+          break;
+
+        case 'teachers':
+          if (!row.first_name) errors.push(`Row ${rowNum}: First name is required`);
+          if (!row.last_name) errors.push(`Row ${rowNum}: Last name is required`);
+          if (!row.email) errors.push(`Row ${rowNum}: Email is required`);
+          if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+            errors.push(`Row ${rowNum}: Invalid email format`);
+          }
+          break;
+
+        case 'parents':
+          if (!row.first_name) errors.push(`Row ${rowNum}: First name is required`);
+          if (!row.last_name) errors.push(`Row ${rowNum}: Last name is required`);
+          if (!row.email) errors.push(`Row ${rowNum}: Email is required`);
+          if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+            errors.push(`Row ${rowNum}: Invalid email format`);
+          }
+          if (!['father', 'mother', 'guardian', 'other'].includes(row.relation?.toLowerCase())) {
+            errors.push(`Row ${rowNum}: Relation must be father, mother, guardian, or other`);
+          }
+          break;
+      }
+    });
+
+    return errors;
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    if (!selectedFile.name.endsWith('.csv')) {
+      toast.error('Please select a CSV file');
+      return;
+    }
+
+    setFile(selectedFile);
+    setErrors([]);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const data = parseCSV(text);
+      setCsvData(data);
+      
+      const validationErrors = validateData(data);
+      setErrors(validationErrors);
+    };
+    reader.readAsText(selectedFile);
+  };
+
+  const handleUpload = async () => {
+    if (!csvData.length || errors.length > 0) return;
+
+    setIsProcessing(true);
+    try {
+      await onUpload(csvData);
+      toast.success(`Successfully imported ${csvData.length} ${entity}`);
+      onClose();
+      setFile(null);
+      setCsvData([]);
+      setErrors([]);
+    } catch (error: any) {
+      toast.error(`Failed to import ${entity}: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleClose = () => {
+    onClose();
+    setFile(null);
+    setCsvData([]);
+    setErrors([]);
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle>Bulk Upload {entity}</DialogTitle>
+          <DialogDescription>
+            Upload a CSV file to import multiple {entity} at once. Download the template below to get started.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Template Download */}
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div>
+              <p className="font-medium">Download Template</p>
+              <p className="text-sm text-muted-foreground">
+                Get the CSV template with required columns
+              </p>
+            </div>
+            <Button variant="outline" onClick={downloadTemplate}>
+              <Download className="h-4 w-4 mr-2" />
+              Template
+            </Button>
+          </div>
+
+          {/* File Upload */}
+          <div className="space-y-2">
+            <Label htmlFor="csv-file">Upload CSV File</Label>
+            <Input
+              id="csv-file"
+              type="file"
+              accept=".csv"
+              onChange={handleFileChange}
+            />
+          </div>
+
+          {/* Preview and Errors */}
+          {file && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">
+                  {csvData.length} rows found
+                </Badge>
+                {errors.length > 0 && (
+                  <Badge variant="destructive">
+                    {errors.length} errors
+                  </Badge>
+                )}
+              </div>
+
+              {errors.length > 0 && (
+                <div className="p-3 border border-red-200 rounded-lg bg-red-50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="h-4 w-4 text-red-500" />
+                    <span className="font-medium text-red-700">Validation Errors</span>
+                  </div>
+                  <ul className="text-sm text-red-600 space-y-1">
+                    {errors.slice(0, 10).map((error, index) => (
+                      <li key={index}>• {error}</li>
+                    ))}
+                    {errors.length > 10 && (
+                      <li>• ... and {errors.length - 10} more errors</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleUpload}
+            disabled={!csvData.length || errors.length > 0 || isProcessing}
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            {isProcessing ? 'Importing...' : `Import ${csvData.length} ${entity}`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+} 

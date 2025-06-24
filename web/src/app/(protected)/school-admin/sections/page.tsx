@@ -11,6 +11,7 @@ import EnhancedCrudTable from '@/components/enhanced-crud-table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
-import { Plus, Users, BookOpen } from 'lucide-react';
+import { Plus, Users, BookOpen, Edit, Trash2, Upload } from 'lucide-react';
+import CSVUploadModal from '@/components/csv-upload-modal';
 
 // Validation schema
 const sectionSchema = z.object({
@@ -81,6 +83,7 @@ export default function SectionsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingSection, setEditingSection] = useState<Section | null>(null);
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
 
   // Form setup
   const form = useForm<SectionFormData>({
@@ -107,6 +110,44 @@ export default function SectionsPage() {
       
       if (error) throw error;
       return data as Teacher[];
+    },
+    enabled: !!user?.school_id,
+  });
+
+  // Fetch sections with joined teacher data and student counts
+  const { data: sectionsData = [], isLoading: sectionsLoading } = useQuery({
+    queryKey: ['sections', user?.school_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('classes')
+        .select(`
+          *,
+          teacher:users!classes_teacher_id_fkey(first_name, last_name)
+        `)
+        .eq('school_id', user?.school_id)
+        .order('grade')
+        .order('section');
+      
+      if (error) throw error;
+      
+      // Get student counts for each section
+      const sectionsWithCounts = await Promise.all(
+        (data || []).map(async (section) => {
+          const { count } = await supabase
+            .from('students')
+            .select('*', { count: 'exact', head: true })
+            .eq('school_id', user?.school_id)
+            .eq('grade', section.grade)
+            .eq('section', section.section);
+          
+          return {
+            ...section,
+            students_count: count || 0
+          };
+        })
+      );
+      
+      return sectionsWithCounts as Section[];
     },
     enabled: !!user?.school_id,
   });
@@ -200,15 +241,51 @@ export default function SectionsPage() {
     }
   };
 
+  const handleBulkUpload = async (csvData: any[]) => {
+    try {
+      const response = await fetch('/api/admin/bulk-import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          entity: 'sections',
+          data: csvData,
+          school_id: user?.school_id
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Import failed');
+      }
+
+      if (result.errors && result.errors.length > 0) {
+        console.warn('Import completed with errors:', result.errors);
+        toast.success(`Imported ${result.imported.length} sections. ${result.errors.length} errors occurred.`);
+      } else {
+        toast.success(`Successfully imported ${result.imported.length} sections`);
+      }
+
+      // Refresh the sections data
+      queryClient.invalidateQueries({ queryKey: ['sections'] });
+      
+    } catch (error: any) {
+      console.error('Bulk import error:', error);
+      throw error;
+    }
+  };
+
   // Table columns configuration
   const columns = [
     {
       key: 'section_display',
       label: 'Section (Grade | Section)',
-      render: (record: Section) => (
+      render: (value: any, item: Section) => (
         <div className="flex items-center space-x-2">
           <BookOpen className="h-4 w-4 text-primary" />
-          <span className="font-medium">{record.grade} | {record.section}</span>
+          <span className="font-medium">{item.grade} | {item.section}</span>
         </div>
       ),
       sortable: true,
@@ -216,9 +293,9 @@ export default function SectionsPage() {
     {
       key: 'class_teacher',
       label: 'Class Teacher',
-      render: (record: Section) => 
-        record.teacher ? (
-          <span>{record.teacher.first_name} {record.teacher.last_name}</span>
+      render: (value: any, item: Section) => 
+        item.teacher ? (
+          <span>{item.teacher.first_name} {item.teacher.last_name}</span>
         ) : (
           <Badge variant="outline">No teacher assigned</Badge>
         ),
@@ -227,18 +304,18 @@ export default function SectionsPage() {
     {
       key: 'capacity',
       label: 'Capacity',
-      render: (record: Section) => (
-        <Badge variant="secondary">{record.capacity}</Badge>
+      render: (value: any, item: Section) => (
+        <Badge variant="secondary">{item.capacity}</Badge>
       ),
       sortable: true,
     },
     {
       key: 'students_count',
       label: 'Students Count',
-      render: (record: Section) => (
+      render: (value: any, item: Section) => (
         <div className="flex items-center space-x-1">
           <Users className="h-4 w-4 text-muted-foreground" />
-          <span>{record.students_count || 0}</span>
+          <span>{item.students_count || 0}</span>
         </div>
       ),
       sortable: true,
@@ -254,33 +331,95 @@ export default function SectionsPage() {
             Manage school sections and class assignments
           </p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Section
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setIsBulkUploadOpen(true)}>
+            <Upload className="h-4 w-4 mr-2" />
+            Bulk Upload
+          </Button>
+          <Button onClick={handleCreate}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Section
+          </Button>
+        </div>
       </div>
 
-      <EnhancedCrudTable
-        entity="classes"
-        columns={columns}
-        title="Sections"
-        searchPlaceholder="Search sections..."
-        onAdd={handleCreate}
-        onEdit={handleEdit}
-        onDelete={async (item: Section) => {
-          const { error } = await supabase
-            .from('classes')
-            .delete()
-            .eq('id', item.id);
-          
-          if (error) throw error;
-          
-          queryClient.invalidateQueries({ queryKey: ['sections'] });
-          toast.success('Section deleted successfully');
-        }}
-        addButtonText="Add Section"
-        filters={{}}
-      />
+      <Card>
+        <CardContent className="p-0">
+          {sectionsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : sectionsData.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No sections found. Create your first section to get started.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b bg-muted/50">
+                  <tr>
+                    {columns.map((column) => (
+                      <th
+                        key={column.key}
+                        className="px-4 py-3 text-left text-sm font-medium"
+                      >
+                        {column.label}
+                      </th>
+                    ))}
+                    <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sectionsData.map((section) => (
+                    <tr key={section.id} className="border-b hover:bg-muted/30">
+                      {columns.map((column) => (
+                        <td key={column.key} className="px-4 py-3">
+                          {column.render 
+                            ? column.render((section as any)[column.key], section)
+                            : (section as any)[column.key]
+                          }
+                        </td>
+                      ))}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(section)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={async () => {
+                              if (confirm('Are you sure you want to delete this section?')) {
+                                const { error } = await supabase
+                                  .from('classes')
+                                  .delete()
+                                  .eq('id', section.id);
+                                
+                                if (error) {
+                                  toast.error(`Failed to delete section: ${error.message}`);
+                                } else {
+                                  queryClient.invalidateQueries({ queryKey: ['sections'] });
+                                  toast.success('Section deleted successfully');
+                                }
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Create Dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -539,6 +678,14 @@ export default function SectionsPage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Upload Modal */}
+      <CSVUploadModal
+        isOpen={isBulkUploadOpen}
+        onClose={() => setIsBulkUploadOpen(false)}
+        entity="sections"
+        onUpload={handleBulkUpload}
+      />
     </div>
   );
 } 

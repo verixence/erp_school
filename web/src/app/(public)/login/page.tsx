@@ -40,10 +40,21 @@ export default function LoginPage() {
         }
 
         // Redirect based on role
-        if (userData.role === 'super_admin') {
-          router.push('/super-admin');
-        } else {
-          router.push('/dashboard');
+        switch (userData.role) {
+          case 'super_admin':
+            router.push('/super-admin');
+            break;
+          case 'school_admin':
+            router.push('/school-admin');
+            break;
+          case 'teacher':
+            router.push('/teacher');
+            break;
+          case 'parent':
+            router.push('/parent');
+            break;
+          default:
+            router.push('/dashboard');
         }
       }
     } catch (error) {
