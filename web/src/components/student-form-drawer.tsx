@@ -56,6 +56,7 @@ const studentSchema = z.object({
   admission_no: z.string().min(1, 'Admission number is required'),
   grade: z.string().min(1, 'Grade is required'),
   section: z.string().min(1, 'Section is required').max(10, 'Section too long'),
+  section_id: z.string().optional(),
   parent_id: z.string().optional(),
   student_email: z.string().email('Invalid email').optional().or(z.literal('')),
   student_phone: z.string().optional(),
@@ -71,6 +72,14 @@ interface Parent {
   phone?: string;
 }
 
+interface Section {
+  id: string;
+  grade: number;
+  section: string;
+  capacity: number;
+  students_count: number;
+}
+
 interface StudentFormDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -80,8 +89,6 @@ interface StudentFormDrawerProps {
 const GRADES = [
   '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'
 ];
-
-const SECTIONS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
 const steps = [
   {
@@ -113,6 +120,7 @@ export default function StudentFormDrawer({
   const queryClient = useQueryClient();
   const [currentStep, setCurrentStep] = useState(1);
   const [isCreatingParent, setIsCreatingParent] = useState(false);
+  const [selectedGrade, setSelectedGrade] = useState<string>('');
 
   // Form setup
   const form = useForm<StudentFormData>({
@@ -124,6 +132,7 @@ export default function StudentFormDrawer({
       admission_no: '',
       grade: '',
       section: '',
+      section_id: '',
       parent_id: 'none',
       student_email: '',
       student_phone: '',
@@ -146,6 +155,44 @@ export default function StudentFormDrawer({
     },
     enabled: !!user?.school_id && open,
   });
+
+  // Fetch sections for dropdown
+  const { data: sections = [] } = useQuery({
+    queryKey: ['sections', user?.school_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sections')
+        .select(`
+          id,
+          grade,
+          section,
+          capacity,
+          (SELECT COUNT(*) FROM students WHERE section_id = sections.id) as students_count
+        `)
+        .eq('school_id', user?.school_id)
+        .order('grade')
+        .order('section');
+      
+      if (error) throw error;
+      return data as Section[];
+    },
+    enabled: !!user?.school_id && open,
+  });
+
+  // Filter sections by selected grade
+  const availableSections = sections.filter(s => 
+    selectedGrade ? s.grade.toString() === selectedGrade : true
+  );
+
+  // Watch grade changes to reset section
+  const watchedGrade = form.watch('grade');
+  React.useEffect(() => {
+    if (watchedGrade !== selectedGrade) {
+      setSelectedGrade(watchedGrade);
+      form.setValue('section', '');
+      form.setValue('section_id', '');
+    }
+  }, [watchedGrade, selectedGrade, form]);
 
   // Check admission number uniqueness
   const checkAdmissionNo = async (admissionNo: string) => {
@@ -174,6 +221,7 @@ export default function StudentFormDrawer({
       const processedData = {
         ...data,
         parent_id: data.parent_id === 'none' ? null : data.parent_id,
+        section_id: data.section_id || null,
         school_id: user?.school_id,
       };
 
@@ -185,9 +233,11 @@ export default function StudentFormDrawer({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['sections'] }); // Refresh section counts
       onOpenChange(false);
       form.reset();
       setCurrentStep(1);
+      setSelectedGrade('');
       toast.success('Student created successfully');
     },
     onError: (error: any) => {
@@ -293,6 +343,7 @@ export default function StudentFormDrawer({
         admission_no: student.admission_no || '',
         grade: student.grade || '',
         section: student.section || '',
+        section_id: student.section_id || '',
         parent_id: student.parent_id || 'none',
         student_email: student.student_email || '',
         student_phone: student.student_phone || '',
@@ -306,6 +357,7 @@ export default function StudentFormDrawer({
         admission_no: '',
         grade: '',
         section: '',
+        section_id: '',
         parent_id: 'none',
         student_email: '',
         student_phone: '',
@@ -419,16 +471,23 @@ export default function StudentFormDrawer({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Section *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select onValueChange={(value) => {
+                      field.onChange(value);
+                      // Also set the section_id
+                      const selectedSection = availableSections.find(s => s.section === value);
+                      if (selectedSection) {
+                        form.setValue('section_id', selectedSection.id);
+                      }
+                    }} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select section" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {SECTIONS.map((section) => (
-                          <SelectItem key={section} value={section}>
-                            Section {section}
+                        {availableSections.map((section) => (
+                          <SelectItem key={section.id} value={section.section}>
+                            Section {section.section} ({section.students_count}/{section.capacity})
                           </SelectItem>
                         ))}
                       </SelectContent>

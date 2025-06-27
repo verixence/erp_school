@@ -41,10 +41,9 @@ import CSVUploadModal from '@/components/csv-upload-modal';
 
 // Validation schema
 const sectionSchema = z.object({
-  class_name: z.string().min(1, 'Section name is required').max(50, 'Section name too long'),
-  grade: z.string().min(1, 'Grade is required'),
+  grade: z.number().min(1, 'Grade must be between 1-12').max(12, 'Grade must be between 1-12'),
   section: z.string().min(1, 'Section is required').max(10, 'Section too long'),
-  teacher_id: z.string().optional(),
+  class_teacher: z.string().optional(),
   capacity: z.number().min(1, 'Capacity must be at least 1').max(100, 'Capacity too high'),
 });
 
@@ -52,10 +51,9 @@ type SectionFormData = z.infer<typeof sectionSchema>;
 
 interface Section {
   id: string;
-  class_name: string;
-  grade: string;
+  grade: number;
   section: string;
-  teacher_id?: string;
+  class_teacher?: string;
   teacher?: {
     first_name: string;
     last_name: string;
@@ -72,9 +70,8 @@ interface Teacher {
   email: string;
 }
 
-const GRADES = [
-  '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'
-];
+const GRADES = Array.from({ length: 12 }, (_, i) => i + 1);
+const SECTIONS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
 export default function SectionsPage() {
   const { user } = useAuth();
@@ -89,10 +86,9 @@ export default function SectionsPage() {
   const form = useForm<SectionFormData>({
     resolver: zodResolver(sectionSchema),
     defaultValues: {
-      class_name: '',
-      grade: '',
+      grade: 1,
       section: '',
-      teacher_id: 'none',
+      class_teacher: 'none',
       capacity: 30,
     },
   });
@@ -119,10 +115,10 @@ export default function SectionsPage() {
     queryKey: ['sections', user?.school_id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('classes')
+        .from('sections')
         .select(`
           *,
-          teacher:users!classes_teacher_id_fkey(first_name, last_name)
+          teacher:users!sections_class_teacher_fkey(first_name, last_name)
         `)
         .eq('school_id', user?.school_id)
         .order('grade')
@@ -130,15 +126,13 @@ export default function SectionsPage() {
       
       if (error) throw error;
       
-      // Get student counts for each section
+      // Get student counts for each section using section_id
       const sectionsWithCounts = await Promise.all(
         (data || []).map(async (section) => {
           const { count } = await supabase
             .from('students')
             .select('*', { count: 'exact', head: true })
-            .eq('school_id', user?.school_id)
-            .eq('grade', section.grade)
-            .eq('section', section.section);
+            .eq('section_id', section.id);
           
           return {
             ...section,
@@ -155,15 +149,15 @@ export default function SectionsPage() {
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (data: SectionFormData) => {
-      // Convert "none" to null for teacher_id
+      // Convert "none" to null for class_teacher
       const processedData = {
         ...data,
-        teacher_id: data.teacher_id === 'none' ? null : data.teacher_id,
+        class_teacher: data.class_teacher === 'none' ? null : data.class_teacher,
         school_id: user?.school_id,
       };
 
       const { error } = await supabase
-        .from('classes')
+        .from('sections')
         .insert(processedData);
       
       if (error) throw error;
@@ -184,14 +178,14 @@ export default function SectionsPage() {
     mutationFn: async (data: SectionFormData) => {
       if (!editingSection) return;
       
-      // Convert "none" to null for teacher_id
+      // Convert "none" to null for class_teacher
       const processedData = {
         ...data,
-        teacher_id: data.teacher_id === 'none' ? null : data.teacher_id,
+        class_teacher: data.class_teacher === 'none' ? null : data.class_teacher,
       };
 
       const { error } = await supabase
-        .from('classes')
+        .from('sections')
         .update(processedData)
         .eq('id', editingSection.id);
       
@@ -209,25 +203,41 @@ export default function SectionsPage() {
     },
   });
 
-  // Handlers
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('sections')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sections'] });
+      toast.success('Section deleted successfully');
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to delete section: ${error.message}`);
+    },
+  });
+
   const handleCreate = () => {
-    setIsCreateOpen(true);
     form.reset({
-      class_name: '',
-      grade: '',
+      grade: 1,
       section: '',
-      teacher_id: 'none',
+      class_teacher: 'none',
       capacity: 30,
     });
+    setIsCreateOpen(true);
   };
 
   const handleEdit = (section: Section) => {
     setEditingSection(section);
     form.reset({
-      class_name: section.class_name,
       grade: section.grade,
       section: section.section,
-      teacher_id: section.teacher_id || 'none',
+      class_teacher: section.class_teacher || 'none',
       capacity: section.capacity,
     });
     setIsEditOpen(true);
@@ -243,193 +253,228 @@ export default function SectionsPage() {
 
   const handleBulkUpload = async (csvData: any[]) => {
     try {
-      const response = await fetch('/api/admin/bulk-import', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          entity: 'sections',
-          data: csvData,
-          school_id: user?.school_id
-        }),
-      });
+      const processedData = csvData.map(row => ({
+        grade: parseInt(row.grade) || 1,
+        section: row.section || 'A',
+        class_teacher: row.teacher_id || null,
+        capacity: parseInt(row.capacity) || 30,
+        school_id: user?.school_id,
+      }));
 
-      const result = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(result.error || 'Import failed');
-      }
+      const { error } = await supabase
+        .from('sections')
+        .insert(processedData);
 
-      if (result.errors && result.errors.length > 0) {
-        console.warn('Import completed with errors:', result.errors);
-        toast.success(`Imported ${result.imported.length} sections. ${result.errors.length} errors occurred.`);
-      } else {
-        toast.success(`Successfully imported ${result.imported.length} sections`);
-      }
+      if (error) throw error;
 
-      // Refresh the sections data
       queryClient.invalidateQueries({ queryKey: ['sections'] });
-      
+      setIsBulkUploadOpen(false);
+      toast.success(`${processedData.length} sections uploaded successfully`);
     } catch (error: any) {
-      console.error('Bulk import error:', error);
-      throw error;
+      toast.error(`Upload failed: ${error.message}`);
     }
   };
 
-  // Table columns configuration
   const columns = [
     {
-      key: 'section_display',
-      label: 'Section (Grade | Section)',
-      render: (value: any, item: Section) => (
-        <div className="flex items-center space-x-2">
-          <BookOpen className="h-4 w-4 text-primary" />
-          <span className="font-medium">{item.grade} | {item.section}</span>
-        </div>
-      ),
+      key: 'grade',
+      label: 'Grade',
       sortable: true,
+      render: (section: Section) => (
+        <Badge variant="outline" className="font-medium">
+          Grade {section.grade}
+        </Badge>
+      ),
     },
     {
-      key: 'class_teacher',
+      key: 'section',
+      label: 'Section',
+      sortable: true,
+      render: (section: Section) => (
+        <Badge className="bg-indigo-100 text-indigo-800">
+          Section {section.section}
+        </Badge>
+      ),
+    },
+    {
+      key: 'teacher',
       label: 'Class Teacher',
-      render: (value: any, item: Section) => 
-        item.teacher ? (
-          <span>{item.teacher.first_name} {item.teacher.last_name}</span>
-        ) : (
-          <Badge variant="outline">No teacher assigned</Badge>
-        ),
-      sortable: false,
+      render: (section: Section) => (
+        <div>
+          {section.teacher ? (
+            <span className="font-medium">
+              {section.teacher.first_name} {section.teacher.last_name}
+            </span>
+          ) : (
+            <span className="text-gray-500 italic">Not assigned</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'students_count',
+      label: 'Students',
+      sortable: true,
+      render: (section: Section) => (
+        <div className="flex items-center space-x-2">
+          <Users className="w-4 h-4 text-gray-500" />
+          <span className="font-medium">{section.students_count}</span>
+          <span className="text-gray-500">/ {section.capacity}</span>
+        </div>
+      ),
     },
     {
       key: 'capacity',
       label: 'Capacity',
-      render: (value: any, item: Section) => (
-        <Badge variant="secondary">{item.capacity}</Badge>
-      ),
       sortable: true,
+      render: (section: Section) => (
+        <Badge 
+          variant={section.students_count >= section.capacity ? "destructive" : "secondary"}
+        >
+          {section.capacity}
+        </Badge>
+      ),
+    },
+  ];
+
+  const actions = [
+    {
+      label: 'Edit',
+      icon: Edit,
+      onClick: handleEdit,
+      variant: 'outline' as const,
     },
     {
-      key: 'students_count',
-      label: 'Students Count',
-      render: (value: any, item: Section) => (
-        <div className="flex items-center space-x-1">
-          <Users className="h-4 w-4 text-muted-foreground" />
-          <span>{item.students_count || 0}</span>
-        </div>
-      ),
-      sortable: true,
+      label: 'Delete',
+      icon: Trash2,
+      onClick: (section: Section) => {
+        if (confirm(`Are you sure you want to delete Grade ${section.grade} Section ${section.section}?`)) {
+          deleteMutation.mutate(section.id);
+        }
+      },
+      variant: 'destructive' as const,
     },
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Sections</h1>
-          <p className="text-muted-foreground">
-            Manage school sections and class assignments
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900">Sections Management</h1>
+          <p className="text-gray-600 mt-2">Manage class sections and student assignments</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setIsBulkUploadOpen(true)}>
-            <Upload className="h-4 w-4 mr-2" />
+          <Button
+            onClick={() => setIsBulkUploadOpen(true)}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <Upload className="w-4 h-4" />
             Bulk Upload
           </Button>
-          <Button onClick={handleCreate}>
-            <Plus className="h-4 w-4 mr-2" />
+          <Button
+            onClick={handleCreate}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700"
+          >
+            <Plus className="w-4 h-4" />
             Add Section
           </Button>
         </div>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          {sectionsLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <BookOpen className="w-8 h-8 text-indigo-600" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Total Sections</p>
+                <p className="text-2xl font-bold text-gray-900">{sectionsData.length}</p>
+              </div>
             </div>
-          ) : sectionsData.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">No sections found. Create your first section to get started.</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <Users className="w-8 h-8 text-green-600" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Total Students</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {sectionsData.reduce((sum, section) => sum + section.students_count, 0)}
+                </p>
+              </div>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="border-b bg-muted/50">
-                  <tr>
-                    {columns.map((column) => (
-                      <th
-                        key={column.key}
-                        className="px-4 py-3 text-left text-sm font-medium"
-                      >
-                        {column.label}
-                      </th>
-                    ))}
-                    <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sectionsData.map((section) => (
-                    <tr key={section.id} className="border-b hover:bg-muted/30">
-                      {columns.map((column) => (
-                        <td key={column.key} className="px-4 py-3">
-                          {column.render 
-                            ? column.render((section as any)[column.key], section)
-                            : (section as any)[column.key]
-                          }
-                        </td>
-                      ))}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(section)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={async () => {
-                              if (confirm('Are you sure you want to delete this section?')) {
-                                const { error } = await supabase
-                                  .from('classes')
-                                  .delete()
-                                  .eq('id', section.id);
-                                
-                                if (error) {
-                                  toast.error(`Failed to delete section: ${error.message}`);
-                                } else {
-                                  queryClient.invalidateQueries({ queryKey: ['sections'] });
-                                  toast.success('Section deleted successfully');
-                                }
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <Users className="w-8 h-8 text-blue-600" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Average Class Size</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {sectionsData.length > 0 
+                    ? Math.round(sectionsData.reduce((sum, section) => sum + section.students_count, 0) / sectionsData.length)
+                    : 0
+                  }
+                </p>
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <BookOpen className="w-8 h-8 text-orange-600" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Capacity Utilization</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {sectionsData.length > 0 
+                    ? Math.round(
+                        (sectionsData.reduce((sum, section) => sum + section.students_count, 0) /
+                         sectionsData.reduce((sum, section) => sum + section.capacity, 0)) * 100
+                      )
+                    : 0
+                  }%
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Create Dialog */}
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+      <EnhancedCrudTable
+        entity="sections"
+        columns={columns}
+        title="Sections"
+        searchPlaceholder="Search sections..."
+        customActions={actions}
+      />
+
+      {/* Create/Edit Dialog */}
+      <Dialog open={isCreateOpen || isEditOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsCreateOpen(false);
+          setIsEditOpen(false);
+          setEditingSection(null);
+          form.reset();
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add New Section</DialogTitle>
+            <DialogTitle>
+              {editingSection ? 'Edit Section' : 'Create New Section'}
+            </DialogTitle>
             <DialogDescription>
-              Create a new section for your school. Fill in the section details below.
+              {editingSection 
+                ? 'Update the section details below.'
+                : 'Add a new section to your school.'
+              }
             </DialogDescription>
           </DialogHeader>
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -438,7 +483,10 @@ export default function SectionsPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Grade</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select 
+                      onValueChange={(value) => field.onChange(parseInt(value))} 
+                      value={field.value?.toString()}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select grade" />
@@ -446,7 +494,7 @@ export default function SectionsPage() {
                       </FormControl>
                       <SelectContent>
                         {GRADES.map((grade) => (
-                          <SelectItem key={grade} value={grade}>
+                          <SelectItem key={grade} value={grade.toString()}>
                             Grade {grade}
                           </SelectItem>
                         ))}
@@ -463,38 +511,35 @@ export default function SectionsPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Section</FormLabel>
-                    <FormControl>
-                      <Input placeholder="A, B, C..." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="class_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Section Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Grade 5 - A" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="teacher_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Class Teacher</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select teacher" />
+                          <SelectValue placeholder="Select section" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {SECTIONS.map((section) => (
+                          <SelectItem key={section} value={section}>
+                            Section {section}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="class_teacher"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Class Teacher (Optional)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select class teacher" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -518,11 +563,12 @@ export default function SectionsPage() {
                   <FormItem>
                     <FormLabel>Capacity</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        placeholder="30"
+                      <Input
+                        type="number"
+                        min="1"
+                        max="100"
                         {...field}
-                        onChange={(e) => field.onChange(Number(e.target.value))}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                       />
                     </FormControl>
                     <FormMessage />
@@ -531,147 +577,23 @@ export default function SectionsPage() {
               />
 
               <DialogFooter>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setIsCreateOpen(false)}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsCreateOpen(false);
+                    setIsEditOpen(false);
+                    setEditingSection(null);
+                    form.reset();
+                  }}
                 >
                   Cancel
                 </Button>
-                <Button 
-                  type="submit" 
-                  disabled={createMutation.isPending}
+                <Button
+                  type="submit"
+                  disabled={createMutation.isPending || updateMutation.isPending}
                 >
-                  {createMutation.isPending ? 'Creating...' : 'Create Section'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Dialog */}
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Edit Section</DialogTitle>
-            <DialogDescription>
-              Update the section information below.
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="grade"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Grade</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select grade" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {GRADES.map((grade) => (
-                          <SelectItem key={grade} value={grade}>
-                            Grade {grade}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="section"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Section</FormLabel>
-                    <FormControl>
-                      <Input placeholder="A, B, C..." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="class_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Section Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Grade 5 - A" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="teacher_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Class Teacher</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select teacher" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">No teacher assigned</SelectItem>
-                        {teachers.map((teacher) => (
-                          <SelectItem key={teacher.id} value={teacher.id}>
-                            {teacher.first_name} {teacher.last_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="capacity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Capacity</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="number" 
-                        placeholder="30"
-                        {...field}
-                        onChange={(e) => field.onChange(Number(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <DialogFooter>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setIsEditOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
-                  disabled={updateMutation.isPending}
-                >
-                  {updateMutation.isPending ? 'Updating...' : 'Update Section'}
+                  {editingSection ? 'Update' : 'Create'} Section
                 </Button>
               </DialogFooter>
             </form>
