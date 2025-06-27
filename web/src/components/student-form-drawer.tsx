@@ -167,14 +167,14 @@ export default function StudentFormDrawer({
           grade,
           section,
           capacity,
-          (SELECT COUNT(*) FROM students WHERE section_id = sections.id) as students_count
+          students_count
         `)
         .eq('school_id', user?.school_id)
         .order('grade')
         .order('section');
       
       if (error) throw error;
-      return data as Section[];
+      return (data || []) as Section[];
     },
     enabled: !!user?.school_id && open,
   });

@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { supabase } from '@/lib/supabase-client';
 import { useAuth } from '@/hooks/use-auth';
 import EnhancedCrudTable from '@/components/enhanced-crud-table';
+import CSVUploadModal from '@/components/csv-upload-modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -36,13 +37,20 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
-import { Plus, Users, BookOpen, Edit, Trash2, Upload } from 'lucide-react';
-import CSVUploadModal from '@/components/csv-upload-modal';
+import { 
+  Plus, 
+  Users, 
+  BookOpen, 
+  Edit, 
+  Trash2, 
+  Upload,
+  UserCheck 
+} from 'lucide-react';
 
 // Validation schema
 const sectionSchema = z.object({
-  grade: z.number().min(1, 'Grade must be between 1-12').max(12, 'Grade must be between 1-12'),
-  section: z.string().min(1, 'Section is required').max(10, 'Section too long'),
+  grade: z.number().min(1).max(12),
+  section: z.string().min(1, 'Section is required').max(10, 'Section name too long'),
   class_teacher: z.string().optional(),
   capacity: z.number().min(1, 'Capacity must be at least 1').max(100, 'Capacity too high'),
 });
@@ -57,7 +65,8 @@ interface Section {
   teacher?: {
     first_name: string;
     last_name: string;
-  };
+    email: string;
+  } | null;
   capacity: number;
   students_count: number;
   created_at: string;
@@ -70,8 +79,8 @@ interface Teacher {
   email: string;
 }
 
-const GRADES = Array.from({ length: 12 }, (_, i) => i + 1);
-const SECTIONS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+const GRADES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const SECTIONS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
 export default function SectionsPage() {
   const { user } = useAuth();
@@ -93,6 +102,26 @@ export default function SectionsPage() {
     },
   });
 
+  // Fetch sections with teacher information and student count
+  const { data: sectionsData = [] } = useQuery({
+    queryKey: ['sections', user?.school_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sections')
+        .select(`
+          *,
+          teacher:users!class_teacher(first_name, last_name, email)
+        `)
+        .eq('school_id', user?.school_id)
+        .order('grade')
+        .order('section');
+      
+      if (error) throw error;
+      return data as Section[];
+    },
+    enabled: !!user?.school_id,
+  });
+
   // Fetch teachers for dropdown
   const { data: teachers = [] } = useQuery({
     queryKey: ['teachers', user?.school_id],
@@ -110,42 +139,6 @@ export default function SectionsPage() {
     enabled: !!user?.school_id,
   });
 
-  // Fetch sections with joined teacher data and student counts
-  const { data: sectionsData = [], isLoading: sectionsLoading } = useQuery({
-    queryKey: ['sections', user?.school_id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('sections')
-        .select(`
-          *,
-          teacher:users!sections_class_teacher_fkey(first_name, last_name)
-        `)
-        .eq('school_id', user?.school_id)
-        .order('grade')
-        .order('section');
-      
-      if (error) throw error;
-      
-      // Get student counts for each section using section_id
-      const sectionsWithCounts = await Promise.all(
-        (data || []).map(async (section) => {
-          const { count } = await supabase
-            .from('students')
-            .select('*', { count: 'exact', head: true })
-            .eq('section_id', section.id);
-          
-          return {
-            ...section,
-            students_count: count || 0
-          };
-        })
-      );
-      
-      return sectionsWithCounts as Section[];
-    },
-    enabled: !!user?.school_id,
-  });
-
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (data: SectionFormData) => {
@@ -154,6 +147,7 @@ export default function SectionsPage() {
         ...data,
         class_teacher: data.class_teacher === 'none' ? null : data.class_teacher,
         school_id: user?.school_id,
+        students_count: 0, // Initialize with 0 students
       };
 
       const { error } = await supabase
@@ -222,14 +216,15 @@ export default function SectionsPage() {
     },
   });
 
+  // Handlers
   const handleCreate = () => {
+    setIsCreateOpen(true);
     form.reset({
       grade: 1,
       section: '',
       class_teacher: 'none',
       capacity: 30,
     });
-    setIsCreateOpen(true);
   };
 
   const handleEdit = (section: Section) => {
@@ -253,36 +248,39 @@ export default function SectionsPage() {
 
   const handleBulkUpload = async (csvData: any[]) => {
     try {
-      const processedData = csvData.map(row => ({
-        grade: parseInt(row.grade) || 1,
-        section: row.section || 'A',
-        class_teacher: row.teacher_id || null,
+      const sectionsToCreate = csvData.map(row => ({
+        grade: parseInt(row.grade),
+        section: row.section.toUpperCase(),
         capacity: parseInt(row.capacity) || 30,
+        class_teacher: row.teacher_email ? 
+          teachers.find(t => t.email === row.teacher_email)?.id || null : null,
         school_id: user?.school_id,
+        students_count: 0,
       }));
 
       const { error } = await supabase
         .from('sections')
-        .insert(processedData);
+        .insert(sectionsToCreate);
 
       if (error) throw error;
 
       queryClient.invalidateQueries({ queryKey: ['sections'] });
-      setIsBulkUploadOpen(false);
-      toast.success(`${processedData.length} sections uploaded successfully`);
+      toast.success(`Successfully imported ${csvData.length} sections`);
     } catch (error: any) {
-      toast.error(`Upload failed: ${error.message}`);
+      toast.error(`Bulk upload failed: ${error.message}`);
+      throw error;
     }
   };
 
+  // Table columns
   const columns = [
     {
       key: 'grade',
       label: 'Grade',
       sortable: true,
-      render: (section: Section) => (
-        <Badge variant="outline" className="font-medium">
-          Grade {section.grade}
+      render: (value: number, section: Section) => (
+        <Badge variant="outline">
+          Grade {value}
         </Badge>
       ),
     },
@@ -290,23 +288,32 @@ export default function SectionsPage() {
       key: 'section',
       label: 'Section',
       sortable: true,
-      render: (section: Section) => (
-        <Badge className="bg-indigo-100 text-indigo-800">
-          Section {section.section}
+      render: (value: string, section: Section) => (
+        <Badge variant="secondary">
+          {value}
         </Badge>
       ),
     },
     {
       key: 'teacher',
       label: 'Class Teacher',
-      render: (section: Section) => (
-        <div>
+      render: (value: any, section: Section) => (
+        <div className="flex items-center gap-2">
           {section.teacher ? (
-            <span className="font-medium">
-              {section.teacher.first_name} {section.teacher.last_name}
-            </span>
+            <>
+              <UserCheck className="w-4 h-4 text-green-600" />
+              <div>
+                <span className="font-medium">
+                  {section.teacher.first_name} {section.teacher.last_name}
+                </span>
+                <div className="text-xs text-gray-500">{section.teacher.email}</div>
+              </div>
+            </>
           ) : (
-            <span className="text-gray-500 italic">Not assigned</span>
+            <span className="text-gray-500 italic flex items-center gap-2">
+              <UserCheck className="w-4 h-4" />
+              Not assigned
+            </span>
           )}
         </div>
       ),
@@ -315,10 +322,10 @@ export default function SectionsPage() {
       key: 'students_count',
       label: 'Students',
       sortable: true,
-      render: (section: Section) => (
+      render: (value: number, section: Section) => (
         <div className="flex items-center space-x-2">
           <Users className="w-4 h-4 text-gray-500" />
-          <span className="font-medium">{section.students_count}</span>
+          <span className="font-medium">{value || 0}</span>
           <span className="text-gray-500">/ {section.capacity}</span>
         </div>
       ),
@@ -327,11 +334,11 @@ export default function SectionsPage() {
       key: 'capacity',
       label: 'Capacity',
       sortable: true,
-      render: (section: Section) => (
+      render: (value: number, section: Section) => (
         <Badge 
-          variant={section.students_count >= section.capacity ? "destructive" : "secondary"}
+          variant={(section.students_count || 0) >= value ? "destructive" : "secondary"}
         >
-          {section.capacity}
+          {value}
         </Badge>
       ),
     },
@@ -340,13 +347,13 @@ export default function SectionsPage() {
   const actions = [
     {
       label: 'Edit',
-      icon: Edit,
+      icon: <Edit className="w-4 h-4" />,
       onClick: handleEdit,
       variant: 'outline' as const,
     },
     {
       label: 'Delete',
-      icon: Trash2,
+      icon: <Trash2 className="w-4 h-4" />,
       onClick: (section: Section) => {
         if (confirm(`Are you sure you want to delete Grade ${section.grade} Section ${section.section}?`)) {
           deleteMutation.mutate(section.id);
@@ -360,8 +367,8 @@ export default function SectionsPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Sections Management</h1>
-          <p className="text-gray-600 mt-2">Manage class sections and student assignments</p>
+          <h1 className="text-3xl font-bold text-gray-900">Classes & Sections</h1>
+          <p className="text-gray-600 mt-2">Manage class sections, teacher assignments, and student capacity</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -381,6 +388,24 @@ export default function SectionsPage() {
           </Button>
         </div>
       </div>
+
+      {/* Workflow Info Card */}
+      <Card className="border-l-4 border-l-blue-500 bg-blue-50 mb-6">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <BookOpen className="w-5 h-5 text-blue-600 mt-0.5" />
+            <div>
+              <h4 className="font-semibold text-blue-900 mb-1">Setup Workflow</h4>
+              <p className="text-sm text-blue-800 mb-2">
+                <strong>Step 1:</strong> Create your Classes/Sections first using the form or bulk upload.
+              </p>
+              <p className="text-sm text-blue-800">
+                <strong>Step 2:</strong> Then go to Students page to upload students - they will be automatically assigned to sections based on grade and section name.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -402,7 +427,7 @@ export default function SectionsPage() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Students</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {sectionsData.reduce((sum, section) => sum + section.students_count, 0)}
+                  {sectionsData.reduce((sum, section) => sum + (section.students_count || 0), 0)}
                 </p>
               </div>
             </div>
@@ -416,7 +441,7 @@ export default function SectionsPage() {
                 <p className="text-sm font-medium text-gray-600">Average Class Size</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {sectionsData.length > 0 
-                    ? Math.round(sectionsData.reduce((sum, section) => sum + section.students_count, 0) / sectionsData.length)
+                    ? Math.round(sectionsData.reduce((sum, section) => sum + (section.students_count || 0), 0) / sectionsData.length)
                     : 0
                   }
                 </p>
@@ -433,7 +458,7 @@ export default function SectionsPage() {
                 <p className="text-2xl font-bold text-gray-900">
                   {sectionsData.length > 0 
                     ? Math.round(
-                        (sectionsData.reduce((sum, section) => sum + section.students_count, 0) /
+                        (sectionsData.reduce((sum, section) => sum + (section.students_count || 0), 0) /
                          sectionsData.reduce((sum, section) => sum + section.capacity, 0)) * 100
                       )
                     : 0

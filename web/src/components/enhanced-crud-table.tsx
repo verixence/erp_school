@@ -54,12 +54,14 @@ interface EnhancedCrudTableProps<T = any> {
     label: string;
     icon?: React.ReactNode;
     onClick: (item: T) => void;
-    variant?: 'default' | 'destructive';
+    variant?: 'default' | 'destructive' | 'outline';
   }>;
   filters?: Record<string, any>;
   enableSearch?: boolean;
   enablePagination?: boolean;
   pageSize?: number;
+  customData?: T[]; // Add custom data prop to override querying
+  isCustomDataLoading?: boolean;
 }
 
 export default function EnhancedCrudTable<T extends Record<string, any>>({
@@ -75,7 +77,9 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
   filters = {},
   enableSearch = true,
   enablePagination = true,
-  pageSize = 10
+  pageSize = 10,
+  customData,
+  isCustomDataLoading = false
 }: EnhancedCrudTableProps<T>) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -88,7 +92,7 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
   const [deleteItem, setDeleteItem] = useState<T | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
-  // Queries
+  // Queries - only run if no custom data provided
   const { data: items = [], isLoading, error } = useQuery({
     queryKey: [entity, user?.school_id, search, page, sortBy, sortOrder, filters],
     queryFn: async () => {
@@ -130,7 +134,7 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
       if (error) throw error;
       return data || [];
     },
-    enabled: !!user?.school_id,
+    enabled: !!user?.school_id && !customData, // Only query if no custom data
   });
 
   // Count query for pagination
@@ -214,7 +218,55 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
     }
   };
 
-  const totalPages = enablePagination ? Math.ceil(totalCount / pageSize) : 1;
+  // Use custom data if provided, otherwise use queried data
+  let displayItems = customData || items;
+  const displayLoading = customData ? isCustomDataLoading : isLoading;
+  
+  // Apply client-side filtering for custom data
+  if (customData && search && enableSearch) {
+    displayItems = customData.filter(item => {
+      const searchFields = columns
+        .filter(col => col.key !== 'id' && col.key !== 'created_at' && col.key !== 'updated_at')
+        .map(col => col.key);
+      
+      return searchFields.some(field => {
+        const value = item[field];
+        if (Array.isArray(value)) {
+          // Handle arrays (like parent_names or subjects)
+          return value.some(arrayItem => 
+            arrayItem && arrayItem.toString().toLowerCase().includes(search.toLowerCase())
+          );
+        }
+        return value && value.toString().toLowerCase().includes(search.toLowerCase());
+      });
+    });
+  }
+  
+  // Apply client-side sorting for custom data
+  if (customData && sortBy) {
+    displayItems = [...displayItems].sort((a, b) => {
+      const aVal = a[sortBy] || '';
+      const bVal = b[sortBy] || '';
+      
+      if (sortOrder === 'asc') {
+        return aVal.toString().localeCompare(bVal.toString());
+      } else {
+        return bVal.toString().localeCompare(aVal.toString());
+      }
+    });
+  }
+  
+  // Calculate total count BEFORE pagination
+  const displayTotalCount = customData ? displayItems.length : totalCount;
+  
+  // Apply client-side pagination for custom data
+  if (customData && enablePagination) {
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    displayItems = displayItems.slice(startIndex, endIndex);
+  }
+  
+  const totalPages = enablePagination ? Math.ceil(displayTotalCount / pageSize) : 1;
 
   if (error) {
     return (
@@ -235,7 +287,7 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
         <div>
           <h2 className="text-2xl font-bold">{title}</h2>
           <p className="text-muted-foreground">
-            {totalCount} {totalCount === 1 ? 'item' : 'items'}
+            {displayTotalCount} {displayTotalCount === 1 ? 'item' : 'items'}
           </p>
         </div>
         {onAdd && (
@@ -294,7 +346,7 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? (
+                {displayLoading ? (
                   <tr>
                     <td colSpan={columns.length + 1} className="px-4 py-8 text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -303,14 +355,14 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
                       </div>
                     </td>
                   </tr>
-                ) : items.length === 0 ? (
+                ) : displayItems.length === 0 ? (
                   <tr>
                     <td colSpan={columns.length + 1} className="px-4 py-8 text-center text-muted-foreground">
                       No {entity} found
                     </td>
                   </tr>
                 ) : (
-                  items.map((item, index) => (
+                  displayItems.map((item, index) => (
                     <tr key={item.id || index} className="border-b hover:bg-muted/50">
                       {columns.map((column) => (
                         <td key={column.key} className="px-4 py-3 text-sm">
@@ -370,7 +422,7 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
       {enablePagination && totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, totalCount)} of {totalCount} results
+            Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, displayTotalCount)} of {displayTotalCount} results
           </p>
           <div className="flex items-center gap-2">
             <Button

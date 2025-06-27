@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge';
 interface CSVUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  entity: 'sections' | 'students' | 'teachers' | 'parents';
+  entity: 'sections' | 'students' | 'teachers';
   onUpload: (data: any[]) => Promise<void>;
 }
 
@@ -37,34 +37,26 @@ const CSV_TEMPLATES = {
   },
   students: {
     filename: 'students_template.csv',
-    headers: ['full_name', 'admission_no', 'grade', 'section', 'date_of_birth', 'gender', 'parent_emails', 'student_email', 'student_phone'],
+    headers: ['full_name', 'admission_no', 'grade', 'section', 'date_of_birth', 'gender', 'parent_names', 'parent_emails', 'parent_phones', 'parent_relations', 'student_email', 'student_phone'],
     example: [
-      'Full Name,Admission No,Grade,Section,Date of Birth,Gender,Parent Emails,Student Email,Student Phone',
-      'Alice Johnson,STU001,1,A,2018-05-15,female,alice.parent@email.com;bob.parent@email.com,alice@school.com,',
-      'Bob Smith,STU002,1,A,2018-03-22,male,smith.parent@email.com,,',
-      'Carol Wilson,STU003,2,A,2017-08-10,female,carol.parent@email.com,carol@school.com,123-456-7890'
+      'Full Name,Admission No,Grade,Section,Date of Birth,Gender,Parent Names,Parent Emails,Parent Phones,Parent Relations,Student Email,Student Phone',
+      'Alice Johnson,STU001,1,A,2018-05-15,female,John Johnson;Mary Johnson,john.johnson@email.com;mary.johnson@email.com,123-456-7890;098-765-4321,father;mother,alice@school.com,',
+      'Bob Smith,STU002,1,A,2018-03-22,male,Robert Smith,robert.smith@email.com,555-123-4567,father,,',
+      'Carol Wilson,STU003,2,A,2017-08-10,female,Sarah Wilson,sarah.wilson@email.com,333-444-5555,mother,carol@school.com,123-456-7890',
+      'David Brown,STU004,1,A,2018-01-20,male,John Johnson;Mary Johnson,john.johnson@email.com;mary.johnson@email.com,123-456-7890;098-765-4321,father;mother,,'
     ]
   },
   teachers: {
     filename: 'teachers_template.csv',
-    headers: ['first_name', 'last_name', 'email', 'phone', 'subjects'],
+    headers: ['first_name', 'last_name', 'email', 'phone', 'employee_id', 'department', 'subjects'],
     example: [
-      'First Name,Last Name,Email,Phone,Subjects',
-      'John,Doe,john.doe@school.com,123-456-7890,Mathematics;Physics',
-      'Jane,Smith,jane.smith@school.com,098-765-4321,English;Literature',
-      'Bob,Wilson,bob.wilson@school.com,555-123-4567,Science;Chemistry'
+      'First Name,Last Name,Email,Phone,Employee ID,Department,Subjects',
+      'John,Doe,john.doe@school.com,123-456-7890,EMP001,Mathematics,Mathematics;Physics',
+      'Jane,Smith,jane.smith@school.com,098-765-4321,EMP002,English,English;Literature',
+      'Bob,Wilson,bob.wilson@school.com,555-123-4567,EMP003,Science,Science;Chemistry'
     ]
   },
-  parents: {
-    filename: 'parents_template.csv',
-    headers: ['first_name', 'last_name', 'email', 'phone', 'relation', 'children_admission_nos'],
-    example: [
-      'First Name,Last Name,Email,Phone,Relation,Children Admission Nos',
-      'Alice,Parent,alice.parent@email.com,123-456-7890,mother,STU001',
-      'Bob,Parent,bob.parent@email.com,098-765-4321,father,STU001',
-      'Carol,Parent,carol.parent@email.com,555-123-4567,mother,STU003'
-    ]
-  }
+
 };
 
 export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CSVUploadModalProps) {
@@ -146,17 +138,7 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
           }
           break;
 
-        case 'parents':
-          if (!row.first_name) errors.push(`Row ${rowNum}: First name is required`);
-          if (!row.last_name) errors.push(`Row ${rowNum}: Last name is required`);
-          if (!row.email) errors.push(`Row ${rowNum}: Email is required`);
-          if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
-            errors.push(`Row ${rowNum}: Invalid email format`);
-          }
-          if (!['father', 'mother', 'guardian', 'other'].includes(row.relation?.toLowerCase())) {
-            errors.push(`Row ${rowNum}: Relation must be father, mother, guardian, or other`);
-          }
-          break;
+
       }
     });
 

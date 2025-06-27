@@ -12,7 +12,10 @@ import {
   UserCheck, 
   Building2,
   LogOut,
-  School2
+  School2,
+  ClipboardCheck,
+  Calendar,
+  BookOpen
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase-client';
 
@@ -21,7 +24,9 @@ const navigation = [
   { name: 'Students', href: '/school-admin/students', icon: GraduationCap },
   { name: 'Teachers', href: '/school-admin/teachers', icon: UserCheck },
   { name: 'Parents', href: '/school-admin/parents', icon: Users },
-  { name: 'Sections', href: '/school-admin/sections', icon: Building2 },
+  { name: 'Classes', href: '/school-admin/sections', icon: Building2 },
+  { name: 'Attendance', href: '/school-admin/attendance', icon: ClipboardCheck },
+  { name: 'Timetable', href: '/school-admin/timetable', icon: Calendar },
 ];
 
 export default function SchoolAdminLayout({
