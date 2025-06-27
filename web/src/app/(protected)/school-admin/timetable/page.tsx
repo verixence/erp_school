@@ -16,7 +16,8 @@ import {
   Plus,
   Wand2,
   Copy,
-  AlertCircle
+  AlertCircle,
+  Settings
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -77,52 +78,6 @@ export default function TimetablePage() {
     teacher_id: ''
   });
 
-  // Get school period configuration
-  const { data: periodConfig = [] } = useQuery({
-    queryKey: ['school-period-config', user?.school_id],
-    queryFn: async () => {
-      if (!user?.school_id) return [];
-      
-      const { data, error } = await supabase.rpc('get_school_period_config', {
-        p_school_id: user.school_id
-      });
-      
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!user?.school_id,
-  });
-
-  // Dynamic weekdays and periods based on school configuration
-  const weekdays = periodConfig.length > 0 
-    ? periodConfig.map((config: any) => ({
-        id: config.day_of_week,
-        name: config.day_name
-      }))
-    : [
-        { id: 0, name: 'Monday' },
-        { id: 1, name: 'Tuesday' },
-        { id: 2, name: 'Wednesday' },
-        { id: 3, name: 'Thursday' },
-        { id: 4, name: 'Friday' },
-        { id: 5, name: 'Saturday' }
-      ];
-
-  const periodNumbers = periodConfig.length > 0 
-    ? Array.from({ length: Math.max(...periodConfig.map((c: any) => 
-        Math.max(...c.periods.map((p: any) => p.period_number))
-      )) }, (_, i) => i + 1)
-    : Array.from({ length: 8 }, (_, i) => i + 1);
-
-  // Get period details for display
-  const getPeriodDetails = (dayOfWeek: number, periodNumber: number) => {
-    const dayConfig = periodConfig.find((c: any) => c.day_of_week === dayOfWeek);
-    if (!dayConfig) return null;
-    
-    const period = dayConfig.periods.find((p: any) => p.period_number === periodNumber);
-    return period || null;
-  };
-
   const subjects = [
     'Mathematics', 'English', 'Science', 'Social Studies', 'Hindi',
     'Physical Education', 'Computer Science', 'Art', 'Music', 'Library'
@@ -146,6 +101,54 @@ export default function TimetablePage() {
     },
     enabled: !!user?.school_id,
   });
+
+  // Get the selected section's grade
+  const selectedSectionGrade = sections.find(s => s.id === selectedSection)?.grade;
+
+  // Get school period configuration for the selected section's grade
+  const { data: periodConfig = [] } = useQuery({
+    queryKey: ['school-period-config', user?.school_id, selectedSectionGrade],
+    queryFn: async () => {
+      if (!user?.school_id) return [];
+      
+      const { data, error } = await supabase.rpc('get_school_period_config', {
+        p_school_id: user.school_id,
+        p_grade: selectedSectionGrade || null
+      });
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user?.school_id && !!selectedSection,
+  });
+
+  // Dynamic weekdays and periods based on school configuration
+  const weekdays = periodConfig.length > 0 
+    ? [...new Set(periodConfig.map((config: any) => config.day_of_week))]
+        .sort()
+        .map(dayId => {
+          const dayConfig = periodConfig.find((c: any) => c.day_of_week === dayId);
+          return {
+            id: dayId,
+            name: dayConfig.day_name
+          };
+        })
+    : []; // No fallback - require configuration
+
+  const periodNumbers = periodConfig.length > 0 
+    ? Array.from({ length: Math.max(...periodConfig.map((c: any) => 
+        Math.max(...c.periods.map((p: any) => p.period_number))
+      )) }, (_, i) => i + 1)
+    : []; // No fallback - require configuration
+
+  // Get period details for display
+  const getPeriodDetails = (dayOfWeek: number, periodNumber: number) => {
+    const dayConfig = periodConfig.find((c: any) => c.day_of_week === dayOfWeek);
+    if (!dayConfig) return null;
+    
+    const period = dayConfig.periods.find((p: any) => p.period_number === periodNumber);
+    return period || null;
+  };
 
   // Auto-select first section when sections load
   useEffect(() => {
@@ -200,10 +203,16 @@ export default function TimetablePage() {
     enabled: !!selectedSection,
   });
 
-  // Safe initialization of timetable data - only update when periodData actually changes
+  // Safe initialization of timetable data - only update when section changes or data is actually different
   useEffect(() => {
-    if (selectedSection && periodData !== undefined) {
-      setTimetableData(periodData);
+    if (selectedSection) {
+      setTimetableData(prevData => {
+        // Only update if the data has actually changed to prevent infinite re-renders
+        if (JSON.stringify(prevData) !== JSON.stringify(periodData)) {
+          return periodData;
+        }
+        return prevData;
+      });
     }
   }, [selectedSection, periodData]);
 
@@ -488,6 +497,7 @@ export default function TimetablePage() {
               </button>
               <button
                 onClick={() => setActiveTab('timing-settings')}
+                data-tab="timing-settings"
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'timing-settings'
                     ? 'border-indigo-500 text-indigo-600'
@@ -595,20 +605,6 @@ export default function TimetablePage() {
             <CardContent>
               {weekdays.length > 0 && periodNumbers.length > 0 ? (
                 <div className="space-y-4">
-                  {periodConfig.length === 0 && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
-                        <div>
-                          <h4 className="font-medium text-amber-900">No Period Configuration Found</h4>
-                          <p className="text-sm text-amber-700 mt-1">
-                            Using default 8-period, 6-day schedule. To customize periods and timings for your school, 
-                            go to the <strong>Timing Settings</strong> tab.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse border border-gray-300">
                       <thead>
@@ -679,35 +675,38 @@ export default function TimetablePage() {
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No timetable found</h3>
-                  <p className="text-gray-600 mb-4">Create a new timetable for this section to get started</p>
-                  <div className="flex gap-3 justify-center">
+                  <Settings className="w-16 h-16 text-amber-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Timing Configuration Required</h3>
+                  <p className="text-gray-600 mb-6">
+                    Before creating timetables, you need to configure your school's period timings.
+                    {selectedSectionData && (
+                      <span className="block mt-2 text-sm">
+                        Selected: <strong>Grade {selectedSectionData.grade} Section {selectedSectionData.section}</strong>
+                      </span>
+                    )}
+                  </p>
+                  <div className="space-y-4">
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 max-w-md mx-auto">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div className="text-left">
+                          <h4 className="font-medium text-amber-900">Setup Required</h4>
+                          <p className="text-sm text-amber-700 mt-1">
+                            Configure period timings for Grade {selectedSectionData?.grade || 'this grade'} in the Timing Settings tab before creating timetables.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                     <Button 
-                      onClick={handleCreateTimetable}
-                      disabled={createTimetableMutation.isPending}
-                      className="bg-indigo-600 hover:bg-indigo-700"
+                      onClick={() => {
+                        // Switch to timing settings tab
+                        const timingTab = document.querySelector('[data-tab="timing-settings"]') as HTMLButtonElement;
+                        if (timingTab) timingTab.click();
+                      }}
+                      className="bg-amber-600 hover:bg-amber-700"
                     >
-                      <Plus className="w-4 h-4 mr-2" />
-                      {createTimetableMutation.isPending ? 'Creating...' : 'Create Timetable'}
-                    </Button>
-                    
-                    <Button
-                      onClick={() => setShowAutofillDialog(true)}
-                      disabled={autofillMutation.isPending}
-                      className="bg-green-600 hover:bg-green-700"
-                    >
-                      <Wand2 className="w-4 h-4 mr-2" />
-                      Auto-Fill
-                    </Button>
-                    
-                    <Button
-                      onClick={() => setShowCopyDialog(true)}
-                      disabled={copyMutation.isPending}
-                      className="bg-purple-600 hover:bg-purple-700"
-                    >
-                      <Copy className="w-4 h-4 mr-2" />
-                      Copy From
+                      <Settings className="w-4 h-4 mr-2" />
+                      Go to Timing Settings
                     </Button>
                   </div>
                 </div>
