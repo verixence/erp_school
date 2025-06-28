@@ -143,11 +143,11 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  grade_group TEXT;
+  v_grade_group TEXT;
 BEGIN
   -- Determine grade group if grade is provided
   IF p_grade IS NOT NULL THEN
-    grade_group := CASE 
+    v_grade_group := CASE 
       WHEN p_grade BETWEEN 1 AND 5 THEN '1-5'
       WHEN p_grade BETWEEN 6 AND 10 THEN '6-10'
       WHEN p_grade BETWEEN 11 AND 12 THEN '11-12'
@@ -161,7 +161,7 @@ BEGIN
       sps.*,
       CASE 
         WHEN sps.grade_group = p_grade::text THEN 1  -- Exact grade match (highest priority)
-        WHEN sps.grade_group = grade_group THEN 2    -- Grade group match
+        WHEN sps.grade_group = v_grade_group THEN 2    -- Grade group match
         WHEN sps.grade_group = 'all' THEN 3          -- Default fallback
         ELSE 4
       END as priority
@@ -170,7 +170,7 @@ BEGIN
       AND sps.is_active = TRUE
       AND (
         sps.grade_group = p_grade::text OR
-        sps.grade_group = grade_group OR 
+        sps.grade_group = v_grade_group OR 
         sps.grade_group = 'all'
       )
   ),

@@ -12,10 +12,9 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@erp/common": "file:../../common",
     "@expo/vector-icons": "^14.0.0",
-    "@react-navigation/native": "^7.0.0",
     "@react-navigation/bottom-tabs": "^7.0.0",
+    "@react-navigation/native": "^7.0.0",
     "@react-navigation/stack": "^7.0.0",
     "@supabase/supabase-js": "^2.39.0",
     "@tanstack/react-query": "^5.0.0",
@@ -26,20 +25,23 @@
     "expo-router": "~5.1.0",
     "expo-status-bar": "~2.2.3",
     "nativewind": "^4.0.0",
-    "react": "19.0.0",
-    "react-native": "0.79.4",
+    "react": "18.2.0",
+    "react-native": "0.73.4",
+    "react-native-gesture-handler": "~2.24.0",
+    "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
-    "react-native-gesture-handler": "~2.24.0",
-    "react-native-reanimated": "~3.17.4"
+    "expo-dev-client": "~5.2.2"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
-    "@types/react": "~19.0.10",
-    "@types/react-native": "~0.79.0",
-    "tailwindcss": "^3.4.0",
-    "typescript": "^5.3.3",
+    "@types/react": "~18.2.0",
+    "@types/react-native": "~0.73.0",
+    "autoprefixer": "^10.4.0",
+    "metro": "^0.82.4",
+    "metro-config": "^0.82.4",
     "postcss": "^8.4.0",
-    "autoprefixer": "^10.4.0"
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.3"
   }
 }

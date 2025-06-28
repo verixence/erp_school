@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase-client';
-import { toast } from 'sonner';
+import { toast } from 'react-hot-toast';
 
 interface Section {
   id: string;
@@ -38,15 +38,30 @@ export default function NewHomework() {
     queryFn: async () => {
       if (!user?.id) return [];
 
+      // Get sections via section_teachers junction table
       const { data, error } = await supabase
-        .from('sections')
-        .select('*')
+        .from('section_teachers')
+        .select(`
+          sections!inner(
+            id,
+            grade,
+            section,
+            school_id
+          )
+        `)
         .eq('teacher_id', user.id)
-        .order('grade', { ascending: true })
-        .order('section', { ascending: true });
+        .eq('sections.school_id', user.school_id);
 
       if (error) throw error;
-      return data as Section[];
+      
+      // Transform the data to match the expected Section interface
+      const sectionsData = data?.map((item: any) => ({
+        id: item.sections.id,
+        grade: item.sections.grade,
+        section: item.sections.section
+      })) || [];
+
+      return sectionsData as Section[];
     },
     enabled: !!user?.id,
   });
@@ -98,7 +113,7 @@ export default function NewHomework() {
   };
 
   const handleFileUpload = () => {
-    toast.info('File upload feature coming soon!');
+    toast('File upload feature coming soon!');
   };
 
   if (isLoading) {

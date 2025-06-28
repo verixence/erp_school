@@ -158,6 +158,55 @@ async function main() {
     }
     console.log('✅ Sample timetable created');
 
+    // Create section_teachers relationships
+    console.log('\n🔗 Creating section-teacher relationships...');
+    const sectionTeacherRelationships = [];
+    
+    // Add all teachers who teach in each section based on the timetable
+    for (const period of samplePeriods) {
+      if (period.teacher_id) {
+        const relationship = {
+          section_id: period.section_id,
+          teacher_id: period.teacher_id
+        };
+        
+        // Check if this relationship already exists in our array
+        const exists = sectionTeacherRelationships.some(r => 
+          r.section_id === relationship.section_id && r.teacher_id === relationship.teacher_id
+        );
+        
+        if (!exists) {
+          sectionTeacherRelationships.push(relationship);
+        }
+      }
+    }
+    
+    // Also ensure class teachers are in the relationships
+    for (const section of sections) {
+      const relationship = {
+        section_id: section.id,
+        teacher_id: section.class_teacher
+      };
+      
+      const exists = sectionTeacherRelationships.some(r => 
+        r.section_id === relationship.section_id && r.teacher_id === relationship.teacher_id
+      );
+      
+      if (!exists) {
+        sectionTeacherRelationships.push(relationship);
+      }
+    }
+
+    // Insert the relationships
+    for (const relationship of sectionTeacherRelationships) {
+      const { error } = await supabase
+        .from('section_teachers')
+        .insert(relationship);
+
+      if (error) throw error;
+    }
+    console.log(`✅ Created ${sectionTeacherRelationships.length} section-teacher relationships`);
+
     // Create some sample students
     console.log('\n👨‍🎓 Creating demo students...');
     const sampleStudents = [

@@ -1,6 +1,21 @@
 const { getDefaultConfig } = require('expo/metro-config');
 
+// Get the default config
 const config = getDefaultConfig(__dirname);
 
-// Temporarily disable NativeWind to get the app running
+// Remove all serializer customizations that cause conflicts
+config.serializer = {};
+
+// Remove all transformer customizations
+config.transformer = {};
+
+// Keep only basic resolver settings
+config.resolver = {
+  ...config.resolver,
+  nodeModulesPaths: [require('path').resolve(__dirname, 'node_modules')],
+};
+
+// Clear problematic configurations
+config.watchFolders = [];
+
 module.exports = config; 

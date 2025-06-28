@@ -230,13 +230,15 @@ export default function TimingSettings() {
           .eq('id', editingPeriod.id);
         if (error) throw error;
       } else {
-        // Create new
+        // Create new using upsert to handle duplicates
         const { error } = await supabase
           .from('school_period_settings')
-          .insert({
+          .upsert({
             ...period,
             school_id: user?.school_id,
             grade_group: selectedGradeGroup
+          }, {
+            onConflict: 'school_id,grade_group,day_of_week,period_number'
           });
         if (error) throw error;
       }
@@ -294,7 +296,7 @@ export default function TimingSettings() {
 
       if (deleteError) throw deleteError;
 
-      // Insert copied configuration
+      // Insert copied configuration using upsert
       const newConfig = sourceConfig.map(period => ({
         school_id: user?.school_id,
         grade_group: toGrade,
@@ -309,7 +311,9 @@ export default function TimingSettings() {
 
       const { error: insertError } = await supabase
         .from('school_period_settings')
-        .insert(newConfig);
+        .upsert(newConfig, {
+          onConflict: 'school_id,grade_group,day_of_week,period_number'
+        });
 
       if (insertError) throw insertError;
     },
@@ -361,7 +365,9 @@ export default function TimingSettings() {
 
     const { error } = await supabase
       .from('school_period_settings')
-      .insert(periods);
+      .upsert(periods, {
+        onConflict: 'school_id,grade_group,day_of_week,period_number'
+      });
 
     if (error) throw error;
   };
@@ -401,7 +407,9 @@ export default function TimingSettings() {
 
     const { error } = await supabase
       .from('school_period_settings')
-      .insert(standardPeriods);
+      .upsert(standardPeriods, {
+        onConflict: 'school_id,grade_group,day_of_week,period_number'
+      });
     
     if (error) throw error;
     queryClient.invalidateQueries({ queryKey: ['school-period-settings'] });

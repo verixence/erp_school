@@ -206,29 +206,38 @@ async function bulkImportTeachers(data: any[], school_id: string) {
 
   for (const row of data) {
     try {
-      // Create auth user first
-      const tempPassword = Math.random().toString(36).slice(-8);
+      // Generate a temporary password
+      const tempPassword = 'temp' + Math.random().toString(36).slice(-8) + '!';
       
+      // Create auth user first
       const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
         email: row.email,
         password: tempPassword,
-        email_confirm: true
+        email_confirm: true,
+        user_metadata: {
+          role: 'teacher',
+          school_id,
+          first_name: row.first_name,
+          last_name: row.last_name,
+        }
       });
 
       if (authError) {
-        errors.push(`Teacher ${row.first_name} ${row.last_name}: ${authError.message}`);
+        errors.push(`Teacher ${row.first_name} ${row.last_name} (${row.email}): Auth creation failed - ${authError.message}`);
         continue;
       }
 
-      // Create user record
+      // Create user record in database
       const userData = {
         id: authUser.user.id,
+        email: row.email,
+        role: 'teacher',
+        school_id,
         first_name: row.first_name,
         last_name: row.last_name,
-        email: row.email,
         phone: row.phone || null,
-        role: 'teacher',
-        school_id
+        employee_id: row.employee_id || null,
+        subjects: row.subjects ? row.subjects.split(';').map((s: string) => s.trim()) : []
       };
 
       const { error: userError } = await supabase
@@ -238,13 +247,44 @@ async function bulkImportTeachers(data: any[], school_id: string) {
       if (userError) {
         // Cleanup auth user if user record creation fails
         await supabase.auth.admin.deleteUser(authUser.user.id);
-        errors.push(`Teacher ${row.first_name} ${row.last_name}: ${userError.message}`);
+        errors.push(`Teacher ${row.first_name} ${row.last_name} (${row.email}): Database user creation failed - ${userError.message}`);
         continue;
       }
 
-      successful.push({ ...userData, temp_password: tempPassword });
+      // Create teacher record
+      const teacherData = {
+        user_id: authUser.user.id,
+        school_id,
+        employee_id: row.employee_id || `EMP${Date.now()}${Math.random().toString(36).slice(-3).toUpperCase()}`,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        email: row.email,
+        phone: row.phone || null,
+        department: row.department || null,
+        subjects: row.subjects ? row.subjects.split(';').map((s: string) => s.trim()) : [],
+        status: 'active'
+      };
+
+      const { error: teacherError } = await supabase
+        .from('teachers')
+        .insert(teacherData);
+
+      if (teacherError) {
+        // Cleanup both auth user and database user if teacher record creation fails
+        await supabase.auth.admin.deleteUser(authUser.user.id);
+        await supabase.from('users').delete().eq('id', authUser.user.id);
+        errors.push(`Teacher ${row.first_name} ${row.last_name} (${row.email}): Teacher record creation failed - ${teacherError.message}`);
+        continue;
+      }
+
+      successful.push({ 
+        ...teacherData, 
+        temp_password: tempPassword,
+        message: `Created teacher account for ${row.first_name} ${row.last_name} with login: ${row.email} | Temp password: ${tempPassword}`
+      });
+
     } catch (error: any) {
-      errors.push(`Teacher ${row.first_name} ${row.last_name}: ${error.message}`);
+      errors.push(`Teacher ${row.first_name} ${row.last_name} (${row.email}): Unexpected error - ${error.message}`);
     }
   }
 
@@ -257,30 +297,37 @@ async function bulkImportParents(data: any[], school_id: string) {
 
   for (const row of data) {
     try {
-      // Create auth user first
-      const tempPassword = Math.random().toString(36).slice(-8);
+      // Generate a temporary password
+      const tempPassword = 'temp' + Math.random().toString(36).slice(-8) + '!';
       
+      // Create auth user first
       const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
         email: row.email,
         password: tempPassword,
-        email_confirm: true
+        email_confirm: true,
+        user_metadata: {
+          role: 'parent',
+          school_id,
+          first_name: row.first_name,
+          last_name: row.last_name,
+        }
       });
 
       if (authError) {
-        errors.push(`Parent ${row.first_name} ${row.last_name}: ${authError.message}`);
+        errors.push(`Parent ${row.first_name} ${row.last_name} (${row.email}): Auth creation failed - ${authError.message}`);
         continue;
       }
 
       // Create user record
       const userData = {
         id: authUser.user.id,
+        email: row.email,
+        role: 'parent',
+        school_id,
         first_name: row.first_name,
         last_name: row.last_name,
-        email: row.email,
         phone: row.phone || null,
-        relation: row.relation.toLowerCase(),
-        role: 'parent',
-        school_id
+        relation: row.relation?.toLowerCase() || 'parent'
       };
 
       const { error: userError } = await supabase
@@ -290,7 +337,7 @@ async function bulkImportParents(data: any[], school_id: string) {
       if (userError) {
         // Cleanup auth user if user record creation fails
         await supabase.auth.admin.deleteUser(authUser.user.id);
-        errors.push(`Parent ${row.first_name} ${row.last_name}: ${userError.message}`);
+        errors.push(`Parent ${row.first_name} ${row.last_name} (${row.email}): Database user creation failed - ${userError.message}`);
         continue;
       }
 
@@ -317,9 +364,14 @@ async function bulkImportParents(data: any[], school_id: string) {
         }
       }
 
-      successful.push({ ...userData, temp_password: tempPassword });
+      successful.push({ 
+        ...userData, 
+        temp_password: tempPassword,
+        message: `Created parent account for ${row.first_name} ${row.last_name} with login: ${row.email} | Temp password: ${tempPassword}`
+      });
+
     } catch (error: any) {
-      errors.push(`Parent ${row.first_name} ${row.last_name}: ${error.message}`);
+      errors.push(`Parent ${row.first_name} ${row.last_name} (${row.email}): Unexpected error - ${error.message}`);
     }
   }
 

@@ -1,6 +1,6 @@
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useState, useEffect } from 'react';
-import { supabase } from '@erp/common';
+import { supabase } from '../../lib/supabase';
 
 interface Section {
   id: string;
@@ -105,17 +105,49 @@ export default function Attendance() {
 
   const submitAttendance = async () => {
     try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        alert('Not authenticated');
+        return;
+      }
+
+      // Get teacher's school_id
+      const { data: teacher } = await supabase
+        .from('users')
+        .select('school_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!teacher?.school_id) {
+        alert('Teacher school not found');
+        return;
+      }
+
       const today = new Date().toISOString().split('T')[0];
       const attendanceRecords = Object.entries(attendance).map(([studentId, status]) => ({
+        school_id: teacher.school_id,
         student_id: studentId,
         date: today,
         status,
-        section_id: selectedSection
+        recorded_by: userData.user.id,
+        notes: null
       }));
 
-      // For now, just show success message
-      // In a real app, you'd save to an attendance table
-      alert(`Attendance submitted for ${attendanceRecords.length} students`);
+      // Save to attendance_records table
+      const { error } = await supabase
+        .from('attendance_records')
+        .upsert(attendanceRecords, {
+          onConflict: 'student_id,date',
+          ignoreDuplicates: false
+        });
+
+      if (error) {
+        console.error('Error saving attendance:', error);
+        alert('Error saving attendance: ' + error.message);
+        return;
+      }
+
+      alert(`✅ Attendance saved successfully for ${attendanceRecords.length} students`);
     } catch (error) {
       console.error('Error submitting attendance:', error);
       alert('Error submitting attendance');

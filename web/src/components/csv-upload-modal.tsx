@@ -83,18 +83,56 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
     const lines = text.trim().split('\n');
     if (lines.length < 2) return [];
 
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+    // Improved CSV parsing that handles quoted fields and commas within values
+    const parseCSVLine = (line: string): string[] => {
+      const result: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      let i = 0;
+
+      while (i < line.length) {
+        const char = line[i];
+        
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+        i++;
+      }
+      
+      result.push(current.trim());
+      return result;
+    };
+
+    const headerLine = parseCSVLine(lines[0]);
+    const headers = headerLine.map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
     const data = [];
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim());
-      if (values.length !== headers.length) continue;
+      const values = parseCSVLine(lines[i]);
+      if (values.length !== headers.length) {
+        console.warn(`Row ${i + 1}: Expected ${headers.length} columns, got ${values.length}`);
+        continue;
+      }
 
       const row: any = {};
       headers.forEach((header, index) => {
-        row[header] = values[index];
+        let value = values[index]?.trim() || '';
+        // Remove surrounding quotes if present
+        if (value.startsWith('"') && value.endsWith('"')) {
+          value = value.slice(1, -1);
+        }
+        row[header] = value;
       });
-      data.push(row);
+      
+      // Only add rows that have at least some data
+      if (Object.values(row).some(val => val !== '')) {
+        data.push(row);
+      }
     }
 
     return data;

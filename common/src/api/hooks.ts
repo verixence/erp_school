@@ -80,15 +80,34 @@ export const useTeacherSections = (teacherId?: string) => {
     queryFn: async () => {
       if (!teacherId) return [];
 
+      // Get sections via section_teachers junction table
       const { data, error } = await supabase
-        .from('sections')
-        .select('*')
-        .eq('teacher_id', teacherId)
-        .order('grade', { ascending: true })
-        .order('section', { ascending: true });
+        .from('section_teachers')
+        .select(`
+          sections!inner(
+            id,
+            grade,
+            section,
+            school_id,
+            class_teacher,
+            created_at
+          )
+        `)
+        .eq('teacher_id', teacherId);
 
       if (error) throw error;
-      return data as Section[];
+      
+      // Transform the data to match the expected Section interface
+      const sectionsData = data?.map((item: any) => ({
+        id: item.sections.id,
+        grade: item.sections.grade,
+        section: item.sections.section,
+        school_id: item.sections.school_id,
+        class_teacher: item.sections.class_teacher,
+        created_at: item.sections.created_at
+      })) || [];
+
+      return sectionsData as Section[];
     },
     enabled: !!teacherId,
   });
@@ -290,7 +309,7 @@ export const useTeacherDashboardStats = (teacherId?: string, schoolId?: string) 
 
       // Get sections count
       const { data: sectionsCount } = await supabase
-        .from('sections')
+        .from('section_teachers')
         .select('*', { count: 'exact', head: true })
         .eq('teacher_id', teacherId);
 

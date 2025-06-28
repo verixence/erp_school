@@ -34,6 +34,17 @@ interface Teacher {
   id: string;
   first_name: string;
   last_name: string;
+  proficiency_level?: string;
+  is_available?: boolean;
+}
+
+interface AvailableTeacher {
+  teacher_id: string;
+  teacher_name: string;
+  proficiency_level: string;
+  current_load: number;
+  max_load: number;
+  is_available: boolean;
 }
 
 interface Period {
@@ -78,10 +89,39 @@ export default function TimetablePage() {
     teacher_id: ''
   });
 
-  const subjects = [
-    'Mathematics', 'English', 'Science', 'Social Studies', 'Hindi',
-    'Physical Education', 'Computer Science', 'Art', 'Music', 'Library'
-  ];
+  // Fetch actual subjects taught by teachers in this school
+  const { data: subjects = [] } = useQuery({
+    queryKey: ['school-subjects', user?.school_id],
+    queryFn: async () => {
+      if (!user?.school_id) return [];
+      
+      const { data, error } = await supabase
+        .from('users')
+        .select('subjects')
+        .eq('school_id', user.school_id)
+        .eq('role', 'teacher')
+        .not('subjects', 'is', null);
+
+      if (error) throw error;
+      
+      // Extract unique individual subjects from all teachers
+      const allSubjects = new Set<string>();
+      data.forEach((teacher: any) => {
+        if (teacher.subjects && Array.isArray(teacher.subjects)) {
+          teacher.subjects.forEach((subjectGroup: string) => {
+            // Split comma-separated subjects and trim whitespace
+            const individualSubjects = subjectGroup.split(',').map(s => s.trim());
+            individualSubjects.forEach(subject => {
+              if (subject) allSubjects.add(subject);
+            });
+          });
+        }
+      });
+      
+      return Array.from(allSubjects).sort();
+    },
+    enabled: !!user?.school_id,
+  });
 
   // Fetch sections
   const { data: sections = [], isLoading: sectionsLoading } = useQuery({
@@ -116,7 +156,10 @@ export default function TimetablePage() {
         p_grade: selectedSectionGrade || null
       });
       
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
+      
       return data || [];
     },
     enabled: !!user?.school_id && !!selectedSection,
@@ -158,23 +201,61 @@ export default function TimetablePage() {
     }
   }, [sections, selectedSection, isInitialized]);
 
-  // Fetch teachers
-  const { data: teachers = [] } = useQuery({
-    queryKey: ['teachers', user?.school_id],
+  // Fetch available teachers for selected subject
+  const { data: availableTeachers = [] } = useQuery<AvailableTeacher[]>({
+    queryKey: ['available-teachers', user?.school_id, cellForm.subject, selectedSectionGrade, editingCell?.weekday, editingCell?.period_no],
     queryFn: async () => {
-      if (!user?.school_id) return [];
+      if (!user?.school_id || !cellForm.subject || !selectedSectionGrade || !editingCell) return [];
       
-      const { data, error } = await supabase
+      // Get all teachers who can teach the selected subject
+      const { data: teachersData, error: teachersError } = await supabase
         .from('users')
-        .select('id, first_name, last_name')
+        .select('id, first_name, last_name, subjects')
         .eq('school_id', user.school_id)
         .eq('role', 'teacher')
-        .order('first_name');
-
-      if (error) throw error;
-      return data;
+        .not('subjects', 'is', null);
+      
+      if (teachersError) throw teachersError;
+      
+      // Filter teachers who can teach the selected subject
+      const qualifiedTeachers = teachersData.filter((teacher: any) => {
+        if (!teacher.subjects || !Array.isArray(teacher.subjects)) return false;
+        
+        // Check if any of the teacher's subject groups contain the selected subject
+        return teacher.subjects.some((subjectGroup: string) => {
+          const individualSubjects = subjectGroup.split(',').map(s => s.trim());
+          return individualSubjects.includes(cellForm.subject);
+        });
+      });
+      
+      // Check availability (not assigned at the same time)
+      const availabilityChecks = await Promise.all(
+        qualifiedTeachers.map(async (teacher: any) => {
+          const { data: conflictData, error: conflictError } = await supabase
+            .from('periods')
+            .select('id')
+            .eq('teacher_id', teacher.id)
+            .eq('weekday', editingCell.weekday + 1) // Convert to 1-based for database
+            .eq('period_no', editingCell.period_no);
+          
+          if (conflictError) throw conflictError;
+          
+          const isAvailable = conflictData.length === 0;
+          
+          return {
+            teacher_id: teacher.id,
+            teacher_name: `${teacher.first_name} ${teacher.last_name}`,
+            proficiency_level: 'competent',
+            current_load: 0, // Could be calculated if needed
+            max_load: 30,
+            is_available: isAvailable
+          };
+        })
+      );
+      
+      return availabilityChecks;
     },
-    enabled: !!user?.school_id,
+    enabled: !!user?.school_id && !!cellForm.subject && !!selectedSectionGrade && !!editingCell,
   });
 
   // Fetch timetable for selected section
@@ -195,6 +276,7 @@ export default function TimetablePage() {
 
       return data.map((period: any) => ({
         ...period,
+        weekday: period.weekday - 1, // Convert 1-based (database) to 0-based (frontend)
         teacher_name: period.teacher 
           ? `${period.teacher.first_name} ${period.teacher.last_name}`
           : undefined
@@ -233,7 +315,7 @@ export default function TimetablePage() {
           .from('periods')
           .insert(validPeriods.map(period => ({
             section_id: selectedSection,
-            weekday: period.weekday,
+            weekday: period.weekday + 1, // Convert 0-based (frontend) to 1-based (database)
             period_no: period.period_no,
             subject: period.subject,
             teacher_id: period.teacher_id || null
@@ -256,22 +338,25 @@ export default function TimetablePage() {
   const createTimetableMutation = useMutation({
     mutationFn: async () => {
       if (!selectedSection) throw new Error('No section selected');
+      if (!periodConfig || periodConfig.length === 0) {
+        throw new Error('Period configuration not found. Please configure timing settings first.');
+      }
       
-      // Create a basic timetable structure with empty periods
+      // Create timetable structure based on actual school configuration
       const emptyPeriods: Omit<Period, 'id'>[] = [];
       
-      // Add some default periods for demonstration
-      for (let day = 1; day <= 5; day++) { // Monday to Friday
-        for (let period = 1; period <= 6; period++) {
+      // Use actual period configuration instead of dummy data
+      periodConfig.forEach((dayConfig: any) => {
+        dayConfig.periods.forEach((period: any) => {
           emptyPeriods.push({
             section_id: selectedSection,
-            weekday: day,
-            period_no: period,
+            weekday: dayConfig.day_of_week,
+            period_no: period.period_number,
             subject: '',
             teacher_id: null
           });
-        }
-      }
+        });
+      });
 
       setTimetableData(emptyPeriods);
       toast.success('Empty timetable created! Click on cells to add subjects.');
@@ -296,13 +381,19 @@ export default function TimetablePage() {
   const handleCellSave = useCallback(() => {
     if (!editingCell) return;
 
+    // Validation: If subject is selected, teacher must be selected
+    if (cellForm.subject.trim() && !cellForm.teacher_id) {
+      toast.error('Please select a teacher for the subject');
+      return;
+    }
+
     setTimetableData(prevData => {
       const updatedData = prevData.filter(
         p => !(p.weekday === editingCell.weekday && p.period_no === editingCell.period_no)
       );
 
       if (cellForm.subject.trim()) {
-        const selectedTeacher = teachers.find(t => t.id === cellForm.teacher_id);
+        const selectedTeacher = availableTeachers.find((t: AvailableTeacher) => t.teacher_id === cellForm.teacher_id);
         updatedData.push({
           section_id: selectedSection,
           weekday: editingCell.weekday,
@@ -310,7 +401,7 @@ export default function TimetablePage() {
           subject: cellForm.subject,
           teacher_id: cellForm.teacher_id || null,
           teacher_name: selectedTeacher 
-            ? `${selectedTeacher.first_name} ${selectedTeacher.last_name}`
+            ? selectedTeacher.teacher_name
             : undefined
         });
       }
@@ -322,7 +413,7 @@ export default function TimetablePage() {
     });
 
     setEditingCell(null);
-  }, [editingCell, cellForm, teachers, selectedSection]);
+  }, [editingCell, cellForm, availableTeachers, selectedSection]);
 
   const handleSaveTimetable = useCallback(() => {
     if (!selectedSection) {
@@ -746,17 +837,18 @@ export default function TimetablePage() {
                   </div>
                   
                   <div>
-                    <Label htmlFor="teacher">Teacher</Label>
+                    <Label htmlFor="teacher">Teacher *</Label>
                     <select
                       id="teacher"
                       value={cellForm.teacher_id}
                       onChange={(e) => setCellForm({ ...cellForm, teacher_id: e.target.value })}
-                      className="w-full p-2 border border-gray-300 rounded-md"
+                      className={`w-full p-2 border rounded-md ${cellForm.subject && !cellForm.teacher_id ? 'border-red-300' : 'border-gray-300'}`}
+                      disabled={!cellForm.subject}
                     >
-                      <option value="">Select Teacher (Optional)</option>
-                      {teachers.map(teacher => (
-                        <option key={teacher.id} value={teacher.id}>
-                          {teacher.first_name} {teacher.last_name}
+                      <option value="">{cellForm.subject ? 'Select Teacher *' : 'Select Subject First'}</option>
+                      {availableTeachers.map((teacher: AvailableTeacher) => (
+                        <option key={teacher.teacher_id} value={teacher.teacher_id}>
+                          {teacher.teacher_name}
                         </option>
                       ))}
                     </select>

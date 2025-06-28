@@ -55,7 +55,12 @@ interface EnhancedCrudTableProps<T = any> {
     icon?: React.ReactNode;
     onClick: (item: T) => void;
     variant?: 'default' | 'destructive' | 'outline';
-  }>;
+  }> | ((item: T) => Array<{
+    label: string;
+    icon?: React.ReactNode;
+    onClick: (item: T) => void;
+    variant?: 'default' | 'destructive' | 'outline';
+  }>);
   filters?: Record<string, any>;
   enableSearch?: boolean;
   enablePagination?: boolean;
@@ -73,7 +78,7 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
   onEdit,
   onDelete,
   addButtonText = "Add New",
-  customActions = [],
+  customActions,
   filters = {},
   enableSearch = true,
   enablePagination = true,
@@ -338,7 +343,7 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
                       </div>
                     </th>
                   ))}
-                  {(onEdit || onDelete || customActions.length > 0) && (
+                  {(onEdit || onDelete || customActions) && (
                     <th className="px-4 py-3 text-right text-sm font-medium">
                       Actions
                     </th>
@@ -371,7 +376,7 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
                             : item[column.key] || '-'}
                         </td>
                       ))}
-                      {(onEdit || onDelete || customActions.length > 0) && (
+                      {(onEdit || onDelete || customActions) && (
                         <td className="px-4 py-3 text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -386,16 +391,21 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
                                   Edit
                                 </DropdownMenuItem>
                               )}
-                              {customActions.map((action, actionIndex) => (
-                                <DropdownMenuItem
-                                  key={actionIndex}
-                                  onClick={() => action.onClick(item)}
-                                  className={action.variant === 'destructive' ? 'text-red-600' : ''}
-                                >
-                                  {action.icon && <span className="mr-2">{action.icon}</span>}
-                                  {action.label}
-                                </DropdownMenuItem>
-                              ))}
+                              {customActions && (() => {
+                                const actions = typeof customActions === 'function' 
+                                  ? customActions(item) 
+                                  : customActions;
+                                return actions.map((action, actionIndex) => (
+                                  <DropdownMenuItem
+                                    key={actionIndex}
+                                    onClick={() => action.onClick(item)}
+                                    className={action.variant === 'destructive' ? 'text-red-600' : ''}
+                                  >
+                                    {action.icon && <span className="mr-2">{action.icon}</span>}
+                                    {action.label}
+                                  </DropdownMenuItem>
+                                ));
+                              })()}
                               {onDelete && (
                                 <DropdownMenuItem
                                   onClick={() => handleDeleteClick(item)}

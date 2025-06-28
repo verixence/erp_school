@@ -115,10 +115,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 3. Create teacher record in teachers table
+    const { error: teacherError } = await supabaseAdmin
+      .from('teachers')
+      .insert({
+        user_id: authData.user.id,
+        school_id,
+        employee_id,
+        first_name,
+        last_name,
+        email,
+        phone,
+        department: null, // Can be updated later
+        subjects,
+        status: 'active'
+      });
+
+    if (teacherError) {
+      console.error('Teacher table insert error:', teacherError);
+      
+      // Rollback: delete both auth user and user record
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      await supabaseAdmin.from('users').delete().eq('id', authData.user.id);
+      
+      return NextResponse.json(
+        { error: `Failed to create teacher profile: ${teacherError.message}` },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({ 
       success: true, 
       user_id: authData.user.id,
-      message: 'Teacher created successfully'
+      message: 'Teacher created successfully with login account'
     });
 
   } catch (error: any) {

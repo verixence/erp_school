@@ -28,7 +28,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { motion } from 'framer-motion';
-import { toast } from 'sonner';
+import { toast } from 'react-hot-toast';
 
 interface Section {
   id: string;
@@ -67,14 +67,31 @@ export default function TeacherAttendancePage() {
     queryFn: async (): Promise<Section[]> => {
       if (!user?.id) throw new Error('No user ID');
 
+      // Get sections via section_teachers junction table
       const { data, error } = await supabase
-        .from('sections')
-        .select('id, grade, section, subject')
+        .from('section_teachers')
+        .select(`
+          sections!inner(
+            id,
+            grade,
+            section,
+            school_id
+          )
+        `)
         .eq('teacher_id', user.id)
-        .eq('school_id', user.school_id);
+        .eq('sections.school_id', user.school_id);
 
       if (error) throw error;
-      return data || [];
+      
+      // Transform the data to match the expected Section interface
+      const sectionsData = data?.map((item: any) => ({
+        id: item.sections.id,
+        grade: item.sections.grade,
+        section: item.sections.section,
+        subject: 'All Subjects' // Teachers can mark attendance for all subjects in their sections
+      })) || [];
+
+      return sectionsData;
     },
     enabled: !!user?.id,
   });

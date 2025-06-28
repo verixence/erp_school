@@ -1,16 +1,32 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase-client';
 import { useAuth } from '@/hooks/use-auth';
+import { 
+  Plus, 
+  Upload, 
+  Users, 
+  UserCheck, 
+  User, 
+  BookOpen, 
+  IdCard, 
+  Mail, 
+  Phone,
+  Key,
+  UserX,
+  UserPlus
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import EnhancedCrudTable from '@/components/enhanced-crud-table';
 import TeacherFormModal from '@/components/teacher-form-modal';
 import CSVUploadModal from '@/components/csv-upload-modal';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Mail, Phone, User, BookOpen, IdCard, Upload, Plus, Users, UserCheck } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { toast } from 'react-hot-toast';
 
 interface Teacher {
@@ -30,40 +46,114 @@ interface Teacher {
 export default function TeachersPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+
+  // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | null>(null);
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+  const [isPasswordResetOpen, setIsPasswordResetOpen] = useState(false);
+  const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [temporaryPassword, setTemporaryPassword] = useState('');
 
-  // Fetch teachers from the teachers table (not users)
-  const { data: teachersData = [] } = useQuery({
+  // Fetch teachers data
+  const { data: teachersData = [], isLoading } = useQuery({
     queryKey: ['teachers', user?.school_id],
     queryFn: async () => {
+      if (!user?.school_id) return [];
+      
       const { data, error } = await supabase
-        .from('teachers')
+        .from('users')
         .select('*')
-        .eq('school_id', user?.school_id)
-        .order('created_at', { ascending: false });
+        .eq('school_id', user.school_id)
+        .eq('role', 'teacher')
+        .order('first_name');
       
       if (error) throw error;
-      return data as Teacher[];
+      return data || [];
     },
     enabled: !!user?.school_id,
   });
 
-  // Fetch sections to see how many teachers are assigned as class teachers
-  const { data: sectionsData = [] } = useQuery({
-    queryKey: ['sections', user?.school_id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('sections')
-        .select('class_teacher')
-        .eq('school_id', user?.school_id)
-        .not('class_teacher', 'is', null);
-      
-      if (error) throw error;
-      return data;
+  // Password reset mutation
+  const passwordResetMutation = useMutation({
+    mutationFn: async ({ user_id, new_password }: { user_id: string; new_password: string }) => {
+      const response = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id, new_password, school_id: user?.school_id }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Password reset failed');
+      }
+
+      return response.json();
     },
-    enabled: !!user?.school_id,
+    onSuccess: (data) => {
+      toast.success(data.message);
+      setIsPasswordResetOpen(false);
+      setSelectedTeacher(null);
+      setNewPassword('');
+    },
+    onError: (error: any) => {
+      toast.error(`Password reset failed: ${error.message}`);
+    },
+  });
+
+  // Status toggle mutation
+  const statusToggleMutation = useMutation({
+    mutationFn: async ({ user_id, status }: { user_id: string; status: string }) => {
+      const response = await fetch('/api/admin/toggle-user-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id, status, school_id: user?.school_id }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Status update failed');
+      }
+
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast.success(data.message);
+      queryClient.invalidateQueries({ queryKey: ['teachers'] });
+    },
+    onError: (error: any) => {
+      toast.error(`Status update failed: ${error.message}`);
+    },
+  });
+
+  // Invite user mutation
+  const inviteUserMutation = useMutation({
+    mutationFn: async ({ user_id, temporary_password }: { user_id: string; temporary_password: string }) => {
+      const response = await fetch('/api/admin/invite-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id, temporary_password, school_id: user?.school_id }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Invite failed');
+      }
+
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast.success(data.message);
+      setIsInviteOpen(false);
+      setSelectedTeacher(null);
+      setTemporaryPassword('');
+      queryClient.invalidateQueries({ queryKey: ['teachers'] });
+    },
+    onError: (error: any) => {
+      toast.error(`Invite failed: ${error.message}`);
+    },
   });
 
   // Handlers
@@ -77,47 +167,147 @@ export default function TeachersPage() {
     setIsModalOpen(true);
   };
 
+  const handleResetPassword = (teacher: Teacher) => {
+    setSelectedTeacher(teacher);
+    setNewPassword('');
+    setIsPasswordResetOpen(true);
+  };
+
+  const handleConfirmPasswordReset = () => {
+    if (!selectedTeacher || !newPassword.trim()) {
+      toast.error('Please enter a new password');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters long');
+      return;
+    }
+
+    passwordResetMutation.mutate({
+      user_id: selectedTeacher.id,
+      new_password: newPassword.trim(),
+    });
+  };
+
+  const handleToggleStatus = (teacher: Teacher) => {
+    const newStatus = teacher.status === 'active' ? 'inactive' : 'active';
+    statusToggleMutation.mutate({
+      user_id: teacher.id,
+      status: newStatus,
+    });
+  };
+
+  const handleInvite = (teacher: Teacher) => {
+    setSelectedTeacher(teacher);
+    setTemporaryPassword('');
+    setIsInviteOpen(true);
+  };
+
+  const handleConfirmInvite = () => {
+    if (!selectedTeacher || !temporaryPassword.trim()) {
+      toast.error('Please enter a temporary password');
+      return;
+    }
+
+    if (temporaryPassword.length < 8) {
+      toast.error('Password must be at least 8 characters long');
+      return;
+    }
+
+    inviteUserMutation.mutate({
+      user_id: selectedTeacher.id,
+      temporary_password: temporaryPassword.trim(),
+    });
+  };
+
   const handleBulkUpload = async (csvData: any[]) => {
     try {
-      // Use the database function for bulk creating teachers
-      const { data, error } = await supabase.rpc('bulk_create_teachers', {
-        p_school_id: user?.school_id,
-        p_teachers: csvData
+      // Call the API endpoint that creates both auth users and database records
+      const response = await fetch('/api/admin/bulk-import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          entity: 'teachers',
+          data: csvData,
+          school_id: user?.school_id,
+        }),
       });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Bulk upload failed');
+      }
 
-      const result = data as {
-        success_count: number;
-        error_count: number;
-        results: Array<{ email: string; status: string; error?: string }>;
-      };
+      const result = await response.json();
 
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
       
-      if (result.error_count > 0) {
-        const errors = result.results
-          .filter(r => r.status === 'error')
-          .map(r => `${r.email}: ${r.error}`)
-          .join('\n');
-        
-        toast.error(`${result.success_count} teachers created successfully, ${result.error_count} failed:\n${errors}`);
-      } else {
-        toast.success(`Successfully imported ${result.success_count} teachers with user accounts.`);
+      if (result.errors && result.errors.length > 0) {
+        toast.error(`${result.errors.length} teachers failed to upload. Check console for details.`);
+        console.error('Upload errors:', result.errors);
       }
+      
+      if (result.successful && result.successful.length > 0) {
+        toast.success(`${result.successful.length} teachers uploaded successfully!`);
+      }
+
+      setIsBulkUploadOpen(false);
     } catch (error: any) {
       toast.error(`Bulk upload failed: ${error.message}`);
-      throw error;
     }
   };
 
   // Calculate stats
   const totalTeachers = teachersData.length;
-  const assignedTeachers = sectionsData.length;
+  const assignedTeachers = teachersData.filter(
+    (teacher: Teacher) => teacher.subjects && teacher.subjects.length > 0
+  ).length;
   const unassignedTeachers = totalTeachers - assignedTeachers;
-  const avgSubjects = teachersData.length > 0 
-    ? Math.round(teachersData.reduce((sum, teacher) => sum + (teacher.subjects?.length || 0), 0) / teachersData.length)
+  const avgSubjects = totalTeachers > 0 
+    ? (teachersData.reduce((sum: number, teacher: Teacher) => 
+        sum + (teacher.subjects ? teacher.subjects.length : 0), 0) / totalTeachers).toFixed(1)
     : 0;
+
+  // Function to check if teacher needs invite (has no auth account)
+  const needsInvite = (teacher: Teacher) => {
+    // This is a simple check - in a real app, you might want to track this in the database
+    // For now, we'll assume teachers created through manual entry need invites
+    // while bulk uploaded teachers already have auth accounts
+    return !teacher.created_at || new Date(teacher.created_at) < new Date('2025-01-01');
+  };
+
+  // Custom actions for the table
+  const getCustomActions = (teacher: Teacher) => {
+    const actions = [];
+    
+    if (needsInvite(teacher)) {
+      actions.push({
+        label: 'Send Invite',
+        icon: <Mail className="h-4 w-4" />,
+        onClick: handleInvite,
+        variant: 'default' as const,
+      });
+    } else {
+      actions.push({
+        label: 'Reset Password',
+        icon: <Key className="h-4 w-4" />,
+        onClick: handleResetPassword,
+        variant: 'outline' as const,
+      });
+    }
+    
+    actions.push({
+      label: 'Toggle Status',
+      icon: <UserX className="h-4 w-4" />,
+      onClick: handleToggleStatus,
+      variant: 'destructive' as const,
+    });
+    
+    return actions;
+  };
 
   // Table columns
   const columns = [
@@ -298,7 +488,8 @@ export default function TeachersPage() {
         onEdit={handleEdit}
         addButtonText="Add Teacher"
         customData={teachersData}
-        isCustomDataLoading={false}
+        isCustomDataLoading={isLoading}
+        customActions={getCustomActions}
       />
 
       <TeacherFormModal
@@ -314,6 +505,89 @@ export default function TeachersPage() {
         entity="teachers"
         onUpload={handleBulkUpload}
       />
+
+      {/* Password Reset Dialog */}
+      <Dialog open={isPasswordResetOpen} onOpenChange={setIsPasswordResetOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              Reset password for {selectedTeacher?.first_name} {selectedTeacher?.last_name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="newPassword">New Password</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password (min 8 characters)"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsPasswordResetOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleConfirmPasswordReset}
+              disabled={passwordResetMutation.isPending}
+            >
+              {passwordResetMutation.isPending ? 'Resetting...' : 'Reset Password'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invite Dialog */}
+      <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Invite</DialogTitle>
+            <DialogDescription>
+              Create a login account for {selectedTeacher?.first_name} {selectedTeacher?.last_name}
+              <br />
+              <span className="text-sm text-muted-foreground">
+                Email: {selectedTeacher?.email}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="temporaryPassword">Temporary Password</Label>
+              <Input
+                id="temporaryPassword"
+                type="password"
+                value={temporaryPassword}
+                onChange={(e) => setTemporaryPassword(e.target.value)}
+                placeholder="Enter temporary password (min 8 characters)"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Share this password with the teacher so they can login.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsInviteOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleConfirmInvite}
+              disabled={inviteUserMutation.isPending}
+            >
+              {inviteUserMutation.isPending ? 'Creating Account...' : 'Send Invite'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 
