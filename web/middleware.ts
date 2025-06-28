@@ -1,6 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -13,26 +13,8 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    // Create Supabase client with cookie-based auth
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: {
-          storage: {
-            getItem: (key: string) => {
-              return request.cookies.get(key)?.value || null;
-            },
-            setItem: () => {
-              // Not needed for middleware
-            },
-            removeItem: () => {
-              // Not needed for middleware
-            },
-          },
-        },
-      }
-    );
+    // Create server Supabase client
+    const supabase = createServerSupabaseClient(request);
 
     // Get the current user
     const { data: { user }, error } = await supabase.auth.getUser();

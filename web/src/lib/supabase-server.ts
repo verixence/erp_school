@@ -1,26 +1,24 @@
-import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
+import { createServerClient } from '@supabase/ssr';
+import { NextRequest } from 'next/server';
 
-export const createServerSupabaseClient = async () => {
-  const cookieStore = await cookies();
-  
-  return createClient(
+export function createServerSupabaseClient(request: NextRequest) {
+  return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      auth: {
-        storage: {
-          getItem: (key: string) => {
-            return cookieStore.get(key)?.value || null;
-          },
-          setItem: (key: string, value: string) => {
-            cookieStore.set(key, value);
-          },
-          removeItem: (key: string) => {
-            cookieStore.delete(key);
-          },
+      cookies: {
+        getAll() {
+          const cookieStore = request.cookies;
+          return cookieStore.getAll().map(cookie => ({
+            name: cookie.name,
+            value: cookie.value
+          }));
+        },
+        setAll(cookiesToSet) {
+          // In middleware, we can't set cookies
+          // They will be set by the client-side
         },
       },
     }
   );
-};
+}

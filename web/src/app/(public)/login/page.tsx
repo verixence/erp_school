@@ -188,6 +188,20 @@ export default function LoginPage() {
                   </div>
                   <code className="text-sm font-mono text-blue-800">Password: school123</code>
                 </div>
+                <div className="bg-white px-3 py-2 rounded border border-blue-300">
+                  <p className="text-xs text-blue-600 font-medium mb-1">Teacher:</p>
+                  <div className="flex items-center justify-between">
+                    <code className="text-sm font-mono text-blue-800">sampath.sfmc@gmail.com</code>
+                    <button
+                      type="button"
+                      onClick={() => setEmail('sampath.sfmc@gmail.com')}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      Use
+                    </button>
+                  </div>
+                  <code className="text-sm font-mono text-blue-800">Password: Mundrathi!23</code>
+                </div>
               </div>
             </div>
           </div>
