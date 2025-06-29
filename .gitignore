@@ -87,4 +87,4 @@ junit.xml
 
 # Misc
 *.tgz
-*.tar.gz 
+*.tar.gz .expo/
