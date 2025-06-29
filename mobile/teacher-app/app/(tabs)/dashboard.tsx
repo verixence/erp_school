@@ -2,8 +2,9 @@ import { View, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { getCurrentUser, getTeacherDashboardStats, getTeacherProfile } from '../../lib/api';
 
 interface User {
   id: string;
@@ -69,95 +70,48 @@ function QuickAction({ title, description, icon, color, onPress }: QuickActionPr
 
 export default function Dashboard() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
   // Get current user
-  useEffect(() => {
-    const getUser = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user) {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('id, email, role')
-            .eq('id', session.user.id)
-            .single();
-          
-          if (userData) {
-            setUser(userData);
-          }
-        }
-      } catch (error) {
-        console.error('Error getting user:', error);
-        Alert.alert('Error', 'Failed to load user data');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const { data: userResponse, error: userError, isLoading } = useQuery({
+    queryKey: ['current-user'],
+    queryFn: getCurrentUser,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
-    getUser();
-  }, []);
+  const user = userResponse?.data;
+
+  // Get teacher profile
+  const { data: teacherResponse, error: teacherError } = useQuery({
+    queryKey: ['teacher-profile', user?.id],
+    queryFn: () => getTeacherProfile(user?.id || ''),
+    enabled: !!user?.id,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  });
+
+  const teacher = teacherResponse?.data;
 
   // Teacher dashboard stats
-  const { data: stats } = useQuery({
-    queryKey: ['teacher-dashboard-stats', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-
-      try {
-        // Get today's classes count
-        const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
-        const { count: todaysClasses } = await supabase
-          .from('timetables')
-          .select('*', { count: 'exact', head: true })
-          .eq('teacher_id', user.id)
-          .eq('weekday', today === 0 ? 7 : today); // Convert Sunday from 0 to 7
-
-        // Get pending homework count (due in next 7 days)
-        const nextWeek = new Date();
-        nextWeek.setDate(nextWeek.getDate() + 7);
-        
-        const { count: pendingHomework } = await supabase
-          .from('homeworks')
-          .select('*', { count: 'exact', head: true })
-          .eq('created_by', user.id)
-          .gte('due_date', new Date().toISOString().split('T')[0])
-          .lte('due_date', nextWeek.toISOString().split('T')[0]);
-
-        // Get sections count using section_teachers table
-        const { count: sectionsCount } = await supabase
-          .from('section_teachers')
-          .select('*', { count: 'exact', head: true })
-          .eq('teacher_id', user.id);
-
-        // Get recent announcements count
-        const { count: recentAnnouncements } = await supabase
-          .from('announcements')
-          .select('*', { count: 'exact', head: true })
-          .eq('created_by', user.id)
-          .eq('is_published', true)
-          .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()); // Last 7 days
-
-        return {
-          todaysClasses: todaysClasses || 0,
-          pendingHomework: pendingHomework || 0,
-          sectionsCount: sectionsCount || 0,
-          recentAnnouncements: recentAnnouncements || 0,
-        };
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-        return {
-          todaysClasses: 0,
-          pendingHomework: 0,
-          sectionsCount: 0,
-          recentAnnouncements: 0,
-        };
-      }
-    },
-    enabled: !!user?.id,
+  const { data: statsResponse, error: statsError } = useQuery({
+    queryKey: ['teacher-dashboard-stats', teacher?.id],
+    queryFn: () => getTeacherDashboardStats(teacher?.id || ''),
+    enabled: !!teacher?.id,
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
+
+  const stats = statsResponse?.data;
+
+  // Handle errors
+  useEffect(() => {
+    if (userError) {
+      Alert.alert('Error', 'Failed to load user data');
+    }
+    if (teacherError) {
+      Alert.alert('Error', 'Failed to load teacher profile');
+    }
+    if (statsError) {
+      Alert.alert('Error', 'Failed to load dashboard statistics');
+    }
+  }, [userError, teacherError, statsError]);
 
   const handleLogout = async () => {
     try {
@@ -176,6 +130,8 @@ export default function Dashboard() {
     );
   }
 
+  const displayName = teacher ? `${teacher.first_name} ${teacher.last_name}` : user?.email;
+
   return (
     <ScrollView className="flex-1 bg-gray-50">
       {/* Header */}
@@ -190,7 +146,7 @@ export default function Dashboard() {
           </TouchableOpacity>
         </View>
         <View className="px-4 pb-4">
-          <Text className="text-sm text-gray-600">Welcome, {user?.email}</Text>
+          <Text className="text-sm text-gray-600">Welcome, {displayName}</Text>
         </View>
       </View>
 

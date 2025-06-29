@@ -194,6 +194,29 @@ export interface Database {
           updated_at?: string
         }
       }
+      section_teachers: {
+        Row: {
+          id: string
+          section_id: string
+          teacher_id: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          section_id: string
+          teacher_id: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          section_id?: string
+          teacher_id?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
       students: {
         Row: {
           id: string

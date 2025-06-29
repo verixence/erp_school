@@ -2,7 +2,13 @@ import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useState, useEffect } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../../lib/supabase';
+import { 
+  getCurrentUser, 
+  getTeacherSections, 
+  getSectionStudents, 
+  getAttendanceRecords, 
+  saveAttendanceRecords 
+} from '../../lib/api';
 
 interface Section {
   id: string;
@@ -26,7 +32,6 @@ interface AttendanceRecord {
 
 export default function Attendance() {
   const queryClient = useQueryClient();
-  const [user, setUser] = useState<any>(null);
   const [selectedSection, setSelectedSection] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split('T')[0]
@@ -34,116 +39,80 @@ export default function Attendance() {
   const [attendanceData, setAttendanceData] = useState<Record<string, AttendanceRecord>>({});
 
   // Get current user
-  useEffect(() => {
-    const getUser = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user) {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('id, email, role, school_id')
-            .eq('id', session.user.id)
-            .single();
-          
-          if (userData) {
-            setUser(userData);
-          }
-        }
-      } catch (error) {
-        console.error('Error getting user:', error);
-      }
-    };
-
-    getUser();
-  }, []);
-
-  // Fetch sections where this teacher is assigned (using section_teachers junction table)
-  const { data: sections } = useQuery({
-    queryKey: ['teacher-sections', user?.id],
-    queryFn: async (): Promise<Section[]> => {
-      if (!user?.id) throw new Error('No user ID');
-
-      // Get sections via section_teachers junction table
-      const { data, error } = await supabase
-        .from('section_teachers')
-        .select(`
-          sections!inner(
-            id,
-            grade,
-            section,
-            school_id
-          )
-        `)
-        .eq('teacher_id', user.id)
-        .eq('sections.school_id', user.school_id);
-
-      if (error) throw error;
-      
-      // Transform the data to match the expected Section interface
-      const sectionsData = data?.map((item: any) => ({
-        id: item.sections.id,
-        grade: item.sections.grade,
-        section: item.sections.section,
-      })) || [];
-
-      return sectionsData;
-    },
-    enabled: !!user?.id,
+  const { data: user, error: userError } = useQuery({
+    queryKey: ['current-user'],
+    queryFn: getCurrentUser,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  useEffect(() => {
+    if (userError) {
+      Alert.alert('Error', 'Failed to load user data');
+    }
+  }, [userError]);
+
+  // Fetch teacher's sections
+  const { data: sectionsResponse, error: sectionsError } = useQuery({
+    queryKey: ['teacher-sections', user?.data?.id],
+    queryFn: () => getTeacherSections(user?.data?.id || ''),
+    enabled: !!user?.data?.id,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  });
+
+  const sections = sectionsResponse?.data || [];
+
+  useEffect(() => {
+    if (sectionsError) {
+      Alert.alert('Error', 'Failed to load sections');
+    }
+  }, [sectionsError]);
+
+  // Get selected section details
+  const selectedSectionData = sections.find(s => s.id === selectedSection);
 
   // Fetch students for selected section
-  const { data: students } = useQuery({
-    queryKey: ['section-students', selectedSection],
-    queryFn: async (): Promise<Student[]> => {
-      if (!selectedSection) return [];
-
-      const { data: sectionData } = await supabase
-        .from('sections')
-        .select('grade, section')
-        .eq('id', selectedSection)
-        .single();
-
-      if (!sectionData) return [];
-
-      const { data, error } = await supabase
-        .from('students')
-        .select('id, full_name, admission_no, grade, section')
-        .eq('school_id', user?.school_id)
-        .eq('grade', sectionData.grade)
-        .eq('section', sectionData.section)
-        .order('full_name');
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!selectedSection && !!user?.school_id,
+  const { data: studentsResponse, error: studentsError } = useQuery({
+    queryKey: ['section-students', user?.data?.school_id, selectedSectionData?.grade, selectedSectionData?.section],
+    queryFn: () => getSectionStudents(
+      user?.data?.school_id || '', 
+      selectedSectionData?.grade || '', 
+      selectedSectionData?.section || ''
+    ),
+    enabled: !!user?.data?.school_id && !!selectedSectionData,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  const students = studentsResponse?.data || [];
+
+  useEffect(() => {
+    if (studentsError) {
+      Alert.alert('Error', 'Failed to load students');
+    }
+  }, [studentsError]);
 
   // Fetch existing attendance for selected date and section
-  const { data: existingAttendance } = useQuery({
-    queryKey: ['attendance', selectedSection, selectedDate],
-    queryFn: async () => {
-      if (!selectedSection || !selectedDate || !students?.length) return [];
-
-      const studentIds = students.map(s => s.id);
-
-      const { data, error } = await supabase
-        .from('attendance_records')
-        .select('student_id, status, notes')
-        .eq('school_id', user?.school_id)
-        .eq('date', selectedDate)
-        .in('student_id', studentIds);
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!selectedSection && !!selectedDate && !!students?.length,
+  const { data: existingAttendanceResponse, error: attendanceError } = useQuery({
+    queryKey: ['attendance', user?.data?.school_id, selectedDate, students.map(s => s.id)],
+    queryFn: () => getAttendanceRecords(
+      user?.data?.school_id || '',
+      selectedDate,
+      students.map(s => s.id)
+    ),
+    enabled: !!user?.data?.school_id && !!selectedDate && students.length > 0,
+    staleTime: 1 * 60 * 1000, // 1 minute
   });
+
+  const existingAttendance = existingAttendanceResponse?.data || [];
+
+  useEffect(() => {
+    if (attendanceError) {
+      Alert.alert('Error', 'Failed to load attendance records');
+    }
+  }, [attendanceError]);
 
   // Initialize attendance data when existing records are loaded
   useEffect(() => {
-    if (existingAttendance && students) {
+    if (students.length > 0) {
       const attendanceMap: Record<string, AttendanceRecord> = {};
       
       // Initialize all students as present by default
@@ -170,7 +139,7 @@ export default function Attendance() {
 
   // Set first section as default
   useEffect(() => {
-    if (sections && sections.length > 0 && !selectedSection) {
+    if (sections.length > 0 && !selectedSection) {
       setSelectedSection(sections[0].id);
     }
   }, [sections, selectedSection]);
@@ -178,35 +147,31 @@ export default function Attendance() {
   // Save attendance mutation
   const saveAttendanceMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedSection || !selectedDate || !user?.school_id) {
+      if (!selectedSection || !selectedDate || !user?.data?.school_id) {
         throw new Error('Missing required data');
       }
 
       const records = Object.values(attendanceData).map(record => ({
-        school_id: user.school_id,
+        school_id: user.data.school_id,
         student_id: record.student_id,
         date: selectedDate,
         status: record.status,
-        recorded_by: user.id,
+        recorded_by: user.data.id,
         notes: record.notes || null
       }));
 
-      // Use upsert to handle existing records
-      const { error } = await supabase
-        .from('attendance_records')
-        .upsert(records, {
-          onConflict: 'student_id,date',
-          ignoreDuplicates: false
-        });
-
-      if (error) throw error;
+      const result = await saveAttendanceRecords(records);
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      return result.data;
     },
     onSuccess: () => {
-      Alert.alert('Success', 'Attendance saved successfully!');
+      Alert.alert('Success', 'Attendance saved successfully');
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
     },
     onError: (error: any) => {
-      Alert.alert('Error', `Failed to save attendance: ${error.message}`);
+      Alert.alert('Error', error.message || 'Failed to save attendance');
     },
   });
 
@@ -215,18 +180,18 @@ export default function Attendance() {
       ...prev,
       [studentId]: {
         ...prev[studentId],
-        status,
+        status
       }
     }));
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'present': return 'bg-green-100 text-green-800';
-      case 'absent': return 'bg-red-100 text-red-800';
-      case 'late': return 'bg-yellow-100 text-yellow-800';
-      case 'excused': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'present': return 'bg-green-500';
+      case 'absent': return 'bg-red-500';
+      case 'late': return 'bg-yellow-500';
+      case 'excused': return 'bg-blue-500';
+      default: return 'bg-gray-500';
     }
   };
 
@@ -241,13 +206,12 @@ export default function Attendance() {
   };
 
   const getAttendanceSummary = () => {
-    const statuses = Object.values(attendanceData);
+    const records = Object.values(attendanceData);
     return {
-      present: statuses.filter(s => s.status === 'present').length,
-      absent: statuses.filter(s => s.status === 'absent').length,
-      late: statuses.filter(s => s.status === 'late').length,
-      excused: statuses.filter(s => s.status === 'excused').length,
-      total: statuses.length
+      present: records.filter(r => r.status === 'present').length,
+      absent: records.filter(r => r.status === 'absent').length,
+      late: records.filter(r => r.status === 'late').length,
+      excused: records.filter(r => r.status === 'excused').length,
     };
   };
 
@@ -259,7 +223,6 @@ export default function Attendance() {
     );
   }
 
-  const selectedSectionData = sections?.find(s => s.id === selectedSection);
   const summary = getAttendanceSummary();
 
   return (
@@ -305,11 +268,11 @@ export default function Attendance() {
             </Text>
             <View className="flex-row justify-between">
               <View className="items-center">
-                <Text className="text-2xl font-bold text-green-600">{presentCount}</Text>
+                <Text className="text-2xl font-bold text-green-600">{summary.present}</Text>
                 <Text className="text-gray-600">Present</Text>
               </View>
               <View className="items-center">
-                <Text className="text-2xl font-bold text-red-600">{absentCount}</Text>
+                <Text className="text-2xl font-bold text-red-600">{summary.absent}</Text>
                 <Text className="text-gray-600">Absent</Text>
               </View>
               <View className="items-center">
@@ -329,7 +292,7 @@ export default function Attendance() {
             students.map((student, index) => (
               <TouchableOpacity
                 key={student.id}
-                onPress={() => toggleAttendance(student.id)}
+                onPress={() => updateAttendance(student.id, 'present')}
                 className={`p-4 flex-row justify-between items-center ${
                   index !== students.length - 1 ? 'border-b border-gray-100' : ''
                 }`}
@@ -341,16 +304,16 @@ export default function Attendance() {
                   <Text className="text-gray-600">Grade {student.grade}</Text>
                 </View>
                 <View className={`px-3 py-1 rounded-full ${
-                  attendance[student.id] === 'present'
+                  attendanceData[student.id]?.status === 'present'
                     ? 'bg-green-100'
                     : 'bg-red-100'
                 }`}>
                   <Text className={`font-medium ${
-                    attendance[student.id] === 'present'
+                    attendanceData[student.id]?.status === 'present'
                       ? 'text-green-800'
                       : 'text-red-800'
                   }`}>
-                    {attendance[student.id] === 'present' ? 'Present' : 'Absent'}
+                    {attendanceData[student.id]?.status === 'present' ? 'Present' : 'Absent'}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -365,7 +328,7 @@ export default function Attendance() {
         {/* Submit Button */}
         {students.length > 0 && (
           <TouchableOpacity
-            onPress={submitAttendance}
+            onPress={() => saveAttendanceMutation.mutate()}
             className="bg-indigo-600 rounded-lg p-4 mt-4 shadow-sm"
           >
             <Text className="text-white text-center font-semibold text-lg">
