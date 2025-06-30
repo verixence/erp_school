@@ -582,36 +582,36 @@ export default function SuperAdminDashboard() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 1.1 }}
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-                <CardDescription>
-                  Common administrative tasks
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Link href="/super-admin/schools">
-                    <Button variant="outline" className="w-full h-20 flex flex-col gap-2">
-                      <School2 className="w-6 h-6" />
-                      <span>Manage Schools</span>
-                    </Button>
-                  </Link>
-                  <Link href="/super-admin/audit-logs">
-                    <Button variant="outline" className="w-full h-20 flex flex-col gap-2">
-                      <Database className="w-6 h-6" />
-                      <span>Audit Logs</span>
-                    </Button>
-                  </Link>
-                  <Button variant="outline" className="w-full h-20 flex flex-col gap-2" disabled>
-                    <Settings className="w-6 h-6" />
-                    <span>System Settings</span>
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Actions</CardTitle>
+              <CardDescription>
+                Common administrative tasks
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Link href="/super-admin/schools">
+                  <Button variant="outline" className="w-full h-20 flex flex-col gap-2">
+                    <School2 className="w-6 h-6" />
+                    <span>Manage Schools</span>
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+                </Link>
+                <Link href="/super-admin/audit-logs">
+                  <Button variant="outline" className="w-full h-20 flex flex-col gap-2">
+                    <Database className="w-6 h-6" />
+                    <span>Audit Logs</span>
+                  </Button>
+                </Link>
+                <Button variant="outline" className="w-full h-20 flex flex-col gap-2" disabled>
+                  <Settings className="w-6 h-6" />
+                  <span>System Settings</span>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
         )}
       </div>
     </div>

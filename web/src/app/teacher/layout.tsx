@@ -3,7 +3,7 @@
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { BookOpen, Calendar, Users, Home, GraduationCap, LogOut, CheckCircle, FileText } from 'lucide-react';
+import { BookOpen, Calendar, Users, Home, GraduationCap, LogOut, CheckCircle, FileText, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase-client';
@@ -39,6 +39,11 @@ export default function TeacherLayout({
       href: '/teacher',
       label: 'Dashboard',
       icon: Home,
+    },
+    {
+      href: '/feed',
+      label: 'Community Feed',
+      icon: MessageSquare,
     },
     {
       href: '/teacher/attendance',

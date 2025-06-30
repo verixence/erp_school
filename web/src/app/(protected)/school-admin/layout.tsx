@@ -15,7 +15,9 @@ import {
   School2,
   ClipboardCheck,
   Calendar,
-  BookOpen
+  BookOpen,
+  MessageSquare,
+  Megaphone
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase-client';
 
@@ -27,6 +29,8 @@ const navigation = [
   { name: 'Classes', href: '/school-admin/sections', icon: Building2 },
   { name: 'Attendance', href: '/school-admin/attendance', icon: ClipboardCheck },
   { name: 'Timetable', href: '/school-admin/timetable', icon: Calendar },
+  { name: 'Community', href: '/school-admin/community', icon: MessageSquare },
+  { name: 'Announcements', href: '/school-admin/announcements', icon: Megaphone },
 ];
 
 export default function SchoolAdminLayout({

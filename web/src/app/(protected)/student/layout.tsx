@@ -3,7 +3,7 @@
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { BookOpen, Calendar, Bell, Settings, Home, GraduationCap, LogOut } from 'lucide-react';
+import { BookOpen, Calendar, Bell, Settings, Home, GraduationCap, LogOut, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase-client';
@@ -36,6 +36,7 @@ export default function StudentLayout({
 
   const sidebarItems = [
     { href: '/student', label: 'Dashboard', icon: Home },
+    { href: '/feed', label: 'Community Feed', icon: MessageSquare },
     { href: '/student/attendance', label: 'My Attendance', icon: Calendar },
     { href: '/student/homework', label: 'Homework', icon: BookOpen },
     { href: '/student/timetable', label: 'My Timetable', icon: GraduationCap },
