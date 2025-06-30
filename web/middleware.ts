@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
 
     // Get user role from our database for protected routes
     if (pathname.startsWith('/super-admin') || pathname.startsWith('/school-admin') || 
-        pathname.startsWith('/teacher') || pathname.startsWith('/parent')) {
+        pathname.startsWith('/teacher') || pathname.startsWith('/parent') || pathname.startsWith('/student')) {
       const { data: userData } = await supabase
         .from('users')
         .select('role')
@@ -45,6 +45,10 @@ export async function middleware(request: NextRequest) {
       }
 
       if (pathname.startsWith('/parent') && userData?.role !== 'parent') {
+        return NextResponse.redirect(new URL('/not-authorized', request.url));
+      }
+
+      if (pathname.startsWith('/student') && userData?.role !== 'student') {
         return NextResponse.redirect(new URL('/not-authorized', request.url));
       }
     }

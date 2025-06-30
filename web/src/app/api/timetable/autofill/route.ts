@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createServerSupabaseClient();
+    const supabase = createServerSupabaseClient(request);
 
     // Call the PostgreSQL autofill function
     const { data, error } = await supabase.rpc('autofill_timetable', {

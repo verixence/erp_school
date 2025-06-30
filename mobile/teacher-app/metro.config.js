@@ -1,20 +1,5 @@
-const path = require('path');
+const { getDefaultConfig } = require('expo/metro-config');
 
-module.exports = {
-  projectRoot: __dirname,
-  watchFolders: [],
-  
-  resolver: {
-    nodeModulesPaths: [path.resolve(__dirname, 'node_modules')],
-    resolverMainFields: ['react-native', 'browser', 'main'],
-  },
-  
-  transformer: {
-    getTransformOptions: async () => ({
-      transform: {
-        experimentalImportSupport: false,
-        inlineRequires: true,
-      },
-    }),
-  },
-}; 
+const config = getDefaultConfig(__dirname);
+
+module.exports = config; 

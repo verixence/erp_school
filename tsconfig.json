@@ -8,5 +8,6 @@
       "path": "./web"
     }
   ],
-  "compilerOptions": {}
+  "compilerOptions": {},
+  "extends": "expo/tsconfig.base"
 }

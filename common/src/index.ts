@@ -1,5 +1,5 @@
 // User roles
-export type UserRole = "super_admin" | "school_admin" | "teacher" | "parent";
+export type UserRole = "super_admin" | "school_admin" | "teacher" | "parent" | "student";
 
 // Feature flags
 export const featureKeys = [

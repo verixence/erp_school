@@ -109,7 +109,10 @@ export default function SchoolAdminLayout({
                 </div>
               </div>
               <button
-                onClick={() => supabase.auth.signOut()}
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  window.location.href = '/login';
+                }}
                 className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
                 title="Sign out"
               >

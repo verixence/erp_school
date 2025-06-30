@@ -160,7 +160,7 @@ async function main() {
 
     // Create section_teachers relationships
     console.log('\n🔗 Creating section-teacher relationships...');
-    const sectionTeacherRelationships = [];
+    const sectionTeacherRelationships: { section_id: string; teacher_id: string }[] = [];
     
     // Add all teachers who teach in each section based on the timetable
     for (const period of samplePeriods) {
@@ -234,13 +234,30 @@ async function main() {
     }
     console.log('✅ Demo students created');
 
-    // Create some sample parents
+    // Create some sample parents (with auth)
     console.log('\n👨‍👩‍👧‍👦 Creating demo parents...');
     const parentId = randomUUID();
+    
+    // First create auth user
+    const { data: authParent, error: authParentError } = await supabase.auth.admin.createUser({
+      email: 'parent@sunriseschool.edu',
+      password: 'parent123',
+      email_confirm: true,
+      user_metadata: {
+        role: 'parent'
+      }
+    });
+
+    if (authParentError) {
+      console.warn('Auth parent creation warning:', authParentError.message);
+      // Continue with existing user if already exists
+    }
+
+    // Then create user record
     const { error: parentError } = await supabase
       .from('users')
       .insert({
-        id: parentId,
+        id: authParent?.user?.id || parentId,
         email: 'parent@sunriseschool.edu',
         school_id: schoolId,
         role: 'parent',
@@ -250,7 +267,19 @@ async function main() {
       });
 
     if (parentError) throw parentError;
-    console.log('✅ Demo parent created');
+    console.log('✅ Demo parent created with auth');
+
+    // Link parent to first student (Alice Johnson)
+    console.log('\n🔗 Creating parent-student relationships...');
+    const { error: parentStudentError } = await supabase
+      .from('student_parents')
+      .insert({
+        parent_id: authParent?.user?.id || parentId,
+        student_id: sampleStudents[0].id
+      });
+
+    if (parentStudentError) throw parentStudentError;
+    console.log('✅ Parent-student relationship created');
 
     console.log('\n🎉 Database seeding completed successfully!');
     console.log('\n📋 Login Credentials:');

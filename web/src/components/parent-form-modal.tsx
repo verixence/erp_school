@@ -243,14 +243,23 @@ export default function ParentFormModal({
   };
 
   const handleClose = () => {
-    onOpenChange(false);
     form.reset();
     setSelectedChildren([]);
+    onOpenChange(false);
+  };
+
+  // Handle dialog open/close
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      handleClose();
+    } else {
+      onOpenChange(newOpen);
+    }
   };
 
   // Reset form when parent prop changes
   React.useEffect(() => {
-    if (parent) {
+    if (open && parent) {
       // Get children assigned to this parent
       const parentChildren = students
         .filter(student => student.parent_id === parent.id)
@@ -265,11 +274,22 @@ export default function ParentFormModal({
         relation: parent.relation || undefined,
         children: parentChildren,
       });
+    } else if (open && !parent) {
+      // Reset for new parent
+      form.reset({
+        first_name: '',
+        last_name: '',
+        email: '',
+        phone: '',
+        relation: undefined,
+        children: [],
+      });
+      setSelectedChildren([]);
     }
-  }, [parent, students, form]);
+  }, [open, parent, students, form]);
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>

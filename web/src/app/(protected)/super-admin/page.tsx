@@ -12,7 +12,15 @@ import {
   Activity,
   Database,
   LogOut,
-  ArrowRight
+  ArrowRight,
+  TrendingUp,
+  Building2,
+  GraduationCap,
+  UserCheck,
+  Globe,
+  Calendar,
+  BarChart3,
+  PieChart
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,57 +33,103 @@ interface School {
   id: string;
   name: string;
   domain: string | null;
+  logo_url: string | null;
+  website_url: string | null;
+  email_address: string | null;
+  school_type: string | null;
+  total_capacity: number | null;
+  principal_name: string | null;
   enabled_features: Record<string, boolean>;
   status: string;
   created_at: string;
 }
 
+interface SchoolAnalytics {
+  school_id: string;
+  school_name: string;
+  status: string;
+  created_at: string;
+  total_students: number;
+  total_teachers: number;
+  total_parents: number;
+  total_admins: number;
+  total_users: number;
+  active_users_30d: number;
+  recent_users_7d: number;
+  total_capacity: number | null;
+  capacity_utilization_percent: number;
+}
+
+interface ApplicationStats {
+  total_schools: number;
+  active_schools: number;
+  total_students: number;
+  total_teachers: number;
+  total_parents: number;
+  total_users: number;
+  total_capacity: number;
+  avg_capacity_utilization: number;
+  schools_by_type: Record<string, number>;
+  schools_by_status: Record<string, number>;
+}
+
 interface DashboardStats {
-  totalSchools: number;
-  activeSchools: number;
-  totalUsers: number;
-  avgFeatures: number;
+  applicationStats: ApplicationStats;
   recentSchools: School[];
+  topSchools: SchoolAnalytics[];
 }
 
 export default function SuperAdminDashboard() {
   const { user } = useAuth();
 
-  const { data: stats, isLoading, error } = useQuery({
-    queryKey: ['super-admin-dashboard'],
-    queryFn: async (): Promise<DashboardStats> => {
-      // Fetch schools data
-      const { data: schools, error: schoolsError } = await supabase
-        .from('schools')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (schoolsError) throw schoolsError;
-
-      // Fetch users count
-      const { count: usersCount } = await supabase
-        .from('users')
-        .select('*', { count: 'exact', head: true });
-
-      // Calculate stats
-      const totalSchools = schools?.length || 0;
-      const activeSchools = schools?.filter(s => s.status === 'active').length || 0;
-      const avgFeatures = totalSchools > 0 
-        ? Math.round(schools.reduce((acc, school) => 
-            acc + Object.values(school.enabled_features).filter(Boolean).length, 0
-          ) / totalSchools)
-        : 0;
-
-      return {
-        totalSchools,
-        activeSchools,
-        totalUsers: usersCount || 0,
-        avgFeatures,
-        recentSchools: schools?.slice(0, 5) || [],
-      };
+  // Separate queries for better performance and loading states
+  const { data: appStats } = useQuery({
+    queryKey: ['application-stats'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_application_stats');
+      if (error) throw error;
+      return data as ApplicationStats;
     },
     enabled: user?.role === 'super_admin',
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
+
+  const { data: recentSchools } = useQuery({
+    queryKey: ['recent-schools'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('schools')
+        .select('id, name, logo_url, school_type, enabled_features, status, created_at')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data as School[];
+    },
+    enabled: user?.role === 'super_admin',
+    staleTime: 2 * 60 * 1000, // Cache for 2 minutes
+  });
+
+  const { data: topSchools } = useQuery({
+    queryKey: ['top-schools'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('school_analytics')
+        .select('school_id, school_name, total_students, total_teachers, total_users')
+        .order('total_users', { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data as SchoolAnalytics[];
+    },
+    enabled: user?.role === 'super_admin',
+    staleTime: 10 * 60 * 1000, // Cache for 10 minutes
+  });
+
+  // Combined stats for backward compatibility
+  const stats = {
+    applicationStats: appStats,
+    recentSchools: recentSchools || [],
+    topSchools: topSchools || [],
+  };
 
   const getEnabledFeaturesCount = (features: Record<string, boolean>) => {
     return Object.values(features).filter(Boolean).length;
@@ -122,7 +176,10 @@ export default function SuperAdminDashboard() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => supabase.auth.signOut()}
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  window.location.href = '/login';
+                }}
                 className="text-destructive hover:text-destructive"
               >
                 <LogOut className="w-4 h-4 mr-2" />
@@ -135,24 +192,25 @@ export default function SuperAdminDashboard() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* KPI Cards */}
+        {/* Overview Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <Card>
+            <Card className="relative overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Schools</CardTitle>
-                <School2 className="h-4 w-4 text-muted-foreground" />
+                <Building2 className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats?.totalSchools || 0}</div>
+                <div className="text-2xl font-bold">{appStats?.total_schools || 0}</div>
                 <p className="text-xs text-muted-foreground">
-                  Schools registered
+                  {appStats?.active_schools || 0} active
                 </p>
               </CardContent>
+              <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-blue-500/10 to-blue-600/10 rounded-bl-3xl" />
             </Card>
           </motion.div>
 
@@ -161,17 +219,18 @@ export default function SuperAdminDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <Card>
+            <Card className="relative overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Schools</CardTitle>
-                <Activity className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Total Students</CardTitle>
+                <GraduationCap className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats?.activeSchools || 0}</div>
+                <div className="text-2xl font-bold">{(appStats?.total_students || 0).toLocaleString()}</div>
                 <p className="text-xs text-muted-foreground">
-                  {stats?.totalSchools ? Math.round((stats.activeSchools / stats.totalSchools) * 100) : 0}% active
+                  Across all schools
                 </p>
               </CardContent>
+              <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-green-500/10 to-green-600/10 rounded-bl-3xl" />
             </Card>
           </motion.div>
 
@@ -180,17 +239,18 @@ export default function SuperAdminDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            <Card>
+            <Card className="relative overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+                <CardTitle className="text-sm font-medium">Total Teachers</CardTitle>
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats?.totalUsers || 0}</div>
+                <div className="text-2xl font-bold">{(appStats?.total_teachers || 0).toLocaleString()}</div>
                 <p className="text-xs text-muted-foreground">
-                  Across all schools
+                  Teaching staff
                 </p>
               </CardContent>
+              <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-purple-500/10 to-purple-600/10 rounded-bl-3xl" />
             </Card>
           </motion.div>
 
@@ -199,28 +259,292 @@ export default function SuperAdminDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
-            <Card>
+            <Card className="relative overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Avg Features</CardTitle>
-                <Settings className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Platform Utilization</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats?.avgFeatures || 0}</div>
+                <div className="text-2xl font-bold">
+                  {Math.round(appStats?.avg_capacity_utilization || 0)}%
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  Per school average
+                  Average capacity used
                 </p>
+              </CardContent>
+              <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-orange-500/10 to-orange-600/10 rounded-bl-3xl" />
+            </Card>
+          </motion.div>
+        </div>
+
+        {/* Secondary Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <PieChart className="w-5 h-5" />
+                  <span>Schools by Type</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {appStats?.schools_by_type && Object.entries(appStats.schools_by_type).map(([type, count]) => (
+                    <div key={type} className="flex items-center justify-between">
+                      <span className="text-sm capitalize">{type}</span>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-16 bg-muted rounded-full h-2">
+                          <div
+                            className="bg-primary h-2 rounded-full"
+                            style={{ 
+                              width: `${((count as number) / (appStats.total_schools || 1)) * 100}%` 
+                            }}
+                          />
+                        </div>
+                        <span className="text-sm font-medium w-8 text-right">{count}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Activity className="w-5 h-5" />
+                  <span>Platform Health</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Active Schools</span>
+                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                      {appStats?.active_schools || 0} / {appStats?.total_schools || 0}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Total Users</span>
+                    <span className="font-medium">{(appStats?.total_users || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Total Capacity</span>
+                    <span className="font-medium">{(appStats?.total_capacity || 0).toLocaleString()}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 }}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <UserCheck className="w-5 h-5" />
+                  <span>User Distribution</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Students</span>
+                    <span className="font-medium">{(appStats?.total_students || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Teachers</span>
+                    <span className="font-medium">{(appStats?.total_teachers || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Parents</span>
+                    <span className="font-medium">{(appStats?.total_parents || 0).toLocaleString()}</span>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
         </div>
 
-        {/* Getting Started Card (shown when <= 3 schools) or Recent Schools */}
-        {(stats?.totalSchools || 0) <= 3 ? (
+        {/* School Performance & Recent Schools */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Top Performing Schools */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="mb-8"
+            transition={{ delay: 0.8 }}
+          >
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center space-x-2">
+                      <BarChart3 className="w-5 h-5" />
+                      <span>Top Schools by Users</span>
+                    </CardTitle>
+                    <CardDescription>
+                      Schools with the highest user engagement
+                    </CardDescription>
+                  </div>
+                  <Link href="/super-admin/schools">
+                    <Button variant="outline" size="sm">
+                      View All
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </Link>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {stats?.topSchools?.map((school, index) => (
+                    <motion.div
+                      key={school.school_id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.9 + index * 0.1 }}
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+                          <span className="text-sm font-bold text-primary">#{index + 1}</span>
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-sm">{school.school_name}</h4>
+                          <p className="text-xs text-muted-foreground">
+                            {school.total_students} students • {school.total_teachers} teachers
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-medium">{school.total_users} users</div>
+                        {school.capacity_utilization_percent > 0 && (
+                          <div className="text-xs text-muted-foreground">
+                            {school.capacity_utilization_percent}% capacity
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Recent Schools */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.9 }}
+          >
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center space-x-2">
+                      <Calendar className="w-5 h-5" />
+                      <span>Recent Schools</span>
+                    </CardTitle>
+                    <CardDescription>
+                      Latest schools added to the platform
+                    </CardDescription>
+                  </div>
+                  <Link href="/super-admin/schools">
+                    <Button variant="outline" size="sm">
+                      View All
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </Link>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {stats?.recentSchools?.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <School2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                      <p>No schools found</p>
+                      <p className="text-sm">Create your first school to get started</p>
+                    </div>
+                  ) : (
+                    stats?.recentSchools?.map((school, index) => (
+                    <motion.div
+                      key={school.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 1.0 + index * 0.1 }}
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 relative">
+                          {school.logo_url ? (
+                            <img 
+                              src={school.logo_url} 
+                              alt={`${school.name} logo`}
+                              className="w-full h-full object-cover rounded-lg border"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                              }}
+                            />
+                          ) : null}
+                          <div className={`w-full h-full bg-primary/10 rounded-lg flex items-center justify-center ${school.logo_url ? 'hidden' : ''}`}>
+                            <School2 className="w-5 h-5 text-primary" />
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-sm">{school.name}</h4>
+                          <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+                            <span className="flex items-center space-x-1">
+                              <Globe className="w-3 h-3" />
+                              <span>{school.domain || 'No domain'}</span>
+                            </span>
+                            {school.school_type && (
+                              <Badge variant="outline" className="text-xs">
+                                {school.school_type}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <Badge variant={school.status === 'active' ? 'default' : 'secondary'} className="text-xs">
+                          {school.status}
+                        </Badge>
+                        <div className="text-xs text-muted-foreground">
+                          {getEnabledFeaturesCount(school.enabled_features)}/{getTotalFeatures(school.enabled_features)} features
+                        </div>
+                        <Link href={`/super-admin/${school.id}`}>
+                          <Button variant="ghost" size="sm">
+                            <Settings className="w-4 h-4" />
+                          </Button>
+                        </Link>
+                      </div>
+                    </motion.div>
+                  )))}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+
+        {/* Getting Started or Quick Actions */}
+        {(appStats?.total_schools || 0) === 0 ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.1 }}
           >
             <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10">
               <CardHeader>
@@ -254,107 +578,41 @@ export default function SuperAdminDashboard() {
             </Card>
           </motion.div>
         ) : (
-          /* Recent Schools */
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="mb-8"
+            transition={{ delay: 1.1 }}
           >
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Recent Schools</CardTitle>
-                    <CardDescription>
-                      Latest schools added to the platform
-                    </CardDescription>
-                  </div>
-                  <Link href="/super-admin/schools">
-                    <Button variant="outline" size="sm">
-                      View All
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                  </Link>
-                </div>
+                <CardTitle>Quick Actions</CardTitle>
+                <CardDescription>
+                  Common administrative tasks
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {stats?.recentSchools.map((school, index) => (
-                    <motion.div
-                      key={school.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.6 + index * 0.1 }}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex items-center space-x-4">
-                        <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                          <School2 className="w-5 h-5 text-primary" />
-                        </div>
-                        <div>
-                          <h4 className="font-medium">{school.name}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            {school.domain || 'No domain set'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <Badge variant={school.status === 'active' ? 'default' : 'secondary'}>
-                          {school.status}
-                        </Badge>
-                        <div className="text-sm text-muted-foreground">
-                          {getEnabledFeaturesCount(school.enabled_features)}/{getTotalFeatures(school.enabled_features)} features
-                        </div>
-                        <Link href={`/super-admin/${school.id}`}>
-                          <Button variant="ghost" size="sm">
-                            <Settings className="w-4 h-4" />
-                          </Button>
-                        </Link>
-                      </div>
-                    </motion.div>
-                  ))}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Link href="/super-admin/schools">
+                    <Button variant="outline" className="w-full h-20 flex flex-col gap-2">
+                      <School2 className="w-6 h-6" />
+                      <span>Manage Schools</span>
+                    </Button>
+                  </Link>
+                  <Link href="/super-admin/audit-logs">
+                    <Button variant="outline" className="w-full h-20 flex flex-col gap-2">
+                      <Database className="w-6 h-6" />
+                      <span>Audit Logs</span>
+                    </Button>
+                  </Link>
+                  <Button variant="outline" className="w-full h-20 flex flex-col gap-2" disabled>
+                    <Settings className="w-6 h-6" />
+                    <span>System Settings</span>
+                  </Button>
                 </div>
               </CardContent>
             </Card>
           </motion.div>
         )}
-
-        {/* Quick Actions */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>
-                Common administrative tasks
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Link href="/super-admin/schools">
-                  <Button variant="outline" className="w-full h-20 flex flex-col gap-2">
-                    <School2 className="w-6 h-6" />
-                    <span>Manage Schools</span>
-                  </Button>
-                </Link>
-                <Link href="/super-admin/audit-logs">
-                  <Button variant="outline" className="w-full h-20 flex flex-col gap-2">
-                    <Database className="w-6 h-6" />
-                    <span>Audit Logs</span>
-                  </Button>
-                </Link>
-                <Button variant="outline" className="w-full h-20 flex flex-col gap-2" disabled>
-                  <Settings className="w-6 h-6" />
-                  <span>System Settings</span>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
       </div>
     </div>
   );

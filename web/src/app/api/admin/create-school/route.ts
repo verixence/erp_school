@@ -20,22 +20,97 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, domain, adminEmail, adminPassword } = await request.json();
+    const { 
+      name, 
+      domain, 
+      adminEmail, 
+      adminPassword,
+      // Enhanced school details (matching form field names)
+      logo_url,
+      website_url,
+      email_address,
+      phone_number,
+      address,
+      principal_name,
+      principal_email,
+      principal_phone,
+      theme_colors,
+      school_type,
+      board_affiliation,
+      establishment_year,
+      total_capacity,
+      description,
+      settings
+    } = await request.json();
 
-    // Validate input
+    // Validate required fields
     if (!name || !domain || !adminEmail || !adminPassword) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields: name, domain, adminEmail, adminPassword' },
         { status: 400 }
       );
     }
 
-    // 1. Create the school
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(adminEmail)) {
+      return NextResponse.json(
+        { error: 'Invalid admin email format' },
+        { status: 400 }
+      );
+    }
+
+    if (principal_email && !emailRegex.test(principal_email)) {
+      return NextResponse.json(
+        { error: 'Invalid principal email format' },
+        { status: 400 }
+      );
+    }
+
+    // Default address structure
+    const defaultAddress = {
+      street: '',
+      city: '',
+      state: '',
+      country: '',
+      postal_code: ''
+    };
+
+    // Default theme colors
+    const defaultThemeColors = {
+      primary: '#2563eb',
+      secondary: '#64748b',
+      accent: '#0ea5e9'
+    };
+
+    // Default settings
+    const defaultSettings = {
+      timezone: 'UTC',
+      academic_year_start: 'April',
+      working_days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    };
+
+    // 1. Create the school with enhanced details
     const { data: schoolData, error: schoolError } = await supabaseAdmin
       .from('schools')
       .insert({
         name,
         domain,
+        logo_url: logo_url || null,
+        website_url: website_url || null,
+        email_address: email_address || null,
+        phone_number: phone_number || null,
+        address: address || defaultAddress,
+        principal_name: principal_name || null,
+        principal_email: principal_email || null,
+        principal_phone: principal_phone || null,
+        theme_colors: theme_colors || defaultThemeColors,
+        school_type: school_type || 'public',
+        board_affiliation: board_affiliation || null,
+        establishment_year: establishment_year ? parseInt(establishment_year) : null,
+        total_capacity: total_capacity ? parseInt(total_capacity) : null,
+        description: description || null,
+        settings: settings || defaultSettings,
         enabled_features: {
           core: true,
           attend: false,
@@ -68,6 +143,7 @@ export async function POST(request: NextRequest) {
       user_metadata: {
         role: 'school_admin',
         school_id: schoolData.id,
+        school_name: schoolData.name,
       },
     });
 
@@ -102,10 +178,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 4. Add the user to school_admins table as primary admin
+    const { error: schoolAdminError } = await supabaseAdmin
+      .from('school_admins')
+      .insert({
+        school_id: schoolData.id,
+        user_id: authData.user.id,
+        role: 'admin',
+        is_primary: true,
+        permissions: {
+          manage_users: true,
+          manage_students: true,
+          manage_teachers: true,
+          manage_timetable: true,
+          manage_attendance: true,
+          manage_homework: true,
+          manage_announcements: true,
+          view_analytics: true
+        }
+      });
+
+    if (schoolAdminError) {
+      console.error('School admin insertion error:', schoolAdminError);
+      // Clean up: delete auth user and school
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      await supabaseAdmin.from('schools').delete().eq('id', schoolData.id);
+      return NextResponse.json(
+        { error: 'Failed to create school admin record', details: schoolAdminError.message },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
       school: schoolData,
-      user: { id: authData.user.id, email: adminEmail }
+      user: { id: authData.user.id, email: adminEmail },
+      message: 'School and admin account created successfully'
     });
 
   } catch (error) {

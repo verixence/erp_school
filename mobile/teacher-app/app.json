@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "ERP Teacher",
-    "slug": "erp-teacher",
+    "name": "Teacher App",
+    "slug": "teacher-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -16,22 +16,22 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.erp.teacher"
+      "bundleIdentifier": "com.teacher.app.dev"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.erp.teacher"
+      "package": "com.teacher.app.dev"
     },
     "web": {
-      "favicon": "./assets/favicon.png",
-      "bundler": "metro"
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-dev-client",
       "expo-router"
     ],
-    "scheme": "erp-teacher"
+    "scheme": "teacher-app"
   }
-} 
+}

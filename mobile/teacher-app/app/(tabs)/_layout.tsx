@@ -1,44 +1,50 @@
 import { Tabs } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
+import React from 'react';
 
 export default function TabLayout() {
   return (
-    <Tabs screenOptions={{ tabBarActiveTintColor: '#4F46E5' }}>
+    <Tabs
+      screenOptions={{
+        tabBarActiveTintColor: '#3B82F6',
+        tabBarInactiveTintColor: '#6B7280',
+        headerShown: false,
+      }}
+    >
       <Tabs.Screen
         name="dashboard"
         options={{
           title: 'Dashboard',
-          tabBarIcon: ({ color }) => <MaterialIcons name="dashboard" size={24} color={color} />,
+          tabBarIcon: ({ color }) => <span style={{ color, fontSize: 24 }}>📊</span>,
         }}
       />
       <Tabs.Screen
         name="attendance"
         options={{
           title: 'Attendance',
-          tabBarIcon: ({ color }) => <MaterialIcons name="check-circle" size={24} color={color} />,
+          tabBarIcon: ({ color }) => <span style={{ color, fontSize: 24 }}>✅</span>,
         }}
       />
       <Tabs.Screen
         name="homework"
         options={{
           title: 'Homework',
-          tabBarIcon: ({ color }) => <MaterialIcons name="assignment" size={24} color={color} />,
+          tabBarIcon: ({ color }) => <span style={{ color, fontSize: 24 }}>📝</span>,
         }}
       />
       <Tabs.Screen
         name="timetable"
         options={{
           title: 'Timetable',
-          tabBarIcon: ({ color }) => <MaterialIcons name="schedule" size={24} color={color} />,
+          tabBarIcon: ({ color }) => <span style={{ color, fontSize: 24 }}>📅</span>,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color }) => <MaterialIcons name="settings" size={24} color={color} />,
+          tabBarIcon: ({ color }) => <span style={{ color, fontSize: 24 }}>⚙️</span>,
         }}
       />
     </Tabs>
   );
-}
+} 

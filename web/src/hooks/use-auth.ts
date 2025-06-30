@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase-client';
 // Import types directly for now - will be fixed when we wire up the common package
-type UserRole = "super_admin" | "school_admin" | "teacher" | "parent";
+type UserRole = "super_admin" | "school_admin" | "teacher" | "parent" | "student";
 
 interface User {
   id: string;

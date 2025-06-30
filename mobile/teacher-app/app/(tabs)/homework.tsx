@@ -1,256 +1,181 @@
-import { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  Modal,
-} from 'react-native';
-import { Picker } from '@react-native-picker/picker';
-import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import {
-  useAuth,
-  useTeacherSections,
-  useHomework,
-  useCreateHomework,
-  type Homework,
-} from '@erp/common';
+import React from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 
-interface HomeworkItemProps {
-  homework: Homework;
-}
-
-function HomeworkItem({ homework }: HomeworkItemProps) {
-  const dueDate = new Date(homework.due_date);
-  const isOverdue = dueDate < new Date();
-  
+export default function HomeworkScreen() {
   return (
-    <View className="bg-white rounded-lg p-4 shadow-sm mb-3">
-      <View className="flex-row justify-between items-start mb-2">
-        <Text className="text-lg font-medium text-gray-900 flex-1">
-          {homework.title}
-        </Text>
-        <View className={`px-2 py-1 rounded ${isOverdue ? 'bg-red-100' : 'bg-green-100'}`}>
-          <Text className={`text-xs font-medium ${isOverdue ? 'text-red-800' : 'text-green-800'}`}>
-            {isOverdue ? 'Overdue' : 'Active'}
-          </Text>
+    <View style={styles.container}>
+      <StatusBar style="dark" />
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Homework</Text>
+          <Text style={styles.headerSubtitle}>Manage assignments and submissions</Text>
         </View>
-      </View>
-      
-      <Text className="text-sm text-gray-600 mb-2">{homework.section} • {homework.subject}</Text>
-      
-      {homework.description && (
-        <Text className="text-sm text-gray-700 mb-3">{homework.description}</Text>
-      )}
-      
-      <View className="flex-row justify-between items-center">
-        <Text className="text-sm text-gray-600">
-          Due: {dueDate.toLocaleDateString()}
-        </Text>
-        {homework.file_url && (
-          <Ionicons name="attach" size={16} color="#6b7280" />
-        )}
-      </View>
-    </View>
-  );
-}
 
-export default function Homework() {
-  const { data: authData } = useAuth();
-  const user = authData?.user;
-  
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newHomework, setNewHomework] = useState({
-    section: '',
-    subject: '',
-    title: '',
-    description: '',
-    due_date: '',
-  });
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Active Assignments</Text>
+            <TouchableOpacity style={styles.addButton}>
+              <Text style={styles.addButtonText}>+ New</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.assignmentCard}>
+            <View style={styles.assignmentHeader}>
+              <Text style={styles.assignmentTitle}>Math Problem Set #5</Text>
+              <Text style={styles.assignmentDue}>Due: Tomorrow</Text>
+            </View>
+            <Text style={styles.assignmentClass}>Grade 10A - Mathematics</Text>
+            <View style={styles.assignmentStats}>
+              <Text style={styles.assignmentStat}>📝 18/32 submitted</Text>
+              <Text style={styles.assignmentStat}>⏰ 2 days left</Text>
+            </View>
+          </View>
 
-  const { data: sections = [] } = useTeacherSections(user?.id);
-  const { data: homeworkList = [] } = useHomework(user?.id);
-  const createHomeworkMutation = useCreateHomework();
+          <View style={styles.assignmentCard}>
+            <View style={styles.assignmentHeader}>
+              <Text style={styles.assignmentTitle}>Physics Lab Report</Text>
+              <Text style={styles.assignmentDue}>Due: Friday</Text>
+            </View>
+            <Text style={styles.assignmentClass}>Grade 11B - Physics</Text>
+            <View style={styles.assignmentStats}>
+              <Text style={styles.assignmentStat}>📝 12/28 submitted</Text>
+              <Text style={styles.assignmentStat}>⏰ 5 days left</Text>
+            </View>
+          </View>
 
-  const handleCreateHomework = async () => {
-    if (!user?.school_id || !newHomework.title || !newHomework.section || !newHomework.due_date) {
-      Alert.alert('Error', 'Please fill in all required fields');
-      return;
-    }
+          <View style={styles.assignmentCard}>
+            <View style={styles.assignmentHeader}>
+              <Text style={styles.assignmentTitle}>Chemistry Essay</Text>
+              <Text style={styles.assignmentDue}>Due: Next Week</Text>
+            </View>
+            <Text style={styles.assignmentClass}>Grade 12A - Chemistry</Text>
+            <View style={styles.assignmentStats}>
+              <Text style={styles.assignmentStat}>📝 5/25 submitted</Text>
+              <Text style={styles.assignmentStat}>⏰ 8 days left</Text>
+            </View>
+          </View>
+        </View>
 
-    try {
-      await createHomeworkMutation.mutateAsync({
-        school_id: user.school_id,
-        section: newHomework.section,
-        subject: newHomework.subject,
-        title: newHomework.title,
-        description: newHomework.description,
-        due_date: newHomework.due_date,
-        created_by: user.id,
-      });
-      
-      setShowCreateModal(false);
-      setNewHomework({
-        section: '',
-        subject: '',
-        title: '',
-        description: '',
-        due_date: '',
-      });
-      
-      Alert.alert('Success', 'Homework created successfully!');
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to create homework');
-    }
-  };
-
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      // In a real app, you would upload this to storage
-      Alert.alert('Image Selected', 'File attachment feature coming soon!');
-    }
-  };
-
-  return (
-    <View className="flex-1 bg-gray-50">
-      <ScrollView className="flex-1 p-4">
-        <View className="flex-row justify-between items-center mb-6">
-          <Text className="text-2xl font-bold text-gray-900">Homework</Text>
-          <TouchableOpacity
-            className="bg-primary-600 rounded-lg px-4 py-2"
-            onPress={() => setShowCreateModal(true)}
-          >
-            <Text className="text-white font-medium">Create New</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <TouchableOpacity style={styles.actionButton}>
+            <Text style={styles.actionButtonText}>📊 View Submission Statistics</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton}>
+            <Text style={styles.actionButtonText}>📧 Send Reminders</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton}>
+            <Text style={styles.actionButtonText}>⭐ Grade Submissions</Text>
           </TouchableOpacity>
         </View>
-
-        {homeworkList.length > 0 ? (
-          homeworkList.map(homework => (
-            <HomeworkItem key={homework.id} homework={homework} />
-          ))
-        ) : (
-          <View className="bg-white rounded-lg p-8 shadow-sm">
-            <Text className="text-center text-gray-600">No homework assignments yet</Text>
-          </View>
-        )}
       </ScrollView>
-
-      {/* Create Homework Modal */}
-      <Modal
-        visible={showCreateModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <View className="flex-1 bg-gray-50">
-          <View className="bg-white p-4 border-b border-gray-200">
-            <View className="flex-row justify-between items-center">
-              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-                <Text className="text-primary-600 font-medium">Cancel</Text>
-              </TouchableOpacity>
-              <Text className="text-lg font-semibold">Create Homework</Text>
-              <TouchableOpacity
-                onPress={handleCreateHomework}
-                disabled={createHomeworkMutation.isPending}
-              >
-                <Text className="text-primary-600 font-medium">
-                  {createHomeworkMutation.isPending ? 'Creating...' : 'Create'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <ScrollView className="flex-1 p-4">
-            {/* Section Selection */}
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-2">Section *</Text>
-              <View className="bg-white border border-gray-300 rounded-lg">
-                <Picker
-                  selectedValue={newHomework.section}
-                  onValueChange={(value) => setNewHomework(prev => ({ ...prev, section: value }))}
-                  style={{ height: 50 }}
-                >
-                  <Picker.Item label="Choose a section..." value="" />
-                  {sections.map(section => (
-                    <Picker.Item
-                      key={section.id}
-                      label={`${section.grade} ${section.section}`}
-                      value={`${section.grade} ${section.section}`}
-                    />
-                  ))}
-                </Picker>
-              </View>
-            </View>
-
-            {/* Subject */}
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-2">Subject *</Text>
-              <TextInput
-                className="bg-white border border-gray-300 rounded-lg px-4 py-3"
-                placeholder="Enter subject"
-                value={newHomework.subject}
-                onChangeText={(value) => setNewHomework(prev => ({ ...prev, subject: value }))}
-              />
-            </View>
-
-            {/* Title */}
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-2">Title *</Text>
-              <TextInput
-                className="bg-white border border-gray-300 rounded-lg px-4 py-3"
-                placeholder="Enter homework title"
-                value={newHomework.title}
-                onChangeText={(value) => setNewHomework(prev => ({ ...prev, title: value }))}
-              />
-            </View>
-
-            {/* Description */}
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-2">Description</Text>
-              <TextInput
-                className="bg-white border border-gray-300 rounded-lg px-4 py-3"
-                placeholder="Enter homework description"
-                value={newHomework.description}
-                onChangeText={(value) => setNewHomework(prev => ({ ...prev, description: value }))}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-
-            {/* Due Date */}
-            <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-2">Due Date *</Text>
-              <TextInput
-                className="bg-white border border-gray-300 rounded-lg px-4 py-3"
-                placeholder="YYYY-MM-DD"
-                value={newHomework.due_date}
-                onChangeText={(value) => setNewHomework(prev => ({ ...prev, due_date: value }))}
-              />
-            </View>
-
-            {/* File Attachment */}
-            <TouchableOpacity
-              className="bg-gray-100 border border-gray-300 rounded-lg p-4 mb-4"
-              onPress={pickImage}
-            >
-              <View className="flex-row items-center justify-center">
-                <Ionicons name="attach" size={20} color="#6b7280" />
-                <Text className="ml-2 text-gray-600">Attach Image</Text>
-              </View>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </Modal>
     </View>
   );
-} 
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  header: {
+    backgroundColor: '#8B5CF6',
+    padding: 20,
+    paddingTop: 60,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 16,
+    color: '#E9D5FF',
+  },
+  section: {
+    backgroundColor: 'white',
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+  },
+  addButton: {
+    backgroundColor: '#8B5CF6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  addButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  assignmentCard: {
+    backgroundColor: '#F9FAFB',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  assignmentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  assignmentTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    flex: 1,
+  },
+  assignmentDue: {
+    fontSize: 12,
+    color: '#EF4444',
+    fontWeight: '500',
+  },
+  assignmentClass: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  assignmentStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  assignmentStat: {
+    fontSize: 14,
+    color: '#4B5563',
+  },
+  actionButton: {
+    backgroundColor: '#F3F4F6',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  actionButtonText: {
+    fontSize: 16,
+    color: '#374151',
+  },
+}); 

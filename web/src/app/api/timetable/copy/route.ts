@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createServerSupabaseClient();
+    const supabase = createServerSupabaseClient(request);
 
     // Call the PostgreSQL copy function
     const { data, error } = await supabase.rpc('copy_timetable', {

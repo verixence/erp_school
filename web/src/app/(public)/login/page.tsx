@@ -39,22 +39,25 @@ export default function LoginPage() {
           return;
         }
 
-        // Redirect based on role
+        // Redirect based on role with force refresh
         switch (userData.role) {
           case 'super_admin':
-            router.push('/super-admin');
+            window.location.href = '/super-admin';
             break;
           case 'school_admin':
-            router.push('/school-admin');
+            window.location.href = '/school-admin';
             break;
           case 'teacher':
-            router.push('/teacher');
+            window.location.href = '/teacher';
             break;
           case 'parent':
-            router.push('/parent');
+            window.location.href = '/parent';
+            break;
+          case 'student':
+            window.location.href = '/student';
             break;
           default:
-            router.push('/dashboard');
+            window.location.href = '/dashboard';
         }
       }
     } catch (error) {
@@ -166,7 +169,10 @@ export default function LoginPage() {
                     <code className="text-sm font-mono text-blue-800">admin@school.edu</code>
                     <button
                       type="button"
-                      onClick={() => setEmail('admin@school.edu')}
+                      onClick={() => {
+                        setEmail('admin@school.edu');
+                        setPassword('admin123');
+                      }}
                       className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                     >
                       Use
@@ -180,7 +186,10 @@ export default function LoginPage() {
                     <code className="text-sm font-mono text-blue-800">school@demo.edu</code>
                     <button
                       type="button"
-                      onClick={() => setEmail('school@demo.edu')}
+                      onClick={() => {
+                        setEmail('school@demo.edu');
+                        setPassword('school123');
+                      }}
                       className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                     >
                       Use
@@ -194,13 +203,33 @@ export default function LoginPage() {
                     <code className="text-sm font-mono text-blue-800">sampath.sfmc@gmail.com</code>
                     <button
                       type="button"
-                      onClick={() => setEmail('sampath.sfmc@gmail.com')}
+                      onClick={() => {
+                        setEmail('sampath.sfmc@gmail.com');
+                        setPassword('Mundrathi!23');
+                      }}
                       className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                     >
                       Use
                     </button>
                   </div>
                   <code className="text-sm font-mono text-blue-800">Password: Mundrathi!23</code>
+                </div>
+                <div className="bg-white px-3 py-2 rounded border border-blue-300">
+                  <p className="text-xs text-blue-600 font-medium mb-1">Parent:</p>
+                  <div className="flex items-center justify-between">
+                    <code className="text-sm font-mono text-blue-800">parent@sunriseschool.edu</code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmail('parent@sunriseschool.edu');
+                        setPassword('parent123');
+                      }}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      Use
+                    </button>
+                  </div>
+                  <code className="text-sm font-mono text-blue-800">Password: parent123</code>
                 </div>
               </div>
             </div>
