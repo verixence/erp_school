@@ -25,11 +25,14 @@ export default function CommunityPage() {
     audience: 'all'
   });
 
-  const handleCreatePost = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.school_id) return;
 
-    const newPost = await createPost(user.school_id, formData);
+    const newPost = await createPost(user.school_id, {
+      ...formData,
+      audience: formData.audience as 'all' | 'teachers' | 'parents' | 'students'
+    });
     if (newPost) {
       setFormData({ title: '', body: '', audience: 'all' });
       setIsCreateOpen(false);
@@ -37,13 +40,15 @@ export default function CommunityPage() {
     }
   };
 
-  const handleEditPost = async (e: React.FormEvent) => {
+  const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingPost) return;
 
-    const updatedPost = await updatePost(editingPost.id, formData);
-    if (updatedPost) {
-      setFormData({ title: '', body: '', audience: 'all' });
+    const updated = await updatePost(editingPost.id, {
+      ...formData,
+      audience: formData.audience as 'all' | 'teachers' | 'parents' | 'students'
+    });
+    if (updated) {
       setEditingPost(null);
       refetch();
     }
@@ -109,7 +114,7 @@ export default function CommunityPage() {
               <DialogHeader>
                 <DialogTitle>Create New Post</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleCreatePost} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <Label htmlFor="title">Title</Label>
                   <Input
@@ -217,7 +222,7 @@ export default function CommunityPage() {
             <DialogHeader>
               <DialogTitle>Edit Post</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleEditPost} className="space-y-4">
+            <form onSubmit={handleUpdate} className="space-y-4">
               <div>
                 <Label htmlFor="edit-title">Title</Label>
                 <Input

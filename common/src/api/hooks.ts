@@ -12,6 +12,9 @@ import type {
   QueryOptions,
   ApiResponse
 } from './types';
+// Note: Student and parent specific imports removed due to missing functions
+import { getSchoolBrand, type SchoolBrand } from './brand';
+import { getPosts, getAnnouncements, getAllAnnouncements } from './community';
 
 // Auth hooks
 export const useAuth = () => {
@@ -321,4 +324,41 @@ export const useTeacherDashboardStats = (teacherId?: string, schoolId?: string) 
     },
     enabled: !!teacherId && !!schoolId,
   });
-}; 
+};
+
+// Student and parent specific hooks removed due to missing API functions
+
+// Brand hook
+export function useBrand(schoolId: string) {
+  return useQuery<SchoolBrand | null>({
+    queryKey: ['school-brand', schoolId],
+    queryFn: () => getSchoolBrand(schoolId),
+    enabled: !!schoolId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+// Community hooks
+export function usePosts(schoolId: string, audience?: string) {
+  return useQuery({
+    queryKey: ['posts', schoolId, audience],
+    queryFn: () => getPosts(schoolId, audience),
+    enabled: !!schoolId,
+  });
+}
+
+export function useCommunityAnnouncements(schoolId: string, audience?: string) {
+  return useQuery({
+    queryKey: ['community-announcements', schoolId, audience],
+    queryFn: () => getAnnouncements(schoolId, audience),
+    enabled: !!schoolId,
+  });
+}
+
+export function useAllAnnouncements(schoolId: string) {
+  return useQuery({
+    queryKey: ['all-announcements', schoolId],
+    queryFn: () => getAllAnnouncements(schoolId),
+    enabled: !!schoolId,
+  });
+} 

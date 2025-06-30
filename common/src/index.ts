@@ -70,4 +70,8 @@ export const featureDescriptions: Record<FeatureKey, string> = {
 };
 
 // Export API functionality
-export * from './api'; 
+export * from './api';
+
+// Export brand functionality
+export { getSchoolBrand, type SchoolBrand } from './api/brand';
+export { useBrand } from './api/hooks'; 

@@ -27,11 +27,15 @@ export default function AnnouncementsPage() {
     is_published: false
   });
 
-  const handleCreateAnnouncement = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.school_id) return;
 
-    const newAnnouncement = await createAnnouncement(user.school_id, formData);
+    const newAnnouncement = await createAnnouncement(user.school_id, {
+      ...formData,
+      target_audience: formData.target_audience as 'all' | 'teachers' | 'parents' | 'students',
+      priority: formData.priority as 'low' | 'normal' | 'high' | 'urgent'
+    });
     if (newAnnouncement) {
       setFormData({ title: '', content: '', target_audience: 'all', priority: 'normal', is_published: false });
       setIsCreateOpen(false);
@@ -39,13 +43,16 @@ export default function AnnouncementsPage() {
     }
   };
 
-  const handleEditAnnouncement = async (e: React.FormEvent) => {
+  const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingAnnouncement) return;
 
-    const updatedAnnouncement = await updateAnnouncement(editingAnnouncement.id, formData);
-    if (updatedAnnouncement) {
-      setFormData({ title: '', content: '', target_audience: 'all', priority: 'normal', is_published: false });
+    const updated = await updateAnnouncement(editingAnnouncement.id, {
+      ...formData,
+      target_audience: formData.target_audience as 'all' | 'teachers' | 'parents' | 'students',
+      priority: formData.priority as 'low' | 'normal' | 'high' | 'urgent'
+    });
+    if (updated) {
       setEditingAnnouncement(null);
       refetch();
     }
@@ -135,7 +142,7 @@ export default function AnnouncementsPage() {
               <DialogHeader>
                 <DialogTitle>Create New Announcement</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleCreateAnnouncement} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <Label htmlFor="title">Title</Label>
                   <Input
@@ -279,7 +286,7 @@ export default function AnnouncementsPage() {
             <DialogHeader>
               <DialogTitle>Edit Announcement</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleEditAnnouncement} className="space-y-4">
+            <form onSubmit={handleUpdate} className="space-y-4">
               <div>
                 <Label htmlFor="edit-title">Title</Label>
                 <Input

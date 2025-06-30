@@ -17,7 +17,8 @@ import {
   Calendar,
   BookOpen,
   MessageSquare,
-  Megaphone
+  Megaphone,
+  FileText
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase-client';
 
@@ -29,6 +30,8 @@ const navigation = [
   { name: 'Classes', href: '/school-admin/sections', icon: Building2 },
   { name: 'Attendance', href: '/school-admin/attendance', icon: ClipboardCheck },
   { name: 'Timetable', href: '/school-admin/timetable', icon: Calendar },
+  { name: 'Exams', href: '/school-admin/exams', icon: BookOpen },
+  { name: 'Reports', href: '/school-admin/reports', icon: FileText },
   { name: 'Community', href: '/school-admin/community', icon: MessageSquare },
   { name: 'Announcements', href: '/school-admin/announcements', icon: Megaphone },
 ];
