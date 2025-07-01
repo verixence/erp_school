@@ -46,7 +46,7 @@ interface DashboardStats {
 export default function SchoolAdminDashboard() {
   const { user } = useAuth();
 
-  const { data: stats } = useQuery({
+  const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['school-admin-dashboard', user?.school_id],
     queryFn: async (): Promise<DashboardStats> => {
       if (!user?.school_id) throw new Error('No school ID');
@@ -84,16 +84,30 @@ export default function SchoolAdminDashboard() {
         ? Object.keys(school.enabled_features).length 
         : 0;
 
-      // Fetch real attendance data for the last 30 days
+      // Fetch real attendance data for the last 30 days using optimized function
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
-      const { data: attendanceStats } = await supabase
-        .rpc('get_attendance_stats', {
-          start_date: thirtyDaysAgo.toISOString().split('T')[0],
-          end_date: new Date().toISOString().split('T')[0],
-          school_id_param: user.school_id
-        });
+      // Try optimized function first, fallback to original if not available
+      let attendanceStats;
+      try {
+        const { data } = await supabase
+          .rpc('get_attendance_stats_optimized', {
+            start_date: thirtyDaysAgo.toISOString().split('T')[0],
+            end_date: new Date().toISOString().split('T')[0],
+            school_id_param: user.school_id
+          });
+        attendanceStats = data;
+      } catch (error) {
+        // Fallback to original function
+        const { data } = await supabase
+          .rpc('get_attendance_stats', {
+            start_date: thirtyDaysAgo.toISOString().split('T')[0],
+            end_date: new Date().toISOString().split('T')[0],
+            school_id_param: user.school_id
+          });
+        attendanceStats = data;
+      }
 
       // Get daily attendance data for chart
       const { data: dailyAttendance } = await supabase
@@ -174,6 +188,10 @@ export default function SchoolAdminDashboard() {
       };
     },
     enabled: !!user?.school_id,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    gcTime: 15 * 60 * 1000, // Keep in cache for 15 minutes  
+    refetchOnWindowFocus: false,
+    retry: 2,
   });
 
   const quickActions = [

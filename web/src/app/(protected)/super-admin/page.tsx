@@ -82,8 +82,8 @@ interface DashboardStats {
 export default function SuperAdminDashboard() {
   const { user } = useAuth();
 
-  // Separate queries for better performance and loading states
-  const { data: appStats } = useQuery({
+  // Optimized queries with better caching for performance
+  const { data: appStats, isLoading: statsLoading } = useQuery({
     queryKey: ['application-stats'],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_application_stats');
@@ -91,7 +91,12 @@ export default function SuperAdminDashboard() {
       return data as ApplicationStats;
     },
     enabled: user?.role === 'super_admin',
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    staleTime: 15 * 60 * 1000, // Cache for 15 minutes (materialized view is fast)
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
+    refetchInterval: 10 * 60 * 1000, // Auto-refresh every 10 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    retry: 3, // Retry failed requests 3 times
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
   const { data: recentSchools } = useQuery({
@@ -106,7 +111,9 @@ export default function SuperAdminDashboard() {
       return data as School[];
     },
     enabled: user?.role === 'super_admin',
-    staleTime: 2 * 60 * 1000, // Cache for 2 minutes
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes (static data)
+    gcTime: 15 * 60 * 1000, // Keep in cache for 15 minutes
+    refetchOnWindowFocus: false,
   });
 
   const { data: topSchools } = useQuery({
@@ -121,12 +128,26 @@ export default function SuperAdminDashboard() {
       return data as SchoolAnalytics[];
     },
     enabled: user?.role === 'super_admin',
-    staleTime: 10 * 60 * 1000, // Cache for 10 minutes
+    staleTime: 10 * 60 * 1000, // Cache for 10 minutes (materialized view)
+    gcTime: 20 * 60 * 1000, // Keep in cache for 20 minutes
+    refetchInterval: 15 * 60 * 1000, // Auto-refresh every 15 minutes
+    refetchOnWindowFocus: false,
   });
 
-  // Combined stats for backward compatibility
+  // Combined stats for backward compatibility with default values
   const stats = {
-    applicationStats: appStats,
+    applicationStats: appStats || {
+      total_schools: 0,
+      active_schools: 0,
+      total_students: 0,
+      total_teachers: 0,
+      total_parents: 0,
+      total_users: 0,
+      total_capacity: 0,
+      avg_capacity_utilization: 0,
+      schools_by_type: {},
+      schools_by_status: {},
+    },
     recentSchools: recentSchools || [],
     topSchools: topSchools || [],
   };
