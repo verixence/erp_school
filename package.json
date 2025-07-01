@@ -7,6 +7,10 @@
     "web",
     "mobile/teacher-app"
   ],
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
   "scripts": {
     "dev:web": "pnpm -C web dev",
     "dev:teacher:web": "pnpm -C web dev:teacher",
