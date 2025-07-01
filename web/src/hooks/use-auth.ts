@@ -11,6 +11,13 @@ interface User {
   role: UserRole;
   school_id: string | null;
   created_at: string;
+  first_name?: string;
+  last_name?: string;
+  display_name?: string;
+  phone?: string;
+  employee_id?: string;
+  subjects?: string[];
+  relation?: string;
 }
 
 export function useAuth() {

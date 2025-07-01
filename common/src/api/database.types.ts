@@ -24,6 +24,7 @@ export interface Database {
           created_by: string
           created_at: string
           updated_at: string
+          media_urls: string[] | null
         }
         Insert: {
           id?: string
@@ -38,6 +39,7 @@ export interface Database {
           created_by: string
           created_at?: string
           updated_at?: string
+          media_urls?: string[] | null
         }
         Update: {
           id?: string
@@ -52,6 +54,7 @@ export interface Database {
           created_by?: string
           created_at?: string
           updated_at?: string
+          media_urls?: string[] | null
         }
       }
       attendance_records: {

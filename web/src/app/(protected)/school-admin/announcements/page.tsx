@@ -60,9 +60,11 @@ export default function AnnouncementsPage() {
 
   const handleDeleteAnnouncement = async (announcementId: string) => {
     if (confirm('Are you sure you want to delete this announcement?')) {
-      const success = await deleteAnnouncement(announcementId);
-      if (success) {
+      try {
+        await deleteAnnouncement(announcementId);
         refetch();
+      } catch (error) {
+        console.error('Error deleting announcement:', error);
       }
     }
   };
@@ -165,7 +167,7 @@ export default function AnnouncementsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="audience">Audience</Label>
+                    <Label htmlFor="target_audience">Audience</Label>
                     <Select value={formData.target_audience} onValueChange={(value) => setFormData(prev => ({ ...prev, target_audience: value }))}>
                       <SelectTrigger>
                         <SelectValue />
@@ -309,7 +311,7 @@ export default function AnnouncementsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="edit-audience">Audience</Label>
+                  <Label htmlFor="edit-target_audience">Audience</Label>
                   <Select value={formData.target_audience} onValueChange={(value) => setFormData(prev => ({ ...prev, target_audience: value }))}>
                     <SelectTrigger>
                       <SelectValue />

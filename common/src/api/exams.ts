@@ -3,6 +3,14 @@ import { supabase } from './supabase';
 
 export type ExamType = 'monthly' | 'quarterly' | 'half_yearly' | 'annual' | 'unit_test' | 'other';
 
+export interface Section {
+  id: string;
+  grade: number;
+  section: string;
+  capacity: number;
+  class_teacher?: string;
+}
+
 export interface ExamGroup {
   id: string;
   school_id: string;
@@ -29,9 +37,16 @@ export interface ExamPaper {
   max_marks: number;
   pass_marks: number;
   instructions?: string;
+  teacher_id?: string;
+  venue?: string;
   created_by?: string;
   created_at: string;
   updated_at: string;
+  teacher?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+  };
 }
 
 export interface Mark {
@@ -71,6 +86,8 @@ export interface CreateExamPaperData {
   max_marks?: number;
   pass_marks?: number;
   instructions?: string;
+  teacher_id?: string;
+  venue?: string;
 }
 
 export interface UpdateMarkData {
@@ -182,7 +199,14 @@ export const useExamPapers = (examGroupId?: string) => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('exam_papers')
-        .select('*')
+        .select(`
+          *,
+          teacher:teachers(
+            id,
+            first_name,
+            last_name
+          )
+        `)
         .eq('exam_group_id', examGroupId!)
         .order('section', { ascending: true })
         .order('subject', { ascending: true });
@@ -391,22 +415,248 @@ export const useStudentReportCard = (studentId: string, examGroupId: string) => 
     queryKey: ['report-card', studentId, examGroupId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('marks')
-        .select(`
-          *,
-          exam_paper:exam_papers(
-            id,
-            subject,
-            max_marks,
-            pass_marks
-          )
-        `)
-        .eq('student_id', studentId)
-        .eq('exam_paper.exam_group_id', examGroupId);
+        .rpc('get_student_report_card', {
+          student_id: studentId,
+          exam_group_id: examGroupId
+        });
       
       if (error) throw error;
       return data;
     },
     enabled: !!studentId && !!examGroupId,
+  });
+};
+
+// Report Cards Management
+export interface ReportCard {
+  id: string;
+  student_id: string;
+  exam_group_id: string;
+  school_id: string;
+  template_id: string;
+  total_marks: number;
+  obtained_marks: number;
+  percentage: number;
+  grade: string;
+  rank: number;
+  status: 'draft' | 'published' | 'distributed';
+  generated_at: string;
+  student?: {
+    id: string;
+    full_name: string;
+    admission_no?: string;
+    section?: string;
+  };
+  exam_group?: {
+    id: string;
+    name: string;
+    exam_type: string;
+  };
+}
+
+export const useReportCards = (schoolId?: string, examGroupId?: string, status?: string) => {
+  return useQuery({
+    queryKey: ['report-cards', schoolId, examGroupId, status],
+    queryFn: async () => {
+      let query = supabase
+        .from('report_cards')
+        .select(`
+          *,
+          student:students(id, full_name, admission_no, section),
+          exam_group:exam_groups(id, name, exam_type)
+        `)
+        .order('generated_at', { ascending: false });
+      
+      if (schoolId) {
+        query = query.eq('school_id', schoolId);
+      }
+      if (examGroupId) {
+        query = query.eq('exam_group_id', examGroupId);
+      }
+      if (status) {
+        query = query.eq('status', status);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as ReportCard[];
+    },
+    enabled: !!schoolId,
+  });
+};
+
+export const useGenerateReportCards = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ examGroupId, sectionIds }: { examGroupId: string; sectionIds?: string[] }) => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) throw new Error('Not authenticated');
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('school_id')
+        .eq('id', user.user.id)
+        .single();
+      
+      if (!userData?.school_id) throw new Error('No school associated');
+
+      // Get students for the sections
+      let studentsQuery = supabase
+        .from('students')
+        .select('id')
+        .eq('school_id', userData.school_id);
+      
+      if (sectionIds && sectionIds.length > 0) {
+        studentsQuery = studentsQuery.in('section', sectionIds);
+      }
+      
+      const { data: students, error: studentsError } = await studentsQuery;
+      if (studentsError) throw studentsError;
+
+      // Generate report cards for each student
+      const reportCards = students.map(student => ({
+        student_id: student.id,
+        exam_group_id: examGroupId,
+        school_id: userData.school_id,
+        template_id: 'default', // Use default template for now
+        status: 'draft' as const,
+      }));
+
+      const { data, error } = await supabase
+        .from('report_cards')
+        .upsert(reportCards, { onConflict: 'student_id,exam_group_id' })
+        .select();
+      
+      if (error) throw error;
+      return data as ReportCard[];
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['report-cards'] });
+      queryClient.invalidateQueries({ queryKey: ['report-card', variables.examGroupId] });
+    },
+  });
+};
+
+export const useUpdateReportCardStatus = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: 'draft' | 'published' | 'distributed' }) => {
+      const { data, error } = await supabase
+        .from('report_cards')
+        .update({ status })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data as ReportCard;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['report-cards'] });
+    },
+  });
+};
+
+// Exam Schedule and Timetable
+export interface ExamSchedule {
+  id: string;
+  exam_group_id: string;
+  school_id: string;
+  section: string;
+  subject: string;
+  exam_date: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  venue?: string;
+  invigilator?: string;
+  max_marks: number;
+  pass_marks: number;
+  instructions?: string;
+}
+
+export const useExamSchedule = (examGroupId?: string, section?: string) => {
+  return useQuery({
+    queryKey: ['exam-schedule', examGroupId, section],
+    queryFn: async () => {
+      let query = supabase
+        .from('exam_papers')
+        .select('*')
+        .order('exam_date', { ascending: true })
+        .order('exam_time', { ascending: true });
+      
+      if (examGroupId) {
+        query = query.eq('exam_group_id', examGroupId);
+      }
+      if (section) {
+        query = query.eq('section', section);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as ExamPaper[];
+    },
+    enabled: !!examGroupId,
+  });
+};
+
+export const useUpdateExamSchedule = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (scheduleData: { id: string; exam_date?: string; exam_time?: string; venue?: string; invigilator?: string }) => {
+      const { data, error } = await supabase
+        .from('exam_papers')
+        .update(scheduleData)
+        .eq('id', scheduleData.id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data as ExamPaper;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['exam-schedule', data.exam_group_id] });
+      queryClient.invalidateQueries({ queryKey: ['exam-papers', data.exam_group_id] });
+    },
+  });
+};
+
+// School information for branding
+export const useSchoolInfo = (schoolId?: string) => {
+  return useQuery({
+    queryKey: ['school-info', schoolId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('schools')
+        .select('id, name, address, phone, email, logo_url, established_year, affiliation, principal_name')
+        .eq('id', schoolId!)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!schoolId,
+  });
+};
+
+// Sections for a school
+export const useSchoolSections = (schoolId?: string) => {
+  return useQuery({
+    queryKey: ['school-sections', schoolId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sections')
+        .select('id, grade, section, capacity, class_teacher')
+        .eq('school_id', schoolId!)
+        .order('grade', { ascending: true })
+        .order('section', { ascending: true });
+      
+      if (error) throw error;
+      return data as Section[];
+    },
+    enabled: !!schoolId,
   });
 }; 

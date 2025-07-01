@@ -14,7 +14,11 @@ import {
   Users,
   BarChart3,
   Plus,
-  Eye
+  Eye,
+  CheckCircle2,
+  Clock,
+  Send,
+  PrinterIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -30,71 +34,22 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/use-auth';
+import { 
+  useReportCards,
+  useGenerateReportCards,
+  useUpdateReportCardStatus,
+  useExamGroups,
+  useSchoolSections,
+  useSchoolInfo,
+  type ReportCard
+} from '@erp/common';
+import { toast } from 'sonner';
 
-interface ReportCard {
-  id: string;
-  student_name: string;
-  student_id: string;
-  exam_name: string;
-  section: string;
-  total_marks: number;
-  obtained_marks: number;
-  percentage: number;
-  grade: string;
-  rank: number;
-  attendance: number;
-  generated_at: string;
-  status: 'draft' | 'published' | 'distributed';
-}
-
-// Mock data for report cards
-const mockReportCards: ReportCard[] = [
-  {
-    id: '1',
-    student_name: 'Alice Johnson',
-    student_id: 'STU001',
-    exam_name: 'First Term Exam 2024',
-    section: 'Class 10-A',
-    total_marks: 500,
-    obtained_marks: 425,
-    percentage: 85,
-    grade: 'A',
-    rank: 3,
-    attendance: 95,
-    generated_at: '2024-01-15',
-    status: 'published'
-  },
-  {
-    id: '2',
-    student_name: 'Bob Smith',
-    student_id: 'STU002',
-    exam_name: 'First Term Exam 2024',
-    section: 'Class 10-A',
-    total_marks: 500,
-    obtained_marks: 380,
-    percentage: 76,
-    grade: 'B+',
-    rank: 8,
-    attendance: 92,
-    generated_at: '2024-01-15',
-    status: 'published'
-  },
-  {
-    id: '3',
-    student_name: 'Carol Davis',
-    student_id: 'STU003',
-    exam_name: 'Monthly Test October',
-    section: 'Class 9-B',
-    total_marks: 300,
-    obtained_marks: 285,
-    percentage: 95,
-    grade: 'A+',
-    rank: 1,
-    attendance: 98,
-    generated_at: '2024-01-10',
-    status: 'distributed'
-  }
-];
+const statusColors = {
+  draft: 'bg-gray-100 text-gray-800',
+  published: 'bg-blue-100 text-blue-800',
+  distributed: 'bg-green-100 text-green-800'
+};
 
 const gradeColors = {
   'A+': 'bg-green-100 text-green-800',
@@ -107,12 +62,6 @@ const gradeColors = {
   'F': 'bg-red-100 text-red-800'
 };
 
-const statusColors = {
-  draft: 'bg-gray-100 text-gray-800',
-  published: 'bg-blue-100 text-blue-800',
-  distributed: 'bg-green-100 text-green-800'
-};
-
 export default function ReportsPage() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
@@ -120,12 +69,24 @@ export default function ReportsPage() {
   const [selectedExam, setSelectedExam] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [selectedExamGroup, setSelectedExamGroup] = useState('');
+  const [selectedSections, setSelectedSections] = useState<string[]>([]);
 
-  const filteredReports = mockReportCards.filter(report => {
-    const matchesSearch = report.student_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         report.student_id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesSection = selectedSection === 'all' || report.section === selectedSection;
-    const matchesExam = selectedExam === 'all' || report.exam_name === selectedExam;
+  // API hooks
+  const { data: reportCards = [], isLoading, error } = useReportCards(user?.school_id || undefined);
+  const { data: examGroups = [] } = useExamGroups(user?.school_id || undefined);
+  const { data: sections = [] } = useSchoolSections(user?.school_id || undefined);
+  const { data: schoolInfo } = useSchoolInfo(user?.school_id || undefined);
+  
+  const generateReportCardsMutation = useGenerateReportCards();
+  const updateReportCardStatusMutation = useUpdateReportCardStatus();
+
+  const filteredReports = reportCards.filter(report => {
+    const matchesSearch = 
+      report.student?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.student?.admission_no?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSection = selectedSection === 'all' || report.student?.section === selectedSection;
+    const matchesExam = selectedExam === 'all' || report.exam_group?.name === selectedExam;
     const matchesStatus = selectedStatus === 'all' || report.status === selectedStatus;
     
     return matchesSearch && matchesSection && matchesExam && matchesStatus;
@@ -148,10 +109,171 @@ export default function ReportsPage() {
   };
 
   const handleGenerateReports = async () => {
-    // Implementation for generating report cards
-    console.log('Generating report cards...');
-    setShowGenerateModal(false);
+    if (!selectedExamGroup) {
+      toast.error('Please select an exam group');
+      return;
+    }
+
+    try {
+      await generateReportCardsMutation.mutateAsync({
+        examGroupId: selectedExamGroup,
+        sectionIds: selectedSections.length > 0 ? selectedSections : undefined
+      });
+      
+      toast.success('Report cards generated successfully!');
+      setShowGenerateModal(false);
+      setSelectedExamGroup('');
+      setSelectedSections([]);
+    } catch (error) {
+      console.error('Error generating report cards:', error);
+      toast.error('Failed to generate report cards. Please try again.');
+    }
   };
+
+  const handleUpdateStatus = async (reportId: string, status: 'draft' | 'published' | 'distributed') => {
+    try {
+      await updateReportCardStatusMutation.mutateAsync({ id: reportId, status });
+      toast.success(`Report card ${status} successfully!`);
+    } catch (error) {
+      console.error('Error updating report card status:', error);
+      toast.error('Failed to update report card status. Please try again.');
+    }
+  };
+
+  const handleDownloadReport = (report: ReportCard) => {
+    // Create downloadable report card
+    const reportHTML = generateReportCardHTML(report, schoolInfo);
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    printWindow.document.write(reportHTML);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
+  const generateReportCardHTML = (report: ReportCard, school: any) => {
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Report Card - ${report.student?.full_name}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; background: white; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
+            .logo { width: 80px; height: 80px; margin: 0 auto 10px; }
+            .school-name { font-size: 24px; font-weight: bold; margin: 10px 0; }
+            .report-title { font-size: 18px; color: #666; margin: 5px 0; }
+            .student-info { display: flex; justify-content: space-between; margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; }
+            .info-section { flex: 1; }
+            .info-label { font-weight: bold; color: #666; font-size: 12px; }
+            .info-value { font-size: 14px; margin-bottom: 10px; }
+            .grade-info { text-align: center; margin: 30px 0; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 10px; }
+            .grade { font-size: 48px; font-weight: bold; margin: 0; }
+            .percentage { font-size: 24px; margin: 10px 0; }
+            .marks-summary { display: flex; justify-content: space-around; margin: 20px 0; }
+            .summary-item { text-align: center; }
+            .summary-value { font-size: 20px; font-weight: bold; color: #333; }
+            .summary-label { font-size: 12px; color: #666; }
+            .footer { margin-top: 50px; display: flex; justify-content: space-between; padding-top: 20px; border-top: 1px solid #ddd; }
+            .signature { text-align: center; width: 200px; }
+            .signature-line { border-top: 1px solid #000; margin-top: 50px; padding-top: 5px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            ${school?.logo_url ? `<img src="${school.logo_url}" alt="School Logo" class="logo">` : ''}
+            <div class="school-name">${school?.name || 'School Name'}</div>
+            <div class="report-title">Academic Report Card</div>
+            <div>${report.exam_group?.name} - ${report.exam_group?.exam_type?.replace('_', ' ').toUpperCase()}</div>
+          </div>
+          
+          <div class="student-info">
+            <div class="info-section">
+              <div class="info-label">Student Name</div>
+              <div class="info-value">${report.student?.full_name}</div>
+              <div class="info-label">Admission No.</div>
+              <div class="info-value">${report.student?.admission_no || 'N/A'}</div>
+            </div>
+            <div class="info-section">
+              <div class="info-label">Class/Section</div>
+              <div class="info-value">${report.student?.section || 'N/A'}</div>
+              <div class="info-label">Roll No.</div>
+              <div class="info-value">${report.rank}</div>
+            </div>
+            <div class="info-section">
+              <div class="info-label">Academic Year</div>
+              <div class="info-value">2024-25</div>
+              <div class="info-label">Report Generated</div>
+              <div class="info-value">${formatDate(report.generated_at)}</div>
+            </div>
+          </div>
+          
+          <div class="grade-info">
+            <div class="grade">${report.grade}</div>
+            <div class="percentage">${report.percentage}%</div>
+            <div>Overall Performance</div>
+          </div>
+          
+          <div class="marks-summary">
+            <div class="summary-item">
+              <div class="summary-value">${report.total_marks}</div>
+              <div class="summary-label">Total Marks</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-value">${report.obtained_marks}</div>
+              <div class="summary-label">Marks Obtained</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-value">${report.rank}</div>
+              <div class="summary-label">Class Rank</div>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <div class="signature">
+              <div class="signature-line">Class Teacher</div>
+            </div>
+            <div class="signature">
+              <div class="signature-line">Principal</div>
+            </div>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; font-size: 12px; color: #666;">
+            <p>${school?.address || 'School Address'} | ${school?.phone || 'Phone'} | ${school?.email || 'Email'}</p>
+          </div>
+        </body>
+      </html>
+    `;
+  };
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSelectedSection('all');
+    setSelectedExam('all');
+    setSelectedStatus('all');
+  };
+
+  // Calculate statistics
+  const totalReports = reportCards.length;
+  const avgPerformance = reportCards.length > 0 
+    ? Math.round(reportCards.reduce((sum, report) => sum + report.percentage, 0) / reportCards.length * 10) / 10 
+    : 0;
+  const topPerformers = reportCards.filter(report => report.percentage >= 90).length;
+  const distributedCount = reportCards.filter(report => report.status === 'distributed').length;
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-64">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">Error loading report cards</p>
+          <Button onClick={() => window.location.reload()}>
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -179,31 +301,34 @@ export default function ReportsPage() {
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label>Select Exam</Label>
-                <Select>
+                <Label>Select Exam Group *</Label>
+                <Select value={selectedExamGroup} onValueChange={setSelectedExamGroup}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose exam" />
+                    <SelectValue placeholder="Choose exam group" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="exam1">First Term Exam 2024</SelectItem>
-                    <SelectItem value="exam2">Monthly Test October</SelectItem>
-                    <SelectItem value="exam3">Half Yearly Exam</SelectItem>
+                    {examGroups.map(exam => (
+                      <SelectItem key={exam.id} value={exam.id}>
+                        {exam.name} - {exam.exam_type.replace('_', ' ')}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               
               <div>
-                <Label>Select Section(s)</Label>
+                <Label>Select Sections (Optional)</Label>
                 <Select>
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose sections" />
+                    <SelectValue placeholder="All sections (leave empty for all)" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Sections</SelectItem>
-                    <SelectItem value="10a">Class 10-A</SelectItem>
-                    <SelectItem value="10b">Class 10-B</SelectItem>
-                    <SelectItem value="9a">Class 9-A</SelectItem>
-                    <SelectItem value="9b">Class 9-B</SelectItem>
+                    {sections.map(section => (
+                      <SelectItem key={section.id} value={`${section.grade}-${section.section}`}>
+                        Grade {section.grade} - {section.section}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -212,8 +337,11 @@ export default function ReportsPage() {
                 <Button variant="outline" onClick={() => setShowGenerateModal(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleGenerateReports}>
-                  Generate Reports
+                <Button 
+                  onClick={handleGenerateReports}
+                  disabled={generateReportCardsMutation.isPending}
+                >
+                  {generateReportCardsMutation.isPending ? 'Generating...' : 'Generate Reports'}
                 </Button>
               </div>
             </div>
@@ -235,7 +363,7 @@ export default function ReportsPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Total Reports</p>
-                <p className="text-2xl font-bold text-gray-900">{mockReportCards.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{totalReports}</p>
               </div>
             </div>
           </Card>
@@ -253,7 +381,7 @@ export default function ReportsPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Avg Performance</p>
-                <p className="text-2xl font-bold text-gray-900">85.3%</p>
+                <p className="text-2xl font-bold text-gray-900">{avgPerformance}%</p>
               </div>
             </div>
           </Card>
@@ -271,7 +399,7 @@ export default function ReportsPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Top Performers</p>
-                <p className="text-2xl font-bold text-gray-900">12</p>
+                <p className="text-2xl font-bold text-gray-900">{topPerformers}</p>
               </div>
             </div>
           </Card>
@@ -289,7 +417,7 @@ export default function ReportsPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">Distributed</p>
-                <p className="text-2xl font-bold text-gray-900">{mockReportCards.filter(r => r.status === 'distributed').length}</p>
+                <p className="text-2xl font-bold text-gray-900">{distributedCount}</p>
               </div>
             </div>
           </Card>
@@ -323,13 +451,14 @@ export default function ReportsPage() {
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Sections</SelectItem>
-                  <SelectItem value="Class 10-A">Class 10-A</SelectItem>
-                  <SelectItem value="Class 10-B">Class 10-B</SelectItem>
-                  <SelectItem value="Class 9-A">Class 9-A</SelectItem>
-                  <SelectItem value="Class 9-B">Class 9-B</SelectItem>
-                </SelectContent>
+                                  <SelectContent>
+                    <SelectItem value="all">All Sections</SelectItem>
+                    {sections.map(section => (
+                      <SelectItem key={section.id} value={`${section.grade}-${section.section}`}>
+                        Grade {section.grade} - {section.section}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
               </Select>
             </div>
             
@@ -341,9 +470,11 @@ export default function ReportsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Exams</SelectItem>
-                  <SelectItem value="First Term Exam 2024">First Term Exam 2024</SelectItem>
-                  <SelectItem value="Monthly Test October">Monthly Test October</SelectItem>
-                  <SelectItem value="Half Yearly Exam">Half Yearly Exam</SelectItem>
+                  {examGroups.map(exam => (
+                    <SelectItem key={exam.id} value={exam.name}>
+                      {exam.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -364,7 +495,7 @@ export default function ReportsPage() {
             </div>
             
             <div className="flex items-end">
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" onClick={clearFilters}>
                 <Filter className="w-4 h-4 mr-2" />
                 Clear Filters
               </Button>
@@ -374,93 +505,122 @@ export default function ReportsPage() {
       </motion.div>
 
       {/* Report Cards List */}
-      <div className="space-y-4">
-        {filteredReports.map((report, index) => (
-          <motion.div
-            key={report.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 + index * 0.1 }}
-          >
-            <Card className="glass-morphism border-0 hover:shadow-lg transition-shadow">
-              <div className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                      <GraduationCap className="w-6 h-6 text-white" />
+      {isLoading ? (
+        <div className="flex items-center justify-center min-h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filteredReports.map((report, index) => (
+            <motion.div
+              key={report.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 + index * 0.1 }}
+            >
+              <Card className="glass-morphism border-0 hover:shadow-lg transition-shadow">
+                <div className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                        <GraduationCap className="w-6 h-6 text-white" />
+                      </div>
+                      
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">{report.student?.full_name}</h3>
+                        <p className="text-sm text-gray-500">
+                          ID: {report.student?.admission_no || 'N/A'} • {report.student?.section || 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-4">
+                                      <Badge className={statusColors[report.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}>
+                  {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
+                </Badge>
+                      
+                      <div className="flex items-center space-x-2">
+                        {report.status === 'draft' && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleUpdateStatus(report.id, 'published')}
+                            disabled={updateReportCardStatusMutation.isPending}
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            Publish
+                          </Button>
+                        )}
+                        {report.status === 'published' && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleUpdateStatus(report.id, 'distributed')}
+                            disabled={updateReportCardStatusMutation.isPending}
+                          >
+                            <Send className="w-4 h-4 mr-1" />
+                            Distribute
+                          </Button>
+                        )}
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleDownloadReport(report)}
+                        >
+                          <Download className="w-4 h-4 mr-1" />
+                          Download
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div>
+                      <p className="text-xs text-gray-500">Exam</p>
+                      <p className="text-sm font-medium text-gray-900">{report.exam_group?.name || 'N/A'}</p>
                     </div>
                     
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{report.student_name}</h3>
-                      <p className="text-sm text-gray-500">ID: {report.student_id} • {report.section}</p>
+                      <p className="text-xs text-gray-500">Marks</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {report.obtained_marks}/{report.total_marks}
+                      </p>
                     </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-4">
-                    <Badge className={statusColors[report.status]}>
-                      {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-                    </Badge>
                     
-                    <div className="flex items-center space-x-2">
-                      <Button variant="ghost" size="sm">
-                        <Eye className="w-4 h-4 mr-1" />
-                        View
-                      </Button>
-                      <Button variant="ghost" size="sm">
-                        <Download className="w-4 h-4 mr-1" />
-                        Download
-                      </Button>
+                    <div>
+                      <p className="text-xs text-gray-500">Percentage</p>
+                      <p className={`text-sm font-medium ${getPerformanceColor(report.percentage)}`}>
+                        {report.percentage}%
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <p className="text-xs text-gray-500">Grade</p>
+                      <Badge className={gradeColors[report.grade as keyof typeof gradeColors] || 'bg-gray-100 text-gray-800'}>
+                        {report.grade}
+                      </Badge>
+                    </div>
+                    
+                    <div>
+                      <p className="text-xs text-gray-500">Rank</p>
+                      <p className="text-sm font-medium text-gray-900">#{report.rank}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
+                    <div className="flex items-center space-x-4">
+                      <span>Generated: {formatDate(report.generated_at)}</span>
                     </div>
                   </div>
                 </div>
-                
-                <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-4">
-                  <div>
-                    <p className="text-xs text-gray-500">Exam</p>
-                    <p className="text-sm font-medium text-gray-900">{report.exam_name}</p>
-                  </div>
-                  
-                  <div>
-                    <p className="text-xs text-gray-500">Marks</p>
-                    <p className="text-sm font-medium text-gray-900">
-                      {report.obtained_marks}/{report.total_marks}
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <p className="text-xs text-gray-500">Percentage</p>
-                    <p className={`text-sm font-medium ${getPerformanceColor(report.percentage)}`}>
-                      {report.percentage}%
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <p className="text-xs text-gray-500">Grade</p>
-                    <Badge className={gradeColors[report.grade as keyof typeof gradeColors]}>
-                      {report.grade}
-                    </Badge>
-                  </div>
-                  
-                  <div>
-                    <p className="text-xs text-gray-500">Rank</p>
-                    <p className="text-sm font-medium text-gray-900">#{report.rank}</p>
-                  </div>
-                </div>
-                
-                <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
-                  <div className="flex items-center space-x-4">
-                    <span>Attendance: {report.attendance}%</span>
-                    <span>Generated: {formatDate(report.generated_at)}</span>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       {/* Empty State */}
-      {filteredReports.length === 0 && (
+      {!isLoading && filteredReports.length === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -468,7 +628,21 @@ export default function ReportsPage() {
         >
           <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No report cards found</h3>
-          <p className="text-gray-500 mb-6">Try adjusting your filters or generate new report cards.</p>
+          <p className="text-gray-500 mb-6">
+            {reportCards.length === 0 
+              ? 'Generate your first report cards to get started.' 
+              : 'Try adjusting your filters or generate new report cards.'
+            }
+          </p>
+          {reportCards.length === 0 && (
+            <Button
+              onClick={() => setShowGenerateModal(true)}
+              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Generate First Report Cards
+            </Button>
+          )}
         </motion.div>
       )}
     </div>

@@ -116,6 +116,25 @@ export const useTeacherSections = (teacherId?: string) => {
   });
 };
 
+export const useTeachers = (schoolId?: string) => {
+  return useQuery({
+    queryKey: ['teachers', schoolId],
+    queryFn: async () => {
+      if (!schoolId) return [];
+
+      const { data, error } = await supabase
+        .from('teachers')
+        .select('*')
+        .eq('school_id', schoolId)
+        .order('first_name', { ascending: true });
+
+      if (error) throw error;
+      return data as Teacher[];
+    },
+    enabled: !!schoolId,
+  });
+};
+
 export const useTeacherTimetable = (teacherId?: string, options?: QueryOptions) => {
   return useQuery({
     queryKey: ['teacher-timetable', teacherId, options],

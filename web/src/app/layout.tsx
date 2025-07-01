@@ -1,3 +1,4 @@
+
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -23,23 +24,25 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
-        <ThemeProvider
-          defaultTheme="system"
-          storageKey="school-erp-theme"
-        >
-          <QueryProvider>{children}</QueryProvider>
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: 'var(--background)',
-                color: 'var(--foreground)',
-                border: '1px solid var(--border)',
-              },
-            }}
-          />
-        </ThemeProvider>
+        <QueryProvider>
+          <ThemeProvider
+            defaultTheme="system"
+            storageKey="school-erp-theme"
+          >
+            {children}
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                duration: 4000,
+                style: {
+                  background: 'var(--background)',
+                  color: 'var(--foreground)',
+                  border: '1px solid var(--border)',
+                },
+              }}
+            />
+          </ThemeProvider>
+        </QueryProvider>
       </body>
     </html>
   );

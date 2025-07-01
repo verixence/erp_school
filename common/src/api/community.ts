@@ -1,153 +1,164 @@
-import { createSupabaseClient } from './supabase';
-import type { Database } from './database.types';
+import { supabase } from './supabase';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-export type Post = {
+// Enhanced interfaces with media support
+export interface MediaObject {
+  url: string;
+  type: 'image' | 'video' | 'document';
+  name: string;
+  size?: number;
+}
+
+export interface CommunityPost {
   id: string;
   school_id: string;
-  author_id: string | null;
-  title: string;
-  body: string | null;
-  audience: 'all' | 'teachers' | 'parents' | 'students';
-  media_urls?: string[];
-  created_at: string;
-  updated_at: string;
-  author?: {
-    first_name: string | null;
-    last_name: string | null;
-    role: string;
-  };
-};
-
-export type CommunityAnnouncement = {
-  id: string;
-  school_id: string;
-  title: string;
-  content: string;
-  target_audience: 'all' | 'teachers' | 'parents' | 'students';
-  sections: string[] | null;
-  priority: 'low' | 'normal' | 'high' | 'urgent';
-  is_published: boolean;
-  published_at: string | null;
-  created_by: string;
-  media_urls?: string[];
-  created_at: string;
-  updated_at: string;
-  author?: {
-    first_name: string | null;
-    last_name: string | null;
-    role: string;
-  };
-};
-
-export type CreatePostData = {
+  author_id: string;
   title: string;
   body: string;
   audience: 'all' | 'teachers' | 'parents' | 'students';
-  media_urls?: string[];
-};
+  created_at: string;
+  updated_at: string;
+  media_urls: string[];
+  media?: MediaObject[];
+  reactions?: PostReaction[];
+  comments?: PostComment[];
+  _count?: {
+    reactions: number;
+    comments: number;
+  };
+  author?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    role: string;
+    display_name?: string;
+  };
+}
 
-export type CreateAnnouncementData = {
+export interface PostReaction {
+  post_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+  user?: {
+    first_name: string;
+    last_name: string;
+  };
+}
+
+export interface PostComment {
+  id: string;
+  post_id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+  user?: {
+    first_name: string;
+    last_name: string;
+  };
+}
+
+export interface CommunityAnnouncement {
+  id: string;
+  school_id: string;
   title: string;
   content: string;
   target_audience: 'all' | 'teachers' | 'parents' | 'students';
   sections?: string[];
-  priority?: 'low' | 'normal' | 'high' | 'urgent';
-  is_published?: boolean;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  is_published: boolean;
+  published_at?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
   media_urls?: string[];
-};
+  author?: {
+    first_name: string;
+    last_name: string;
+    role: string;
+  };
+}
 
-// Posts API
-export async function getPosts(schoolId: string, audience?: string): Promise<Post[]> {
-  const supabase = createSupabaseClient();
-  
+export interface CreatePostData {
+  title: string;
+  body: string;
+  audience: 'all' | 'teachers' | 'parents' | 'students';
+  media?: MediaObject[];
+}
+
+export interface CreateAnnouncementData {
+  title: string;
+  content: string;
+  target_audience: 'all' | 'teachers' | 'parents' | 'students';
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  is_published?: boolean;
+  media?: MediaObject[];
+}
+
+export interface CreateReactionData {
+  post_id: string;
+  emoji: string;
+}
+
+export interface CreateCommentData {
+  post_id: string;
+  body: string;
+}
+
+// Raw API Functions (for compatibility with existing code)
+export const getPosts = async (schoolId: string, audience?: string) => {
   let query = supabase
     .from('posts')
     .select(`
       *,
-      author:users!posts_author_id_fkey(first_name, last_name, role)
+      author:users!posts_author_id_fkey(
+        id,
+        first_name,
+        last_name,
+        role,
+        display_name
+      ),
+      reactions:post_reactions(
+        emoji,
+        user_id,
+        created_at,
+        user:users(first_name, last_name)
+      ),
+      comments:post_comments(
+        id,
+        body,
+        created_at,
+        user:users(first_name, last_name)
+      )
     `)
     .eq('school_id', schoolId)
     .order('created_at', { ascending: false });
-    
+
   if (audience && audience !== 'all') {
-    query = query.in('audience', [audience, 'all']);
+    query = query.or(`audience.eq.${audience},audience.eq.all`);
   }
-  
+
   const { data, error } = await query;
-  
+
   if (error) {
     console.error('Error fetching posts:', error);
-    return [];
+    throw error;
   }
-  
-  return data || [];
-}
 
-export async function createPost(schoolId: string, postData: CreatePostData): Promise<Post | null> {
-  const supabase = createSupabaseClient();
-  
-  const { data, error } = await supabase
-    .from('posts')
-    .insert({
-      school_id: schoolId,
-      author_id: (await supabase.auth.getUser()).data.user?.id,
-      ...postData
-    })
-    .select(`
-      *,
-      author:users!posts_author_id_fkey(first_name, last_name, role)
-    `)
-    .single();
-    
-  if (error) {
-    console.error('Error creating post:', error);
-    return null;
-  }
-  
-  return data;
-}
+  // Transform the data to include proper counts
+  const transformedPosts = data?.map(post => ({
+    ...post,
+    _count: {
+      reactions: post.reactions?.length || 0,
+      comments: post.comments?.length || 0,
+    }
+  })) || [];
 
-export async function updatePost(postId: string, updates: Partial<CreatePostData>): Promise<Post | null> {
-  const supabase = createSupabaseClient();
-  
-  const { data, error } = await supabase
-    .from('posts')
-    .update(updates)
-    .eq('id', postId)
-    .select(`
-      *,
-      author:users!posts_author_id_fkey(first_name, last_name, role)
-    `)
-    .single();
-    
-  if (error) {
-    console.error('Error updating post:', error);
-    return null;
-  }
-  
-  return data;
-}
+  return transformedPosts as CommunityPost[];
+};
 
-export async function deletePost(postId: string): Promise<boolean> {
-  const supabase = createSupabaseClient();
-  
-  const { error } = await supabase
-    .from('posts')
-    .delete()
-    .eq('id', postId);
-    
-  if (error) {
-    console.error('Error deleting post:', error);
-    return false;
-  }
-  
-  return true;
-}
-
-// Announcements API
-export async function getAnnouncements(schoolId: string, audience?: string): Promise<CommunityAnnouncement[]> {
-  const supabase = createSupabaseClient();
-  
+export const getAnnouncements = async (schoolId: string, audience?: string): Promise<CommunityAnnouncement[]> => {
   let query = supabase
     .from('announcements')
     .select(`
@@ -157,24 +168,18 @@ export async function getAnnouncements(schoolId: string, audience?: string): Pro
     .eq('school_id', schoolId)
     .eq('is_published', true)
     .order('created_at', { ascending: false });
-    
+
   if (audience && audience !== 'all') {
-    query = query.in('target_audience', [audience, 'all']);
+    query = query.or(`target_audience.eq.all,target_audience.eq.${audience}`);
   }
-  
+
   const { data, error } = await query;
-  
-  if (error) {
-    console.error('Error fetching announcements:', error);
-    return [];
-  }
+  if (error) throw error;
   
   return data || [];
-}
+};
 
-export async function getAllAnnouncements(schoolId: string): Promise<CommunityAnnouncement[]> {
-  const supabase = createSupabaseClient();
-  
+export const getAllAnnouncements = async (schoolId: string): Promise<CommunityAnnouncement[]> => {
   const { data, error } = await supabase
     .from('announcements')
     .select(`
@@ -183,145 +188,356 @@ export async function getAllAnnouncements(schoolId: string): Promise<CommunityAn
     `)
     .eq('school_id', schoolId)
     .order('created_at', { ascending: false });
-  
-  if (error) {
-    console.error('Error fetching all announcements:', error);
-    return [];
-  }
-  
-  return data || [];
-}
 
-export async function createAnnouncement(schoolId: string, announcementData: CreateAnnouncementData): Promise<CommunityAnnouncement | null> {
-  const supabase = createSupabaseClient();
-  
+  if (error) throw error;
+  return data || [];
+};
+
+export const createPost = async (schoolId: string, postData: CreatePostData): Promise<CommunityPost> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('posts')
+    .insert({
+      school_id: schoolId,
+      author_id: user.id,
+      ...postData,
+      media_urls: postData.media?.map(m => m.url) || []
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const createAnnouncement = async (schoolId: string, announcementData: CreateAnnouncementData): Promise<CommunityAnnouncement> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
   const { data, error } = await supabase
     .from('announcements')
     .insert({
       school_id: schoolId,
-      created_by: (await supabase.auth.getUser()).data.user?.id,
-      priority: 'normal',
-      ...announcementData
+      created_by: user.id,
+      ...announcementData,
+      media_urls: announcementData.media?.map(m => m.url) || []
     })
-    .select(`
-      *,
-      author:users!announcements_created_by_fkey(first_name, last_name, role)
-    `)
+    .select()
     .single();
-    
-  if (error) {
-    console.error('Error creating announcement:', error);
-    return null;
-  }
-  
-  return data;
-}
 
-export async function updateAnnouncement(announcementId: string, updates: Partial<CreateAnnouncementData>): Promise<CommunityAnnouncement | null> {
-  const supabase = createSupabaseClient();
-  
+  if (error) throw error;
+  return data;
+};
+
+export const updateAnnouncement = async (announcementId: string, updates: Partial<CreateAnnouncementData>): Promise<CommunityAnnouncement> => {
+  const updateData: any = { ...updates };
+  if (updates.media) {
+    updateData.media_urls = updates.media.map(m => m.url);
+    delete updateData.media;
+  }
+
   const { data, error } = await supabase
     .from('announcements')
-    .update(updates)
+    .update(updateData)
     .eq('id', announcementId)
-    .select(`
-      *,
-      author:users!announcements_created_by_fkey(first_name, last_name, role)
-    `)
+    .select()
     .single();
-    
-  if (error) {
-    console.error('Error updating announcement:', error);
-    return null;
-  }
-  
-  return data;
-}
 
-export async function deleteAnnouncement(announcementId: string): Promise<boolean> {
-  const supabase = createSupabaseClient();
-  
+  if (error) throw error;
+  return data;
+};
+
+export const deleteAnnouncement = async (announcementId: string): Promise<void> => {
   const { error } = await supabase
     .from('announcements')
     .delete()
     .eq('id', announcementId);
-    
-  if (error) {
-    console.error('Error deleting announcement:', error);
-    return false;
-  }
-  
-  return true;
-}
 
-// Media Upload API
-export async function uploadMedia(files: File[], folder: string = 'community'): Promise<string[]> {
-  const supabase = createSupabaseClient();
-  const uploadedUrls: string[] = [];
-  
+  if (error) throw error;
+};
+
+export const updatePost = async (postId: string, updates: Partial<CreatePostData>): Promise<CommunityPost> => {
+  const updateData: any = { ...updates };
+  if (updates.media) {
+    updateData.media_urls = updates.media.map(m => m.url);
+    delete updateData.media;
+  }
+
+  const { data, error } = await supabase
+    .from('posts')
+    .update(updateData)
+    .eq('id', postId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const deletePost = async (postId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('posts')
+    .delete()
+    .eq('id', postId);
+
+  if (error) throw error;
+};
+
+// Media upload function
+export const uploadMedia = async (files: File[], schoolId: string): Promise<MediaObject[]> => {
+  const mediaObjects: MediaObject[] = [];
+
   for (const file of files) {
     const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-    const filePath = `${folder}/${fileName}`;
-    
+    const fileName = `${Math.random()}.${fileExt}`;
+    const filePath = `posts/${schoolId}/${fileName}`;
+
     const { data, error } = await supabase.storage
       .from('media')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
-      
+      .upload(filePath, file);
+
     if (error) {
-      console.error('Error uploading file:', error);
+      console.error('Upload error:', error);
       continue;
     }
-    
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
+
+    const { data: publicData } = supabase.storage
       .from('media')
       .getPublicUrl(filePath);
-      
-    uploadedUrls.push(publicUrl);
-  }
-  
-  return uploadedUrls;
-}
 
-export async function deleteMedia(urls: string[]): Promise<boolean> {
-  const supabase = createSupabaseClient();
+    const mediaType = file.type.startsWith('image/') ? 'image' : 
+                     file.type.startsWith('video/') ? 'video' : 'document';
+
+    mediaObjects.push({
+      url: publicData.publicUrl,
+      type: mediaType,
+      name: file.name,
+      size: file.size
+    });
+  }
+
+  return mediaObjects;
+};
+
+// React Query Hooks (only specialized ones, avoid conflicts with hooks.ts)
+export const useCreatePost = () => {
+  const queryClient = useQueryClient();
   
-  try {
-    for (const url of urls) {
-      // Extract file path from URL
-      const urlParts = url.split('/');
-      const bucket = urlParts[urlParts.length - 3];
-      const folder = urlParts[urlParts.length - 2];
-      const fileName = urlParts[urlParts.length - 1];
-      const filePath = `${folder}/${fileName}`;
-      
-      const { error } = await supabase.storage
-        .from(bucket)
-        .remove([filePath]);
-        
-      if (error) {
-        console.error('Error deleting file:', error);
+  return useMutation({
+    mutationFn: async (data: CreatePostData & { schoolId: string }) => {
+      const { schoolId, ...postData } = data;
+      return createPost(schoolId, postData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+    },
+  });
+};
+
+export const useUpdateAnnouncement = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ id, ...updates }: { id: string } & Partial<CreateAnnouncementData>) => {
+      return updateAnnouncement(id, updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
+    },
+  });
+};
+
+export const useDeleteAnnouncement = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: deleteAnnouncement,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
+    },
+  });
+};
+
+export const useToggleReaction = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (data: CreateReactionData) => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
+
+        // Check if reaction already exists
+        const { data: existing, error: selectError } = await supabase
+          .from('post_reactions')
+          .select('*')
+          .eq('post_id', data.post_id)
+          .eq('user_id', user.id)
+          .eq('emoji', data.emoji)
+          .maybeSingle();
+
+        if (selectError) {
+          console.error('Error checking existing reaction:', selectError);
+          throw selectError;
+        }
+
+        if (existing) {
+          // Remove reaction if it exists with same emoji
+          const { error: deleteError } = await supabase
+            .from('post_reactions')
+            .delete()
+            .eq('post_id', data.post_id)
+            .eq('user_id', user.id)
+            .eq('emoji', data.emoji);
+          
+          if (deleteError) {
+            console.error('Error removing reaction:', deleteError);
+            throw deleteError;
+          }
+          
+          return { action: 'removed', emoji: data.emoji };
+        } else {
+          // Remove any existing reaction with different emoji first
+          const { error: deleteOtherError } = await supabase
+            .from('post_reactions')
+            .delete()
+            .eq('post_id', data.post_id)
+            .eq('user_id', user.id);
+
+          if (deleteOtherError) {
+            console.error('Error removing other reactions:', deleteOtherError);
+            // Don't throw here, just log - we can still add the new reaction
+          }
+
+          // Add new reaction
+          const { error: insertError } = await supabase
+            .from('post_reactions')
+            .insert({
+              post_id: data.post_id,
+              user_id: user.id,
+              emoji: data.emoji
+            });
+          
+          if (insertError) {
+            console.error('Error adding reaction:', insertError);
+            throw insertError;
+          }
+          
+          return { action: 'added', emoji: data.emoji };
+        }
+      } catch (error) {
+        console.error('Toggle reaction error details:', error);
+        throw error;
       }
-    }
-    return true;
-  } catch (error) {
-    console.error('Error deleting media files:', error);
-    return false;
+    },
+    onSuccess: (result) => {
+      console.log('Reaction toggled successfully:', result);
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+    },
+    onError: (error) => {
+      console.error('Mutation error:', error);
+    },
+  });
+};
+
+export const useCreateComment = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (data: CreateCommentData) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data: comment, error } = await supabase
+        .from('post_comments')
+        .insert({
+          post_id: data.post_id,
+          user_id: user.id,
+          body: data.body
+        })
+        .select(`
+          *,
+          user:users(first_name, last_name)
+        `)
+        .single();
+
+      if (error) throw error;
+      return comment;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+      queryClient.invalidateQueries({ queryKey: ['post-comments'] });
+    },
+  });
+};
+
+export const usePostComments = (postId: string) => {
+  return useQuery({
+    queryKey: ['post-comments', postId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('post_comments')
+        .select(`
+          *,
+          user:users(first_name, last_name)
+        `)
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      return data as PostComment[];
+    },
+    enabled: !!postId,
+  });
+};
+
+// Real-time subscriptions
+export const subscribeToPostUpdates = (callback: (payload: any) => void) => {
+  const channel = supabase
+    .channel('post-updates')
+    .on('postgres_changes', 
+      { event: '*', schema: 'public', table: 'posts' }, 
+      (payload) => callback({ ...payload, table: 'posts' })
+    )
+    .on('postgres_changes', 
+      { event: '*', schema: 'public', table: 'post_reactions' }, 
+      (payload) => callback({ ...payload, table: 'post_reactions' })
+    )
+    .on('postgres_changes', 
+      { event: '*', schema: 'public', table: 'post_comments' }, 
+      (payload) => callback({ ...payload, table: 'post_comments' })
+    )
+    .subscribe();
+
+  return channel;
+};
+
+// Utility functions
+export function getMediaType(url: string): 'image' | 'video' | 'document' {
+  const extension = url.split('.').pop()?.toLowerCase();
+  
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(extension || '')) {
+    return 'image';
   }
+  
+  if (['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'].includes(extension || '')) {
+    return 'video';
+  }
+  
+  return 'document';
 }
 
-export function getMediaType(url: string): 'image' | 'video' | 'document' {
-  const ext = url.split('.').pop()?.toLowerCase();
+export function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 Bytes';
   
-  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext || '')) {
-    return 'image';
-  } else if (['mp4', 'webm', 'ogg', 'avi', 'mov'].includes(ext || '')) {
-    return 'video';
-  } else {
-    return 'document';
-  }
-} 
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Create alias for compatibility with PostCard component
+export type Post = CommunityPost; 

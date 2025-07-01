@@ -3,10 +3,11 @@
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { BookOpen, Calendar, Bell, Settings, Home, GraduationCap, LogOut, MessageSquare } from 'lucide-react';
+import { BookOpen, Calendar, Bell, Settings, Home, GraduationCap, LogOut, MessageSquare, UserCheck, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase-client';
+import { NotificationBell } from '@/components/ui/notification-bell';
 
 export default function ParentLayout({ 
   children 
@@ -40,6 +41,7 @@ export default function ParentLayout({
     { href: '/parent/attendance', label: 'Attendance', icon: Calendar },
     { href: '/parent/homework', label: 'Homework', icon: BookOpen },
     { href: '/parent/timetable', label: 'Timetable', icon: GraduationCap },
+    { href: '/parent/exams', label: 'Exams & Reports', icon: FileText },
     { href: '/parent/announcements', label: 'Announcements', icon: Bell },
     { href: '/parent/settings', label: 'Settings', icon: Settings },
   ];
@@ -85,9 +87,31 @@ export default function ParentLayout({
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        <div className="p-8">
-          {children}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Header with Notifications */}
+        <header className="bg-white border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              {/* Page title can be added here if needed */}
+            </div>
+            <div className="flex items-center space-x-4">
+              <NotificationBell />
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                  <UserCheck className="w-4 h-4 text-gray-600" />
+                </div>
+                <span className="text-sm font-medium text-gray-700">
+                  {user.email}
+                </span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-auto">
+          <div className="p-8">
+            {children}
+          </div>
         </div>
       </div>
     </div>

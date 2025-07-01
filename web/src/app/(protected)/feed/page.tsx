@@ -8,15 +8,17 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MessageSquare, Megaphone, Heart, ThumbsUp, Smile, Star } from 'lucide-react';
+import { PostCard } from '@/components/ui/post-card';
+import { MessageSquare, Megaphone, Heart, ThumbsUp, Smile, Star, ArrowLeft, Home } from 'lucide-react';
 import { Footer } from '@/components/ui/footer';
+import Link from 'next/link';
 
-interface FeedItem {
+interface AnnouncementItem {
   id: string;
-  type: 'post' | 'announcement';
+  type: 'announcement';
   title: string;
   content: string;
-  audience: string;
+  target_audience: string;
   author?: {
     first_name: string | null;
     last_name: string | null;
@@ -24,59 +26,79 @@ interface FeedItem {
   };
   priority?: string;
   created_at: string;
+  media_urls?: string[];
 }
 
 export default function FeedPage() {
   const { user } = useAuth();
   const [activeFilter, setActiveFilter] = useState('all');
   
-  // Determine user's audience type for filtering
-  const userAudience = user?.role === 'teacher' ? 'teachers' : 
-                      user?.role === 'parent' ? 'parents' : 'students';
+  // Fetch posts for all audiences to show cross-portal content
+  // This ensures posts from other portals are visible
+  const { data: allPosts } = usePosts(user?.school_id || '', 'all');
+  const { data: teacherPosts } = usePosts(user?.school_id || '', 'teachers');
+  const { data: parentPosts } = usePosts(user?.school_id || '', 'parents');
+  const { data: studentPosts } = usePosts(user?.school_id || '', 'students');
   
-  const { data: posts } = usePosts(user?.school_id || '', userAudience);
-  const { data: announcements } = useCommunityAnnouncements(user?.school_id || '', userAudience);
+  // Fetch announcements for cross-portal visibility
+  const { data: allAnnouncements } = useCommunityAnnouncements(user?.school_id || '', 'all');
+  const { data: userAnnouncements } = useCommunityAnnouncements(user?.school_id || '', user?.role === 'teacher' ? 'teachers' : user?.role === 'parent' ? 'parents' : 'students');
 
-  // Combine and sort posts and announcements
-  const feedItems: FeedItem[] = useMemo(() => {
-    const combinedItems: FeedItem[] = [];
+  // Combine all posts from different audiences for cross-portal visibility
+  const allCommunityPosts = useMemo(() => {
+    const combinedPosts = [];
     
-    // Add posts
-    posts?.forEach(post => {
-      combinedItems.push({
-        id: post.id,
-        type: 'post',
-        title: post.title,
-        content: post.body || '',
-        audience: post.audience,
-        author: post.author,
-        created_at: post.created_at
-      });
-    });
+    // Add posts from all audiences
+    if (allPosts) combinedPosts.push(...allPosts);
+    if (teacherPosts) combinedPosts.push(...teacherPosts);
+    if (parentPosts) combinedPosts.push(...parentPosts);
+    if (studentPosts) combinedPosts.push(...studentPosts);
     
-    // Add announcements
-    announcements?.forEach(announcement => {
-      combinedItems.push({
-        id: announcement.id,
-        type: 'announcement',
-        title: announcement.title,
-        content: announcement.content,
-        audience: announcement.target_audience,
-        author: announcement.author,
-        priority: announcement.priority,
-        created_at: announcement.created_at
-      });
-    });
+    // Remove duplicates based on ID
+    const uniquePosts = combinedPosts.filter((post, index, arr) => 
+      arr.findIndex(p => p.id === post.id) === index
+    );
     
-    // Sort by creation date (newest first)
-    return combinedItems.sort((a, b) => 
+    return uniquePosts.sort((a, b) => 
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-  }, [posts, announcements]);
+  }, [allPosts, teacherPosts, parentPosts, studentPosts]);
 
-  const filteredItems = feedItems.filter(item => {
-    if (activeFilter === 'all') return true;
-    return item.type === activeFilter;
+  // Transform announcements to match display format
+  const announcementItems: AnnouncementItem[] = useMemo(() => {
+    const combinedAnnouncements = [];
+    
+    if (allAnnouncements) combinedAnnouncements.push(...allAnnouncements);
+    if (userAnnouncements) combinedAnnouncements.push(...userAnnouncements);
+    
+    // Remove duplicates and transform
+    const uniqueAnnouncements = combinedAnnouncements.filter((announcement, index, arr) => 
+      arr.findIndex(a => a.id === announcement.id) === index
+    );
+    
+    return uniqueAnnouncements.map(announcement => ({
+      id: announcement.id,
+      type: 'announcement' as const,
+      title: announcement.title,
+      content: announcement.content,
+      target_audience: announcement.target_audience || 'all',
+      author: announcement.author,
+      priority: announcement.priority,
+      created_at: announcement.created_at,
+      media_urls: announcement.media_urls
+    })).sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }, [allAnnouncements, userAnnouncements]);
+
+  const filteredPosts = allCommunityPosts.filter(post => {
+    if (activeFilter === 'all' || activeFilter === 'post') return true;
+    return false;
+  });
+
+  const filteredAnnouncements = announcementItems.filter(announcement => {
+    if (activeFilter === 'all' || activeFilter === 'announcement') return true;
+    return false;
   });
 
   const getTypeIcon = (type: string) => {
@@ -124,24 +146,45 @@ export default function FeedPage() {
     );
   };
 
-  const handleReaction = (itemId: string, emoji: string) => {
-    // TODO: Implement reaction functionality
-    console.log(`Reacted with ${emoji} to item ${itemId}`);
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-100">
+      {/* Navigation Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 mb-6"
+      >
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Link href="/dashboard">
+                <Button variant="ghost" size="sm" className="flex items-center gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Dashboard
+                </Button>
+              </Link>
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-6 w-6 text-green-600" />
+                <h1 className="text-xl font-bold text-gray-900">Community Feed</h1>
+              </div>
+            </div>
+            <Link href="/dashboard">
+              <Button variant="outline" size="sm" className="flex items-center gap-2">
+                <Home className="h-4 w-4" />
+                Dashboard
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </motion.div>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="container mx-auto px-4 py-8"
+        className="container mx-auto px-4 pb-8"
       >
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2 mb-2">
-            <MessageSquare className="h-8 w-8 text-green-600" />
-            Community Feed
-          </h1>
-          <p className="text-gray-600">Stay updated with school posts and announcements</p>
+        <div className="mb-6">
+          <p className="text-gray-600">Stay updated with school posts and announcements from all portals</p>
         </div>
 
         <Tabs value={activeFilter} onValueChange={setActiveFilter} className="mb-6">
@@ -153,12 +196,25 @@ export default function FeedPage() {
         </Tabs>
 
         <div className="space-y-6">
-          {filteredItems.map((item, index) => (
+          {/* Render Posts using PostCard component for full functionality */}
+          {(activeFilter === 'all' || activeFilter === 'post') && filteredPosts.map((post, index) => (
             <motion.div
-              key={`${item.type}-${item.id}`}
+              key={`post-${post.id}`}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
+            >
+              <PostCard post={post} />
+            </motion.div>
+          ))}
+
+          {/* Render Announcements with media support */}
+          {(activeFilter === 'all' || activeFilter === 'announcement') && filteredAnnouncements.map((item, index) => (
+            <motion.div
+              key={`announcement-${item.id}`}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: (filteredPosts.length + index) * 0.1 }}
             >
               <Card className="glassmorphism hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
                 <div className="p-6">
@@ -172,7 +228,7 @@ export default function FeedPage() {
                           <span>•</span>
                           <span>{new Date(item.created_at).toLocaleDateString()}</span>
                           <span>•</span>
-                          {getAudienceBadge(item.audience)}
+                          {getAudienceBadge(item.target_audience)}
                           {item.priority && (
                             <>
                               <span>•</span>
@@ -189,44 +245,54 @@ export default function FeedPage() {
                   
                   <p className="text-gray-700 mb-4 leading-relaxed">{item.content}</p>
                   
-                  {/* Emoji Reaction Buttons */}
+                  {/* Display announcement media if available */}
+                  {item.media_urls && item.media_urls.length > 0 && (
+                    <div className="mb-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {item.media_urls.map((url, mediaIndex) => (
+                          <div key={mediaIndex} className="relative">
+                            <img
+                              src={url}
+                              alt={`Announcement media ${mediaIndex + 1}`}
+                              className="w-full h-48 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={() => window.open(url, '_blank')}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Simple reaction buttons for announcements */}
                   <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
                     <span className="text-sm text-gray-500 mr-2">React:</span>
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => handleReaction(item.id, '👍')}
                       className="hover:bg-blue-50"
                     >
-                      <ThumbsUp className="w-4 h-4 mr-1" />
                       👍
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => handleReaction(item.id, '❤️')}
                       className="hover:bg-red-50"
                     >
-                      <Heart className="w-4 h-4 mr-1" />
                       ❤️
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => handleReaction(item.id, '😊')}
                       className="hover:bg-yellow-50"
                     >
-                      <Smile className="w-4 h-4 mr-1" />
                       😊
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => handleReaction(item.id, '⭐')}
-                      className="hover:bg-orange-50"
+                      className="hover:bg-purple-50"
                     >
-                      <Star className="w-4 h-4 mr-1" />
-                      ⭐
+                      🎉
                     </Button>
                   </div>
                 </div>
@@ -234,27 +300,20 @@ export default function FeedPage() {
             </motion.div>
           ))}
 
-          {filteredItems.length === 0 && (
+          {/* Show message if no content */}
+          {filteredPosts.length === 0 && filteredAnnouncements.length === 0 && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="text-center py-12"
             >
-              <div className="flex justify-center mb-4">
-                <MessageSquare className="h-16 w-16 text-gray-400" />
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No items in feed</h3>
-              <p className="text-gray-500">
-                {activeFilter === 'all' 
-                  ? 'There are no posts or announcements to show yet.'
-                  : `There are no ${activeFilter}s to show yet.`
-                }
-              </p>
+              <MessageSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-xl font-medium text-gray-600 mb-2">No content yet</h3>
+              <p className="text-gray-500">Check back later for new posts and announcements!</p>
             </motion.div>
           )}
         </div>
       </motion.div>
-      
       <Footer />
     </div>
   );

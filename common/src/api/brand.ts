@@ -1,5 +1,4 @@
-import { createSupabaseClient } from './supabase';
-import type { Database } from './database.types';
+import { supabase } from './supabase';
 
 export type SchoolBrand = {
   logo_url: string | null;
@@ -13,18 +12,25 @@ export type SchoolBrand = {
 };
 
 export async function getSchoolBrand(schoolId: string): Promise<SchoolBrand | null> {
-  const supabase = createSupabaseClient();
-  
   const { data, error } = await supabase
     .from('schools')
-    .select('logo_url, name, theme_colors, address, website_url, principal_name, phone_number, email_address')
+    .select(`
+      name,
+      logo_url,
+      theme_colors,
+      address,
+      website_url,
+      principal_name,
+      phone_number,
+      email_address
+    `)
     .eq('id', schoolId)
     .single();
-    
+
   if (error) {
     console.error('Error fetching school brand:', error);
     return null;
   }
-  
+
   return data;
 } 

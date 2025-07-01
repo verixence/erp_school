@@ -3,10 +3,12 @@
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { BookOpen, Calendar, Users, Home, GraduationCap, LogOut, CheckCircle, FileText, MessageSquare } from 'lucide-react';
+import { BookOpen, Calendar, Users, Home, GraduationCap, LogOut, CheckCircle, FileText, MessageSquare, UserCheck } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase-client';
+import { NotificationBell } from '@/components/ui/notification-bell';
+
 
 export default function TeacherLayout({ 
   children 
@@ -46,6 +48,16 @@ export default function TeacherLayout({
       icon: MessageSquare,
     },
     {
+      href: '/teacher/community',
+      label: 'Create Posts',
+      icon: MessageSquare,
+    },
+    {
+      href: '/teacher/announcements',
+      label: 'Announcements',
+      icon: FileText,
+    },
+    {
       href: '/teacher/attendance',
       label: 'Attendance',
       icon: CheckCircle,
@@ -63,57 +75,82 @@ export default function TeacherLayout({
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <div className="w-64 bg-white shadow-sm border-r border-gray-200 flex flex-col">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center">
-            <GraduationCap className="w-8 h-8 text-blue-600 mr-3" />
-            <div>
-              <h1 className="text-lg font-semibold text-gray-900">Teacher Portal</h1>
-              <p className="text-sm text-gray-600 mt-1">
-                {user.email}
-              </p>
+    <>
+
+      <div className="min-h-screen bg-gray-50 flex">
+        {/* Sidebar */}
+        <div className="w-64 bg-white shadow-sm border-r border-gray-200 flex flex-col">
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center">
+              <GraduationCap className="w-8 h-8 text-blue-600 mr-3" />
+              <div>
+                <h1 className="text-lg font-semibold text-gray-900">Teacher Portal</h1>
+                <p className="text-sm text-gray-600 mt-1">
+                  {user.email}
+                </p>
+              </div>
             </div>
+          </div>
+
+          {/* Navigation */}
+          <nav className="mt-6 flex-1">
+            {sidebarItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex items-center px-6 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+              >
+                <item.icon className="w-5 h-5 mr-3" />
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+          
+          {/* Logout Button */}
+          <div className="p-6 border-t border-gray-200">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                await supabase.auth.signOut();
+                window.location.href = '/login';
+              }}
+              className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign Out
+            </Button>
           </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="mt-6 flex-1">
-          {sidebarItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex items-center px-6 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-            >
-              <item.icon className="w-5 h-5 mr-3" />
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        
-        {/* Logout Button */}
-        <div className="p-6 border-t border-gray-200">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={async () => {
-              await supabase.auth.signOut();
-              window.location.href = '/login';
-            }}
-            className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Sign Out
-          </Button>
+        {/* Main content */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Top Header with Notifications */}
+          <header className="bg-white border-b border-gray-200 px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                {/* Page title can be added here if needed */}
+              </div>
+              <div className="flex items-center space-x-4">
+                <NotificationBell />
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                    <UserCheck className="w-4 h-4 text-gray-600" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">
+                    {user.email}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <div className="flex-1 overflow-auto">
+            {children}
+          </div>
         </div>
       </div>
-
-      {/* Main content */}
-      <div className="flex-1">
-        {children}
-      </div>
-    </div>
+    </>
   );
 } 

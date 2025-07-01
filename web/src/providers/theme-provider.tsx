@@ -1,14 +1,9 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext } from "react";
+import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "next-themes";
 
 type Theme = "dark" | "light" | "system";
-
-type ThemeProviderProps = {
-  children: React.ReactNode;
-  defaultTheme?: Theme;
-  storageKey?: string;
-};
 
 type ThemeProviderState = {
   theme: Theme;
@@ -22,66 +17,11 @@ const initialState: ThemeProviderState = {
 
 const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 
-export function ThemeProvider({
-  children,
-  defaultTheme = "system",
-  storageKey = "ui-theme",
-  ...props
-}: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(defaultTheme);
-  const [mounted, setMounted] = useState(false);
-
-  // Only run on client side after hydration
-  useEffect(() => {
-    setMounted(true);
-    const storedTheme = localStorage.getItem(storageKey) as Theme;
-    if (storedTheme) {
-      setTheme(storedTheme);
-    }
-  }, [storageKey]);
-
-  useEffect(() => {
-    if (!mounted) return;
-
-    const root = window.document.documentElement;
-    root.classList.remove("light", "dark");
-
-    if (theme === "system") {
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
-        .matches
-        ? "dark"
-        : "light";
-
-      root.classList.add(systemTheme);
-      return;
-    }
-
-    root.classList.add(theme);
-  }, [theme, mounted]);
-
-  const value = {
-    theme,
-    setTheme: (theme: Theme) => {
-      if (mounted) {
-        localStorage.setItem(storageKey, theme);
-      }
-      setTheme(theme);
-    },
-  };
-
-  // Prevent flash of unstyled content during SSR
-  if (!mounted) {
-    return (
-      <ThemeProviderContext.Provider {...props} value={value}>
-        {children}
-      </ThemeProviderContext.Provider>
-    );
-  }
-
+export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   return (
-    <ThemeProviderContext.Provider {...props} value={value}>
+    <NextThemesProvider {...props}>
       {children}
-    </ThemeProviderContext.Provider>
+    </NextThemesProvider>
   );
 }
 

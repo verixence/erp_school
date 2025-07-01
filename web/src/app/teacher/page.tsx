@@ -1,213 +1,353 @@
 'use client';
 
-import { useAuth } from '@/hooks/use-auth';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { GraduationCap, Calendar, BookOpen, Users, CheckCircle, Clock, FileText } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { 
+  BookOpen, 
+  Users, 
+  Calendar,
+  ClipboardList,
+  MessageSquare,
+  Award,
+  CheckCircle2,
+  Clock,
+  TrendingUp,
+  FileText,
+  PenTool,
+  Eye
+} from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase-client';
+import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/hooks/use-auth';
+import { 
+  useExamGroups,
+  useExamPapers,
+  useMarks,
+  useReportCards,
+  type ExamGroup,
+  type ExamPaper 
+} from '@erp/common';
 
-interface KPICardProps {
-  title: string;
-  value: number;
-  icon: React.ReactNode;
-  color: string;
-  onClick?: () => void;
-}
-
-function KPICard({ title, value, icon, color, onClick }: KPICardProps) {
-  return (
-    <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={onClick}>
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-2xl font-bold text-gray-900">{value}</p>
-            <p className="text-sm text-gray-600 mt-1">{title}</p>
-          </div>
-          <div className={`p-3 rounded-full ${color}`}>
-            {icon}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+import Link from 'next/link';
 
 export default function TeacherDashboard() {
-  const { user, isLoading } = useAuth();
-  const router = useRouter();
+  const { user } = useAuth();
+  const [selectedExamGroup, setSelectedExamGroup] = useState<string | null>(null);
 
-  // Teacher dashboard stats
-  const { data: stats } = useQuery({
-    queryKey: ['teacher-dashboard-stats', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
+  // API hooks
+  const { data: examGroups = [] } = useExamGroups(user?.school_id || undefined);
+  const { data: examPapers = [] } = useExamPapers(selectedExamGroup || undefined);
+  const { data: reportCards = [] } = useReportCards(user?.school_id || undefined);
 
-      // Get today's classes count
-      const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
-      const { count: todaysClasses } = await supabase
-        .from('timetables')
-        .select('*', { count: 'exact', head: true })
-        .eq('teacher_id', user.id)
-        .eq('weekday', today === 0 ? 7 : today); // Convert Sunday from 0 to 7
 
-      // Get pending homework count (due in next 7 days)
-      const nextWeek = new Date();
-      nextWeek.setDate(nextWeek.getDate() + 7);
-      
-      const { count: pendingHomework } = await supabase
-        .from('homeworks')
-        .select('*', { count: 'exact', head: true })
-        .eq('created_by', user.id)
-        .gte('due_date', new Date().toISOString().split('T')[0])
-        .lte('due_date', nextWeek.toISOString().split('T')[0]);
+  // Get recent exam groups (published ones)
+  const recentExamGroups = examGroups
+    .filter(group => group.is_published)
+    .slice(0, 3);
 
-      // Get sections count
-      const { count: sectionsCount } = await supabase
-        .from('sections')
-        .select('*', { count: 'exact', head: true })
-        .eq('teacher_id', user.id);
+  // Get pending marks entry (exam papers that need marks)
+  const pendingMarksPapers = examPapers.filter(paper => {
+    // This would need to be enhanced to check if marks are actually entered
+    return paper.exam_date && new Date(paper.exam_date) <= new Date();
+  }).slice(0, 5);
 
-      // Get recent announcements count
-      const { count: recentAnnouncements } = await supabase
-        .from('announcements')
-        .select('*', { count: 'exact', head: true })
-        .eq('created_by', user.id)
-        .eq('is_published', true)
-        .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()); // Last 7 days
+  // Calculate statistics
+  const totalStudents = 0; // This would come from teacher's sections
+  const completedExams = examPapers.filter(paper => 
+    paper.exam_date && new Date(paper.exam_date) <= new Date()
+  ).length;
+  const pendingReports = reportCards.filter(report => report.status === 'draft').length;
 
-      return {
-        todaysClasses: todaysClasses || 0,
-        pendingHomework: pendingHomework || 0,
-        sectionsCount: sectionsCount || 0,
-        recentAnnouncements: recentAnnouncements || 0,
-      };
+  const stats = [
+    {
+      title: "My Students",
+      value: totalStudents,
+      description: "Students in your sections",
+      icon: Users,
+      color: "bg-blue-500",
+      trend: "+12%"
     },
-    enabled: !!user?.id,
-  });
+    {
+      title: "Completed Exams",
+      value: completedExams,
+      description: "Exams conducted this term",
+      icon: Award,
+      color: "bg-green-500",
+      trend: "+8%"
+    },
+    {
+      title: "Pending Reports",
+      value: pendingReports,
+      description: "Reports awaiting completion",
+      icon: FileText,
+      color: "bg-orange-500",
+      trend: "-3%"
+    },
+    {
+      title: "Active Exams",
+      value: recentExamGroups.length,
+      description: "Currently active exam groups",
+      icon: BookOpen,
+      color: "bg-purple-500",
+      trend: "+5%"
+    },
+  ];
 
-  useEffect(() => {
-    if (!isLoading && (!user || user.role !== 'teacher')) {
-      router.replace('/not-authorized');
-    }
-  }, [user, isLoading, router]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  if (!user || user.role !== 'teacher') {
-    return null;
-  }
+  const quickActions = [
+    {
+      title: "Enter Marks",
+      description: "Update exam marks for your subjects",
+      icon: PenTool,
+      href: "/teacher/marks",
+      color: "bg-gradient-to-r from-blue-600 to-blue-700",
+      badge: pendingMarksPapers.length > 0 ? pendingMarksPapers.length : null
+    },
+    {
+      title: "View Timetable",
+      description: "Check your exam schedule",
+      icon: Calendar,
+      href: "/teacher/timetable",
+      color: "bg-gradient-to-r from-green-600 to-green-700"
+    },
+    {
+      title: "Create Homework",
+      description: "Assign new homework to students",
+      icon: ClipboardList,
+      href: "/teacher/homework/new",
+      color: "bg-gradient-to-r from-purple-600 to-purple-700"
+    },
+    {
+      title: "Announcements",
+      description: "Share updates with students",
+      icon: MessageSquare,
+      href: "/teacher/announcements",
+      color: "bg-gradient-to-r from-orange-600 to-orange-700"
+    },
+  ];
 
   return (
-    <div className="p-8">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Dashboard</h2>
-          <p className="text-gray-600">Overview of your teaching activities</p>
+    <div className="space-y-8">
+      {/* Welcome Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl p-8 text-white bg-gradient-to-r from-blue-600 to-purple-600"
+      >
+        <h1 className="text-3xl font-bold mb-2">Welcome back, Teacher!</h1>
+        <p className="text-blue-100 mb-6">
+          Manage your classes, exams, and student progress from your dashboard
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <Button variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-white/30">
+            <Eye className="w-4 h-4 mr-2" />
+            View My Profile
+          </Button>
+          <Button variant="outline" className="border-white/30 text-white hover:bg-white/10">
+            <Calendar className="w-4 h-4 mr-2" />
+            Today's Schedule
+          </Button>
         </div>
+      </motion.div>
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <KPICard
-            title="Today's Classes"
-            value={stats?.todaysClasses || 0}
-            icon={<Calendar className="w-6 h-6 text-white" />}
-            color="bg-blue-500"
-            onClick={() => router.push('/teacher/timetable')}
-          />
-          <KPICard
-            title="Pending Homework"
-            value={stats?.pendingHomework || 0}
-            icon={<BookOpen className="w-6 h-6 text-white" />}
-            color="bg-green-500"
-            onClick={() => router.push('/teacher/homework')}
-          />
-          <KPICard
-            title="My Sections"
-            value={stats?.sectionsCount || 0}
-            icon={<Users className="w-6 h-6 text-white" />}
-            color="bg-purple-500"
-          />
-          <KPICard
-            title="Recent Announcements"
-            value={stats?.recentAnnouncements || 0}
-            icon={<FileText className="w-6 h-6 text-white" />}
-            color="bg-orange-500"
-            onClick={() => router.push('/teacher/announcements')}
-          />
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((stat, index) => (
+          <motion.div
+            key={stat.title}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.1 }}
+          >
+            <Card className="glass-morphism border-0 hover:shadow-lg transition-all duration-300">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+                    <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
+                    <p className="text-xs text-gray-500 mt-1">{stat.description}</p>
+                  </div>
+                  <div className={`p-3 rounded-xl ${stat.color}`}>
+                    <stat.icon className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center">
+                  <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
+                  <span className="text-sm text-green-600 font-medium">{stat.trend}</span>
+                  <span className="text-sm text-gray-500 ml-1">from last month</span>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Quick Actions */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+      >
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">Quick Actions</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {quickActions.map((action, index) => (
+            <motion.div
+              key={action.title}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.5 + index * 0.1 }}
+            >
+              <Link href={action.href}>
+                <Card className="glass-morphism border-0 hover:shadow-xl transition-all duration-300 cursor-pointer group">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className={`p-3 rounded-xl ${action.color} group-hover:scale-110 transition-transform`}>
+                          <action.icon className="w-6 h-6 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                            {action.title}
+                          </h3>
+                          <p className="text-sm text-gray-600">{action.description}</p>
+                        </div>
+                      </div>
+                      {action.badge && (
+                        <Badge className="bg-red-100 text-red-800">
+                          {action.badge}
+                        </Badge>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            </motion.div>
+          ))}
         </div>
+      </motion.div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center mb-4">
-                <div className="bg-blue-100 p-3 rounded-full mr-4">
-                  <CheckCircle className="w-6 h-6 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Mark Attendance</h3>
-                  <p className="text-gray-600">Record student attendance for today</p>
-                </div>
-              </div>
-              <Button 
-                onClick={() => router.push('/teacher/attendance')}
-                className="w-full"
+      {/* Recent Exam Groups */}
+      {recentExamGroups.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+        >
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Recent Exam Groups</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {recentExamGroups.map((examGroup, index) => (
+              <motion.div
+                key={examGroup.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7 + index * 0.1 }}
               >
-                Go to Attendance
-              </Button>
+                <Card className="glass-morphism border-0 hover:shadow-lg transition-shadow">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                          <BookOpen className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-lg font-semibold">{examGroup.name}</CardTitle>
+                          <CardDescription className="capitalize">
+                            {examGroup.exam_type.replace('_', ' ')}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <Badge className="bg-green-100 text-green-800">
+                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                        Published
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Start Date:</span>
+                        <span className="font-medium">
+                          {new Date(examGroup.start_date).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">End Date:</span>
+                        <span className="font-medium">
+                          {new Date(examGroup.end_date).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                    <Button 
+                      className="w-full mt-4" 
+                      variant="outline"
+                      onClick={() => setSelectedExamGroup(examGroup.id)}
+                    >
+                      View Details
+                    </Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Pending Marks Entry */}
+      {pendingMarksPapers.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8 }}
+        >
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Pending Marks Entry</h2>
+          <Card className="glass-morphism border-0">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Clock className="w-5 h-5 text-orange-500" />
+                <span>Exams Requiring Marks Entry</span>
+              </CardTitle>
+              <CardDescription>
+                Complete marks entry for these recently conducted exams
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {pendingMarksPapers.map((paper, index) => (
+                  <motion.div
+                    key={paper.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.9 + index * 0.1 }}
+                    className="flex items-center justify-between p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                        <PenTool className="w-4 h-4 text-orange-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-900">{paper.subject}</h4>
+                        <p className="text-sm text-gray-600">
+                          Section: {paper.section} • {paper.max_marks} marks
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <span className="text-sm text-gray-500">
+                        {paper.exam_date ? new Date(paper.exam_date).toLocaleDateString() : 'TBD'}
+                      </span>
+                      <Link href={`/teacher/marks/${paper.id}`}>
+                        <Button size="sm" className="bg-orange-600 hover:bg-orange-700">
+                          Enter Marks
+                        </Button>
+                      </Link>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
             </CardContent>
           </Card>
-
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center mb-4">
-                <div className="bg-green-100 p-3 rounded-full mr-4">
-                  <BookOpen className="w-6 h-6 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Assign Homework</h3>
-                  <p className="text-gray-600">Create new homework assignments</p>
-                </div>
-              </div>
-              <Button 
-                onClick={() => router.push('/teacher/homework/new')}
-                className="w-full"
-                variant="outline"
-              >
-                Create Homework
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center mb-4">
-                <div className="bg-purple-100 p-3 rounded-full mr-4">
-                  <Clock className="w-6 h-6 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">View Timetable</h3>
-                  <p className="text-gray-600">Check your class schedule</p>
-                </div>
-              </div>
-              <Button 
-                onClick={() => router.push('/teacher/timetable')}
-                className="w-full"
-                variant="outline"
-              >
-                View Schedule
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+        </motion.div>
+      )}
     </div>
   );
 } 

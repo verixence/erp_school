@@ -177,11 +177,10 @@ export function EnhancedSchoolForm({ open, onOpenChange, editMode = false, initi
         try {
           const fileExt = logoFile.name.split('.').pop();
           const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-          const filePath = `school-logos/${fileName}`;
 
           const { error: uploadError } = await supabase.storage
-            .from('public')
-            .upload(filePath, logoFile);
+            .from('school-logos')
+            .upload(fileName, logoFile);
 
           if (uploadError) {
             console.error('Logo upload error:', uploadError);
@@ -189,8 +188,8 @@ export function EnhancedSchoolForm({ open, onOpenChange, editMode = false, initi
           }
 
           const { data: { publicUrl } } = supabase.storage
-            .from('public')
-            .getPublicUrl(filePath);
+            .from('school-logos')
+            .getPublicUrl(fileName);
 
           finalLogoUrl = publicUrl;
         } catch (error) {
