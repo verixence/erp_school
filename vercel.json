@@ -1,6 +1,0 @@
-{
-  "installCommand": "pnpm install",
-  "buildCommand": "pnpm --filter @erp/web build",
-  "outputDirectory": "web/.next",
-  "framework": "nextjs"
-} 
