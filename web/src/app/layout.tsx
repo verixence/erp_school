@@ -1,4 +1,3 @@
-
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -12,8 +11,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "School ERP - Multi-Tenant Management System",
-  description: "Advanced multi-tenant School ERP system for managing 150+ schools",
+  title: "CampusHoster - School Management Platform",
+  description: "Advanced cloud-based school management platform for educational institutions",
 };
 
 export default function RootLayout({

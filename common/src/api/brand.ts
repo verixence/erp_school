@@ -108,48 +108,57 @@ export function transformToBrand(schoolBrand: SchoolBrand): Brand {
 }
 
 export async function getSchoolBrand(schoolId: string): Promise<SchoolBrand | null> {
-  // This would typically fetch from your database
-  // For now, return mock data
-  const mockBrands: Record<string, SchoolBrand> = {
-    '1': {
-      id: '1',
-      name: 'Green Valley School',
-      primary_color: '#10b981',
-      secondary_color: '#34d399',
-      accent_color: '#6ee7b7',
-      address: '123 Education Lane, Knowledge City',
-      created_at: new Date().toISOString(),
-    },
-    '2': {
-      id: '2',
-      name: 'Sunrise Academy',
-      primary_color: '#ef4444',
-      secondary_color: '#f87171',
-      accent_color: '#fca5a5',
-      address: '456 Learning Ave, Wisdom Town',
-      created_at: new Date().toISOString(),
-    },
-    '3': {
-      id: '3',
-      name: 'Blue Ridge Institute',
-      primary_color: '#3b82f6',
-      secondary_color: '#60a5fa',
-      accent_color: '#93c5fd',
-      address: '789 Scholar St, Academic Heights',
-      created_at: new Date().toISOString(),
-    },
-  };
+  try {
+    const { data: school, error } = await supabase
+      .from('schools')
+      .select('id, name, logo_url, address, theme_colors, primary_color, secondary_color, accent_color')
+      .eq('id', schoolId)
+      .single();
 
-  // Return the school brand if it exists, otherwise return a default brand
-  return mockBrands[schoolId] || {
-    id: schoolId,
-    name: 'CampusHoster School',
-    primary_color: '#6366f1',
-    secondary_color: '#8b5cf6',
-    accent_color: '#ec4899',
-    address: 'Default School Address',
-    created_at: new Date().toISOString(),
-  };
+    if (error || !school) {
+      console.error('Error fetching school brand:', error);
+      return null;
+    }
+
+    // Format the address from the JSON object
+    const addressParts = [];
+    if (school.address?.street) addressParts.push(school.address.street);
+    if (school.address?.city) addressParts.push(school.address.city);
+    if (school.address?.state) addressParts.push(school.address.state);
+    if (school.address?.country) addressParts.push(school.address.country);
+    
+    const formattedAddress = addressParts.join(', ') || 'School Address';
+
+    // Use the theme_colors object if it exists, otherwise fall back to individual color fields
+    const themeColors = school.theme_colors || {};
+    const primaryColor = themeColors.primary || school.primary_color || '#6366f1';
+    const secondaryColor = themeColors.secondary || school.secondary_color || '#8b5cf6';
+    const accentColor = themeColors.accent || school.accent_color || '#ec4899';
+
+    return {
+      id: school.id,
+      name: school.name,
+      logo_url: school.logo_url,
+      primary_color: primaryColor,
+      secondary_color: secondaryColor,
+      accent_color: accentColor,
+      address: formattedAddress,
+      created_at: new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error('Error in getSchoolBrand:', error);
+    
+    // Return a default brand as fallback
+    return {
+      id: schoolId,
+      name: 'CampusHoster School',
+      primary_color: '#6366f1',
+      secondary_color: '#8b5cf6',
+      accent_color: '#ec4899',
+      address: 'Default School Address',
+      created_at: new Date().toISOString(),
+    };
+  }
 }
 
 export async function getBrandForSchool(schoolId: string): Promise<Brand | null> {

@@ -77,8 +77,8 @@ export default function LoginPage() {
               <GraduationCap className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">School ERP</h1>
-              <p className="text-gray-600">Multi-Tenant Management System</p>
+              <h1 className="text-2xl font-bold text-gray-900">CampusHoster</h1>
+              <p className="text-gray-600">School Management Platform</p>
             </div>
           </div>
 
@@ -183,53 +183,53 @@ export default function LoginPage() {
                 <div className="bg-white px-3 py-2 rounded border border-blue-300">
                   <p className="text-xs text-blue-600 font-medium mb-1">School Admin:</p>
                   <div className="flex items-center justify-between">
-                    <code className="text-sm font-mono text-blue-800">school@demo.edu</code>
+                    <code className="text-sm font-mono text-blue-800">admin.monte@yopmail.com</code>
                     <button
                       type="button"
                       onClick={() => {
-                        setEmail('school@demo.edu');
-                        setPassword('school123');
+                        setEmail('admin.monte@yopmail.com');
+                        setPassword('Welcome!23');
                       }}
                       className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                     >
                       Use
                     </button>
                   </div>
-                  <code className="text-sm font-mono text-blue-800">Password: school123</code>
+                  <code className="text-sm font-mono text-blue-800">Password: Welcome!23</code>
                 </div>
                 <div className="bg-white px-3 py-2 rounded border border-blue-300">
                   <p className="text-xs text-blue-600 font-medium mb-1">Teacher:</p>
                   <div className="flex items-center justify-between">
-                    <code className="text-sm font-mono text-blue-800">sampath.sfmc@gmail.com</code>
+                    <code className="text-sm font-mono text-blue-800">Yoga@yopmail.com</code>
                     <button
                       type="button"
                       onClick={() => {
-                        setEmail('sampath.sfmc@gmail.com');
-                        setPassword('Mundrathi!23');
+                        setEmail('Yoga@yopmail.com');
+                        setPassword('Welcome!23');
                       }}
                       className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                     >
                       Use
                     </button>
                   </div>
-                  <code className="text-sm font-mono text-blue-800">Password: Mundrathi!23</code>
+                  <code className="text-sm font-mono text-blue-800">Password: Welcome!23</code>
                 </div>
                 <div className="bg-white px-3 py-2 rounded border border-blue-300">
                   <p className="text-xs text-blue-600 font-medium mb-1">Parent:</p>
                   <div className="flex items-center justify-between">
-                    <code className="text-sm font-mono text-blue-800">parent@sunriseschool.edu</code>
+                    <code className="text-sm font-mono text-blue-800">gadar.R@yopmail.com</code>
                     <button
                       type="button"
                       onClick={() => {
-                        setEmail('parent@sunriseschool.edu');
-                        setPassword('parent123');
+                        setEmail('gadar.R@yopmail.com');
+                        setPassword('Welcome!23');
                       }}
                       className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                     >
                       Use
                     </button>
                   </div>
-                  <code className="text-sm font-mono text-blue-800">Password: parent123</code>
+                  <code className="text-sm font-mono text-blue-800">Password: Welcome!23</code>
                 </div>
               </div>
             </div>

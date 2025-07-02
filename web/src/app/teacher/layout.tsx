@@ -1,14 +1,18 @@
 'use client';
 
 import { useAuth } from '@/hooks/use-auth';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { BookOpen, Calendar, Users, Home, GraduationCap, LogOut, CheckCircle, FileText, MessageSquare, UserCheck, Award } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
+import { getBrandForSchool, injectBrandCSS } from '@erp/common';
+import { CampusHeader } from '@/components/CampusHeader';
+import { CampusFooter } from '@/components/CampusFooter';
+import { KBarProviderWrapper } from '@/components/kbar-provider';
+import { BookOpen, Calendar, Users, Home, GraduationCap, FileText, MessageSquare, CheckCircle, Award } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase-client';
-import { NotificationBell } from '@/components/ui/notification-bell';
-
 
 export default function TeacherLayout({ 
   children 
@@ -17,6 +21,22 @@ export default function TeacherLayout({
 }) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Fetch brand data for the school
+  const { data: brand, isLoading: brandLoading } = useQuery({
+    queryKey: ['school-brand', user?.school_id],
+    queryFn: () => getBrandForSchool(user!.school_id!),
+    enabled: !!user?.school_id,
+  });
+
+  // Inject brand CSS when brand data is available
+  useEffect(() => {
+    if (brand) {
+      injectBrandCSS(brand);
+    }
+  }, [brand]);
 
   useEffect(() => {
     if (!isLoading && (!user || user.role !== 'teacher')) {
@@ -24,16 +44,38 @@ export default function TeacherLayout({
     }
   }, [user, isLoading, router]);
 
+  const handleMobileMenuToggle = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const handleMobileMenuClose = () => {
+    setIsMobileMenuOpen(false);
+  };
+
+  // Show loading state while auth is loading
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
 
+  // Redirect if not authorized
   if (!user || user.role !== 'teacher') {
     return null;
+  }
+
+  // Show loading state while brand is loading
+  if (brandLoading || !brand) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading school data...</p>
+        </div>
+      </div>
+    );
   }
 
   const sidebarItems = [
@@ -80,82 +122,102 @@ export default function TeacherLayout({
   ];
 
   return (
-    <>
+    <KBarProviderWrapper>
+      <div className="min-h-screen flex flex-col bg-background">
+        {/* Header */}
+        <CampusHeader 
+          brand={brand} 
+          onMenuToggle={handleMobileMenuToggle}
+        />
 
-      <div className="min-h-screen bg-gray-50 flex">
-        {/* Sidebar */}
-        <div className="w-64 bg-white shadow-sm border-r border-gray-200 flex flex-col">
-          {/* Header */}
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center">
-              <GraduationCap className="w-8 h-8 text-blue-600 mr-3" />
-              <div>
-                <h1 className="text-lg font-semibold text-gray-900">Teacher Portal</h1>
-                <p className="text-sm text-gray-600 mt-1">
-                  {user.email}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Navigation */}
-          <nav className="mt-6 flex-1">
-            {sidebarItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex items-center px-6 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-              >
-                <item.icon className="w-5 h-5 mr-3" />
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-          
-          {/* Logout Button */}
-          <div className="p-6 border-t border-gray-200">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={async () => {
-                await supabase.auth.signOut();
-                window.location.href = '/login';
-              }}
-              className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Sign Out
-            </Button>
-          </div>
-        </div>
-
-        {/* Main content */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Top Header with Notifications */}
-          <header className="bg-white border-b border-gray-200 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                {/* Page title can be added here if needed */}
-              </div>
-              <div className="flex items-center space-x-4">
-                <NotificationBell />
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                    <UserCheck className="w-4 h-4 text-gray-600" />
-                  </div>
-                  <span className="text-sm font-medium text-gray-700">
+        {/* Main Layout */}
+        <div className="flex flex-1">
+          {/* Sidebar */}
+          <div className={`
+            w-64 bg-card shadow-sm border-r border-border flex flex-col
+            ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+            fixed lg:relative z-30 h-full transition-transform duration-300 ease-in-out
+          `}>
+            {/* Sidebar Header */}
+            <div className="px-6 py-4 border-b border-border">
+              <div className="flex items-center">
+                <GraduationCap className="w-8 h-8 text-primary mr-3" />
+                <div>
+                  <h1 className="text-lg font-semibold text-foreground">Teacher Portal</h1>
+                  <p className="text-sm text-muted-foreground mt-1">
                     {user.email}
-                  </span>
+                  </p>
                 </div>
               </div>
             </div>
-          </header>
 
-          <div className="flex-1 overflow-auto">
-            {children}
+            {/* Navigation */}
+            <nav className="mt-6 flex-1">
+              {sidebarItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={handleMobileMenuClose}
+                  className={`
+                    flex items-center px-6 py-3 transition-colors
+                    ${pathname === item.href 
+                      ? 'bg-primary/10 text-primary border-r-2 border-primary' 
+                      : 'text-muted-foreground hover:bg-primary/5 hover:text-primary'
+                    }
+                  `}
+                >
+                  <item.icon className="w-5 h-5 mr-3" />
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+            
+            {/* Logout Button */}
+            <div className="p-6 border-t border-border">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  window.location.href = '/login';
+                }}
+                className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                <GraduationCap className="w-4 h-4 mr-2" />
+                Sign Out
+              </Button>
+            </div>
           </div>
+
+          {/* Overlay for mobile */}
+          {isMobileMenuOpen && (
+            <div 
+              className="fixed inset-0 bg-black/50 z-20 lg:hidden"
+              onClick={handleMobileMenuClose}
+            />
+          )}
+
+          {/* Main Content */}
+          <main className="flex-1 overflow-x-hidden">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.2 }}
+                  key={pathname}
+                >
+                  {children}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </main>
         </div>
+
+        {/* Footer */}
+        <CampusFooter brand={brand} />
       </div>
-    </>
+    </KBarProviderWrapper>
   );
 } 

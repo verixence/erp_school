@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { NotificationBell } from '@/components/ui/notification-bell';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -160,12 +161,7 @@ export function CampusHeader({ brand, onMenuToggle }: CampusHeaderProps) {
             </DropdownMenu>
 
             {/* Notification bell */}
-            <Button variant="ghost" size="sm" className="relative focus-primary">
-              <Bell className="h-4 w-4" />
-              <span className="absolute -top-1 -right-1 h-4 w-4 bg-primary rounded-full text-xs text-primary-fg flex items-center justify-center">
-                3
-              </span>
-            </Button>
+            <NotificationBell />
 
             {/* Theme toggle */}
             <ThemeToggle />
