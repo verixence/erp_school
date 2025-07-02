@@ -103,6 +103,7 @@ export default function StudentsPage() {
           .from('users')
           .select('id, first_name, last_name')
           .eq('role', 'parent')
+          .eq('school_id', user?.school_id)
       ]);
 
       if (studentsResult.error) throw studentsResult.error;
@@ -112,8 +113,14 @@ export default function StudentsPage() {
       }
 
       const students = studentsResult.data || [];
-      const relationships = relationshipsResult.data || [];
+      const allRelationships = relationshipsResult.data || [];
       const parents = parentsResult.data || [];
+
+      // Filter relationships to only include students from this school
+      const studentIds = students.map(s => s.id);
+      const relationships = allRelationships.filter(rel => 
+        studentIds.includes(rel.student_id)
+      );
 
       // Create parent lookup map
       const parentMap: Record<string, { first_name: string; last_name: string }> = {};
@@ -138,11 +145,14 @@ export default function StudentsPage() {
         };
       });
 
-      console.log('Simple approach results:', {
+      console.log('Enhanced approach results:', {
         students: students.length,
-        relationships: relationships.length, 
+        allRelationships: allRelationships.length,
+        filteredRelationships: relationships.length, 
         parents: parents.length,
-        sample: studentsWithParents[0]
+        parentMap: Object.keys(parentMap).length,
+        sampleStudent: studentsWithParents[0],
+        sampleParentNames: studentsWithParents[0]?.parent_names
       });
 
       return studentsWithParents as Student[];

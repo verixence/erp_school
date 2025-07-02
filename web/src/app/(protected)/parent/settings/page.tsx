@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/hooks/use-auth';
+import { useChildren } from '@/hooks/use-parent';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { User, Bell, Shield, Users, Phone, Mail, Key, Save, AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase-client';
+import { toast } from 'react-hot-toast';
 
 // Simple Switch Component
 const Switch = ({ checked, onCheckedChange, ...props }: { 
@@ -39,40 +43,24 @@ const Separator = ({ className = '', ...props }: { className?: string; [key: str
 
 export default function ParentSettings() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Mock parent data
-  const [parentData, setParentData] = useState({
-    firstName: 'John',
-    lastName: 'Smith',
-    email: 'john.smith@example.com',
-    phone: '+1 (555) 123-4567',
-    alternatePhone: '+1 (555) 987-6543',
-    address: '123 Main Street, Cityville, State 12345',
-    occupation: 'Software Engineer',
-    relationship: 'Father',
-  });
+  // Get real children data
+  const { data: children = [] } = useChildren(user?.id);
 
-  // Mock children data
-  const [childrenData] = useState([
-    {
-      id: '1',
-      name: 'Emily Smith',
-      grade: '8th Grade',
-      section: 'A',
-      studentId: 'STU001',
-      status: 'Active'
-    },
-    {
-      id: '2',
-      name: 'Michael Smith',
-      grade: '5th Grade',
-      section: 'B',
-      studentId: 'STU002',
-      status: 'Active'
-    }
-  ]);
+  // Real parent data from authenticated user
+  const [parentData, setParentData] = useState({
+    firstName: user?.first_name || '',
+    lastName: user?.last_name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    alternatePhone: '',
+    address: '',
+    occupation: '',
+    relationship: user?.relation || '',
+  });
 
   // Notification preferences
   const [notifications, setNotifications] = useState({
@@ -95,12 +83,38 @@ export default function ParentSettings() {
     twoFactorAuth: false,
   });
 
+  // Update profile mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          first_name: data.firstName,
+          last_name: data.lastName,
+          phone: data.phone,
+          relation: data.relationship,
+        })
+        .eq('id', user?.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user'] });
+      toast.success('Profile updated successfully!');
+      setIsEditing(false);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to update profile');
+    },
+  });
+
   const handleSave = async () => {
     setIsSaving(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsSaving(false);
-    setIsEditing(false);
+    try {
+      await updateProfileMutation.mutateAsync(parentData);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -279,22 +293,27 @@ export default function ParentSettings() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {childrenData.map((child) => (
+            {children.map((child: any) => (
               <div key={child.id} className="border rounded-lg p-4 bg-gray-50">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-medium text-lg">{child.name}</h3>
+                    <h3 className="font-medium text-lg">{child.full_name}</h3>
                     <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
-                      <span>{child.grade} - Section {child.section}</span>
-                      <span>Student ID: {child.studentId}</span>
+                      <span>Grade {child.sections?.grade} - Section {child.sections?.section}</span>
+                      <span>Admission No: {child.admission_no || 'N/A'}</span>
                     </div>
                   </div>
                   <Badge variant="default" className="bg-green-100 text-green-800">
-                    {child.status}
+                    Active
                   </Badge>
                 </div>
               </div>
             ))}
+            {children.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                No children found. Please contact school administration.
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -128,7 +128,11 @@ export default function TeacherHomework() {
                 <h1 className="text-xl font-semibold text-gray-900">Homework</h1>
               </div>
             </div>
-            <Button onClick={() => router.push('/teacher/homework/new')}>
+            <Button 
+              onClick={() => router.push('/teacher/homework/new')}
+              className="bg-purple-600 hover:bg-purple-700 text-white font-medium shadow-md"
+              size="lg"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Create New
             </Button>
@@ -147,7 +151,11 @@ export default function TeacherHomework() {
               <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No homework assignments</h3>
               <p className="text-gray-600 mb-4">You haven't created any homework assignments yet.</p>
-              <Button onClick={() => router.push('/teacher/homework/new')}>
+              <Button 
+                onClick={() => router.push('/teacher/homework/new')}
+                className="bg-purple-600 hover:bg-purple-700 text-white font-medium shadow-md"
+                size="lg"
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Create First Homework
               </Button>

@@ -142,8 +142,11 @@ export const useTeacherTimetable = (teacherId?: string, options?: QueryOptions) 
       if (!teacherId) return [];
 
       let query = supabase
-        .from('timetables')
-        .select('*')
+        .from('periods')
+        .select(`
+          *,
+          sections!inner(id, grade, section, school_id)
+        `)
         .eq('teacher_id', teacherId)
         .order('weekday', { ascending: true })
         .order('period_no', { ascending: true });
@@ -151,7 +154,12 @@ export const useTeacherTimetable = (teacherId?: string, options?: QueryOptions) 
       const { data, error } = await query;
 
       if (error) throw error;
-      return data as Timetable[];
+      
+      // Transform data to match expected format
+      return data.map((period: any) => ({
+        ...period,
+        section: `Grade ${period.sections.grade} ${period.sections.section}`
+      })) as Timetable[];
     },
     enabled: !!teacherId,
   });

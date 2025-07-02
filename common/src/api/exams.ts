@@ -631,7 +631,7 @@ export const useSchoolInfo = (schoolId?: string) => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('schools')
-        .select('id, name, address, phone, email, logo_url, established_year, affiliation, principal_name')
+        .select('id, name, address, phone_number, email_address, logo_url, establishment_year, board_affiliation, principal_name')
         .eq('id', schoolId!)
         .single();
       

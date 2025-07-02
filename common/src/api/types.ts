@@ -22,6 +22,7 @@ export interface Section {
   section: string;
   subject?: string;
   teacher_id?: string;
+  class_teacher?: string; // Teacher ID who is the class teacher
   capacity?: number;
   school_id: string;
   created_at: string;

@@ -88,22 +88,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Update selected children's parent_id if any children were selected
+    // 3. Link selected children to parent using student_parents table
     if (children.length > 0) {
-      console.log('Assigning children to parent:', { parentId: parentData.id, children });
+      console.log('Linking children to parent:', { parentId: parentData.id, children });
       
-      const { data: updatedStudents, error: childrenError } = await supabaseAdmin
-        .from('students')
-        .update({ parent_id: parentData.id })
-        .in('id', children)
+      // Create entries in student_parents junction table
+      const linkData = children.map((studentId: string) => ({
+        student_id: studentId,
+        parent_id: parentData.id
+      }));
+
+      const { data: parentLinks, error: childrenError } = await supabaseAdmin
+        .from('student_parents')
+        .insert(linkData)
         .select();
 
       if (childrenError) {
-        console.error('Children update error:', childrenError);
+        console.error('Children linking error:', childrenError);
         // Don't fail the entire operation, just log the error
-        console.warn('Failed to assign children to parent, but parent was created successfully');
+        console.warn('Failed to link children to parent, but parent was created successfully');
       } else {
-        console.log('Successfully assigned children:', updatedStudents);
+        console.log('Successfully linked children:', parentLinks);
       }
     }
 

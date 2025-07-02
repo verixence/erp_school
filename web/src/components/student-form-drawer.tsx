@@ -51,7 +51,10 @@ import ParentFormModal from './parent-form-modal';
 // Validation schema
 const studentSchema = z.object({
   full_name: z.string().min(1, 'Full name is required').max(80, 'Name too long'),
-  date_of_birth: z.string().min(1, 'Date of birth is required'),
+  date_of_birth: z.string().min(1, 'Date of birth is required').regex(
+    /^\d{2}\/\d{2}\/\d{4}$/, 
+    'Date must be in DD/MM/YYYY format'
+  ),
   gender: z.enum(['male', 'female', 'other'], { required_error: 'Gender is required' }),
   admission_no: z.string().min(1, 'Admission number is required'),
   grade: z.string().min(1, 'Grade is required'),
@@ -59,7 +62,10 @@ const studentSchema = z.object({
   section_id: z.string().optional(),
   parent_id: z.string().optional(),
   student_email: z.string().email('Invalid email').optional().or(z.literal('')),
-  student_phone: z.string().optional(),
+  student_phone: z.string().optional().refine((val) => {
+    if (!val) return true; // Optional field
+    return /^\+91\s\d{10}$/.test(val);
+  }, 'Phone number must be in format +91 XXXXXXXXXX (10 digits after +91)'),
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -122,6 +128,62 @@ export default function StudentFormDrawer({
   const [isCreatingParent, setIsCreatingParent] = useState(false);
   const [selectedGrade, setSelectedGrade] = useState<string>('');
 
+  // Helper function to format date from YYYY-MM-DD to DD/MM/YYYY
+  const formatDateToDDMMYYYY = (dateStr: string) => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
+  // Helper function to format date from DD/MM/YYYY to YYYY-MM-DD for database
+  const formatDateToYYYYMMDD = (dateStr: string) => {
+    if (!dateStr) return '';
+    const [day, month, year] = dateStr.split('/');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Helper function to validate and format date input
+  const handleDateInput = (value: string) => {
+    // Remove non-numeric characters except /
+    let cleaned = value.replace(/[^\d\/]/g, '');
+    
+    // Auto-format as user types
+    if (cleaned.length >= 2 && !cleaned.includes('/')) {
+      cleaned = cleaned.slice(0, 2) + '/' + cleaned.slice(2);
+    }
+    if (cleaned.length >= 5 && cleaned.split('/').length === 2) {
+      const parts = cleaned.split('/');
+      cleaned = parts[0] + '/' + parts[1] + '/' + parts.slice(1).join('').slice(2);
+    }
+    
+    // Limit to DD/MM/YYYY format
+    const parts = cleaned.split('/');
+    if (parts.length > 0 && parts[0].length > 2) parts[0] = parts[0].slice(0, 2);
+    if (parts.length > 1 && parts[1].length > 2) parts[1] = parts[1].slice(0, 2);
+    if (parts.length > 2 && parts[2].length > 4) parts[2] = parts[2].slice(0, 4);
+    
+    return parts.join('/');
+  };
+
+  // Helper function to format phone number
+  const handlePhoneInput = (value: string) => {
+    // Remove all non-numeric characters
+    let cleaned = value.replace(/[^\d]/g, '');
+    
+    // If it starts with 91, add +91 prefix
+    if (cleaned.startsWith('91') && cleaned.length > 2) {
+      cleaned = cleaned.slice(2);
+    }
+    
+    // Limit to 10 digits after +91
+    if (cleaned.length > 10) {
+      cleaned = cleaned.slice(0, 10);
+    }
+    
+    // Return with +91 prefix if there are digits
+    return cleaned ? `+91 ${cleaned}` : '+91 ';
+  };
+
   // Form setup
   const form = useForm<StudentFormData>({
     resolver: zodResolver(studentSchema),
@@ -135,7 +197,7 @@ export default function StudentFormDrawer({
       section_id: '',
       parent_id: 'none',
       student_email: '',
-      student_phone: '',
+      student_phone: '+91 ',
     },
   });
 
@@ -179,6 +241,25 @@ export default function StudentFormDrawer({
     enabled: !!user?.school_id && open,
   });
 
+  // Fetch current parent for student (when editing)
+  const { data: currentParent } = useQuery({
+    queryKey: ['student-parent', student?.id],
+    queryFn: async () => {
+      if (!student?.id) return null;
+      
+      const { data, error } = await supabase
+        .from('student_parents')
+        .select('parent_id')
+        .eq('student_id', student.id);
+      
+      if (error) throw error;
+      
+      // Return the first parent_id if exists, otherwise null
+      return data && data.length > 0 ? data[0].parent_id : null;
+    },
+    enabled: !!student?.id && open,
+  });
+
   // Filter sections by selected grade
   const availableSections = sections.filter(s => 
     selectedGrade ? s.grade.toString() === selectedGrade : true
@@ -217,25 +298,66 @@ export default function StudentFormDrawer({
         throw new Error('Admission number already exists');
       }
 
-      // Convert "none" to null for parent_id
+      // Convert date format and process data (excluding parent_id)
       const processedData = {
-        ...data,
-        parent_id: data.parent_id === 'none' ? null : data.parent_id,
+        full_name: data.full_name,
+        date_of_birth: formatDateToYYYYMMDD(data.date_of_birth),
+        gender: data.gender,
+        admission_no: data.admission_no,
+        grade: data.grade,
+        section: data.section,
         section_id: data.section_id || null,
         school_id: user?.school_id,
+        student_email: data.student_email || null,
+        student_phone: data.student_phone === '+91 ' ? null : data.student_phone,
       };
 
-      const { error } = await supabase
+      // Create student
+      const { data: studentResult, error: studentError } = await supabase
         .from('students')
-        .insert(processedData);
+        .insert(processedData)
+        .select('id')
+        .single();
       
-      if (error) throw error;
+      if (studentError) throw studentError;
+
+      // Handle parent assignment if selected
+      if (data.parent_id && data.parent_id !== 'none') {
+        const { error: parentLinkError } = await supabase
+          .from('student_parents')
+          .insert({
+            student_id: studentResult.id,
+            parent_id: data.parent_id
+          });
+        
+        if (parentLinkError) throw parentLinkError;
+      }
     },
     onSuccess: () => {
+      // Invalidate all related queries
       queryClient.invalidateQueries({ queryKey: ['students'] });
-      queryClient.invalidateQueries({ queryKey: ['sections'] }); // Refresh section counts
+      queryClient.invalidateQueries({ queryKey: ['sections'] });
+      queryClient.invalidateQueries({ queryKey: ['student-parent'] });
+      
+      // Force refetch to ensure data consistency
+      setTimeout(() => {
+        queryClient.refetchQueries({ queryKey: ['students', user?.school_id] });
+        queryClient.refetchQueries({ queryKey: ['sections', user?.school_id] });
+      }, 100);
+      
       onOpenChange(false);
-      form.reset();
+      form.reset({
+        full_name: '',
+        date_of_birth: '',
+        gender: undefined,
+        admission_no: '',
+        grade: '',
+        section: '',
+        section_id: '',
+        parent_id: 'none',
+        student_email: '',
+        student_phone: '+91 ',
+      });
       setCurrentStep(1);
       setSelectedGrade('');
       toast.success('Student created successfully');
@@ -258,23 +380,73 @@ export default function StudentFormDrawer({
         }
       }
 
-      // Convert "none" to null for parent_id
+      // Convert date format and process data (excluding parent_id)
       const processedData = {
-        ...data,
-        parent_id: data.parent_id === 'none' ? null : data.parent_id,
+        full_name: data.full_name,
+        date_of_birth: formatDateToYYYYMMDD(data.date_of_birth),
+        gender: data.gender,
+        admission_no: data.admission_no,
+        grade: data.grade,
+        section: data.section,
+        section_id: data.section_id || null,
+        student_email: data.student_email || null,
+        student_phone: data.student_phone === '+91 ' ? null : data.student_phone,
       };
 
-      const { error } = await supabase
+      // Update student
+      const { error: studentError } = await supabase
         .from('students')
         .update(processedData)
         .eq('id', student.id);
       
-      if (error) throw error;
+      if (studentError) throw studentError;
+
+      // Handle parent assignment updates
+      // First, remove existing parent relationships
+      const { error: deleteError } = await supabase
+        .from('student_parents')
+        .delete()
+        .eq('student_id', student.id);
+      
+      if (deleteError) throw deleteError;
+
+      // Then add new parent relationship if selected
+      if (data.parent_id && data.parent_id !== 'none') {
+        const { error: parentLinkError } = await supabase
+          .from('student_parents')
+          .insert({
+            student_id: student.id,
+            parent_id: data.parent_id
+          });
+        
+        if (parentLinkError) throw parentLinkError;
+      }
     },
     onSuccess: () => {
+      // Invalidate all related queries
       queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['sections'] });
+      queryClient.invalidateQueries({ queryKey: ['student-parent'] });
+      
+      // Force refetch to ensure data consistency
+      setTimeout(() => {
+        queryClient.refetchQueries({ queryKey: ['students', user?.school_id] });
+        queryClient.refetchQueries({ queryKey: ['sections', user?.school_id] });
+      }, 100);
+      
       onOpenChange(false);
-      form.reset();
+      form.reset({
+        full_name: '',
+        date_of_birth: '',
+        gender: undefined,
+        admission_no: '',
+        grade: '',
+        section: '',
+        section_id: '',
+        parent_id: 'none',
+        student_email: '',
+        student_phone: '+91 ',
+      });
       setCurrentStep(1);
       toast.success('Student updated successfully');
     },
@@ -313,7 +485,18 @@ export default function StudentFormDrawer({
 
   const handleClose = () => {
     onOpenChange(false);
-    form.reset();
+    form.reset({
+      full_name: '',
+      date_of_birth: '',
+      gender: undefined,
+      admission_no: '',
+      grade: '',
+      section: '',
+      section_id: '',
+      parent_id: 'none',
+      student_email: '',
+      student_phone: '+91 ',
+    });
     setCurrentStep(1);
     setIsCreatingParent(false);
   };
@@ -338,15 +521,15 @@ export default function StudentFormDrawer({
       // Editing existing student
       form.reset({
         full_name: student.full_name || '',
-        date_of_birth: student.date_of_birth || '',
+        date_of_birth: student.date_of_birth ? formatDateToDDMMYYYY(student.date_of_birth) : '',
         gender: student.gender || undefined,
         admission_no: student.admission_no || '',
         grade: student.grade || '',
         section: student.section || '',
         section_id: student.section_id || '',
-        parent_id: student.parent_id || 'none',
+        parent_id: currentParent || 'none',
         student_email: student.student_email || '',
-        student_phone: student.student_phone || '',
+        student_phone: student.student_phone || '+91 ',
       });
     } else {
       // Creating new student - ensure form is reset to defaults
@@ -360,10 +543,10 @@ export default function StudentFormDrawer({
         section_id: '',
         parent_id: 'none',
         student_email: '',
-        student_phone: '',
+        student_phone: '+91 ',
       });
     }
-  }, [student, form, open]);
+  }, [student, open, currentParent]);
 
   const renderStepContent = () => {
     const formData = form.getValues();
@@ -392,9 +575,16 @@ export default function StudentFormDrawer({
                 name="date_of_birth"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Date of Birth *</FormLabel>
+                    <FormLabel>Date of Birth * (DD/MM/YYYY)</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input 
+                        placeholder="DD/MM/YYYY" 
+                        {...field}
+                        onChange={(e) => {
+                          const formatted = handleDateInput(e.target.value);
+                          field.onChange(formatted);
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -573,7 +763,14 @@ export default function StudentFormDrawer({
                 <FormItem>
                   <FormLabel>Student Phone (Optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="+1234567890" {...field} />
+                    <Input 
+                      placeholder="+91 XXXXXXXXXX" 
+                      {...field}
+                      onChange={(e) => {
+                        const formatted = handlePhoneInput(e.target.value);
+                        field.onChange(formatted);
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

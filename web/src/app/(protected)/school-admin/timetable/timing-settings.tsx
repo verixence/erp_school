@@ -740,14 +740,37 @@ export default function TimingSettings() {
                       {dayConfig.periods.length} periods
                     </Badge>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleAddPeriod(dayConfig.day_of_week)}
-                  >
-                    <Plus className="w-4 h-4 mr-1" />
-                    Add Period
-                  </Button>
+                                <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleAddPeriod(dayConfig.day_of_week)}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Period
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                  onClick={() => {
+                    const nextPeriodNumber = Math.max(...periodSettings.filter(p => p.day_of_week === dayConfig.day_of_week).map(p => p.period_number), 0) + 1;
+                    setPeriodForm({
+                      day_of_week: dayConfig.day_of_week,
+                      period_number: nextPeriodNumber,
+                      period_name: 'Lunch Break',
+                      start_time: '12:00',
+                      end_time: '12:30',
+                      is_break: true
+                    });
+                    setEditingPeriod(null);
+                    setIsDialogOpen(true);
+                  }}
+                >
+                  <Coffee className="w-4 h-4 mr-1" />
+                  Add Break
+                </Button>
+              </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1026,15 +1049,22 @@ export default function TimingSettings() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                id="is_break"
-                type="checkbox"
-                checked={periodForm.is_break}
-                onChange={(e) => setPeriodForm({ ...periodForm, is_break: e.target.checked })}
-                className="rounded border-gray-300"
-              />
-              <Label htmlFor="is_break">This is a break period</Label>
+            <div className="border rounded-lg p-3 bg-gray-50">
+              <div className="flex items-center gap-2">
+                <input
+                  id="is_break"
+                  type="checkbox"
+                  checked={periodForm.is_break}
+                  onChange={(e) => setPeriodForm({ ...periodForm, is_break: e.target.checked })}
+                  className="rounded border-gray-300"
+                />
+                <Label htmlFor="is_break" className="font-medium">
+                  This is a break period
+                </Label>
+              </div>
+              <p className="text-sm text-gray-600 mt-1 ml-6">
+                Break periods (lunch, recess, assembly) won't appear in the timetable grid but will show timing information.
+              </p>
             </div>
 
             <div className="flex justify-end gap-2">

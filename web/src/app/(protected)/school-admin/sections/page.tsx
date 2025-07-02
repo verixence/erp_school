@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -104,27 +104,50 @@ export default function SectionsPage() {
 
   // Fetch sections with teacher information and student count
   const { data: sectionsData = [] } = useQuery({
-    queryKey: ['sections', user?.school_id],
+    queryKey: ['sections-with-teachers', user?.school_id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('sections')
         .select(`
           *,
-          teacher:users!class_teacher(first_name, last_name, email)
+          users!class_teacher(first_name, last_name, email),
+          students(count)
         `)
         .eq('school_id', user?.school_id)
         .order('grade')
         .order('section');
       
-      if (error) throw error;
-      return data as Section[];
+      if (error) {
+        console.error('Sections query error:', error);
+        throw error;
+      }
+      
+      // Transform the data to include actual student count and teacher
+      const transformedData = (data || []).map(section => {
+        // Handle both possible response structures from Supabase
+        let studentCount = 0;
+        if (section.students) {
+          if (Array.isArray(section.students) && section.students.length > 0) {
+            studentCount = section.students[0].count || 0;
+          } else if (typeof section.students === 'object' && section.students.count !== undefined) {
+            studentCount = section.students.count || 0;
+          }
+        }
+        
+        return {
+          ...section,
+          students_count: studentCount,
+          teacher: section.users || null // Map users to teacher for consistency
+        };
+      });
+      return transformedData as Section[];
     },
     enabled: !!user?.school_id,
   });
 
-  // Fetch teachers for dropdown
+  // Fetch teachers for dropdown (excluding those already assigned as class teachers)
   const { data: teachers = [] } = useQuery({
-    queryKey: ['teachers', user?.school_id],
+    queryKey: ['teachers', user?.school_id, sectionsData],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('users')
@@ -139,15 +162,34 @@ export default function SectionsPage() {
     enabled: !!user?.school_id,
   });
 
-  // Create mutation
+  // Get available teachers (not assigned as class teachers to other sections)
+  const getAvailableTeachers = (currentSectionId?: string) => {
+    const assignedTeacherIds = sectionsData
+      .filter(section => section.id !== currentSectionId && section.class_teacher)
+      .map(section => section.class_teacher);
+    
+    return teachers.filter(teacher => !assignedTeacherIds.includes(teacher.id));
+  };
+
+  // Create mutation with teacher assignment validation
   const createMutation = useMutation({
     mutationFn: async (data: SectionFormData) => {
+      // Check if teacher is already assigned to another section
+      if (data.class_teacher && data.class_teacher !== 'none') {
+        const existingAssignment = sectionsData.find(
+          section => section.class_teacher === data.class_teacher
+        );
+        
+        if (existingAssignment) {
+          throw new Error(`This teacher is already assigned as class teacher for Grade ${existingAssignment.grade} Section ${existingAssignment.section}`);
+        }
+      }
+
       // Convert "none" to null for class_teacher
       const processedData = {
         ...data,
         class_teacher: data.class_teacher === 'none' ? null : data.class_teacher,
         school_id: user?.school_id,
-        students_count: 0, // Initialize with 0 students
       };
 
       const { error } = await supabase
@@ -158,6 +200,7 @@ export default function SectionsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sections'] });
+      queryClient.invalidateQueries({ queryKey: ['sections-with-teachers'] });
       setIsCreateOpen(false);
       form.reset();
       toast.success('Section created successfully');
@@ -167,11 +210,22 @@ export default function SectionsPage() {
     },
   });
 
-  // Update mutation
+  // Update mutation with teacher assignment validation
   const updateMutation = useMutation({
     mutationFn: async (data: SectionFormData) => {
       if (!editingSection) return;
       
+      // Check if teacher is already assigned to another section (excluding current section)
+      if (data.class_teacher && data.class_teacher !== 'none') {
+        const existingAssignment = sectionsData.find(
+          section => section.class_teacher === data.class_teacher && section.id !== editingSection.id
+        );
+        
+        if (existingAssignment) {
+          throw new Error(`This teacher is already assigned as class teacher for Grade ${existingAssignment.grade} Section ${existingAssignment.section}`);
+        }
+      }
+
       // Convert "none" to null for class_teacher
       const processedData = {
         ...data,
@@ -187,6 +241,7 @@ export default function SectionsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sections'] });
+      queryClient.invalidateQueries({ queryKey: ['sections-with-teachers'] });
       setIsEditOpen(false);
       setEditingSection(null);
       form.reset();
@@ -209,6 +264,7 @@ export default function SectionsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sections'] });
+      queryClient.invalidateQueries({ queryKey: ['sections-with-teachers'] });
       toast.success('Section deleted successfully');
     },
     onError: (error: any) => {
@@ -265,6 +321,7 @@ export default function SectionsPage() {
       if (error) throw error;
 
       queryClient.invalidateQueries({ queryKey: ['sections'] });
+      queryClient.invalidateQueries({ queryKey: ['sections-with-teachers'] });
       toast.success(`Successfully imported ${csvData.length} sections`);
     } catch (error: any) {
       toast.error(`Bulk upload failed: ${error.message}`);
@@ -476,6 +533,8 @@ export default function SectionsPage() {
         title="Sections"
         searchPlaceholder="Search sections..."
         customActions={actions}
+        customData={sectionsData}
+        isCustomDataLoading={false}
       />
 
       {/* Create/Edit Dialog */}
@@ -569,11 +628,16 @@ export default function SectionsPage() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="none">No teacher assigned</SelectItem>
-                        {teachers.map((teacher) => (
+                        {getAvailableTeachers(editingSection?.id).map((teacher) => (
                           <SelectItem key={teacher.id} value={teacher.id}>
-                            {teacher.first_name} {teacher.last_name}
+                            {teacher.first_name} {teacher.last_name} - {teacher.email}
                           </SelectItem>
                         ))}
+                        {getAvailableTeachers(editingSection?.id).length === 0 && (
+                          <SelectItem value="no-teachers" disabled>
+                            All teachers are already assigned
+                          </SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />

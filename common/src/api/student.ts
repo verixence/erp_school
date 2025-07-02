@@ -114,10 +114,10 @@ export const useStudentTimetable = (studentId?: string) => {
       if (studentError) throw studentError;
 
       const { data, error } = await supabase
-        .from('timetables')
+        .from('periods')
         .select(`
           *,
-          teachers!inner(
+          teacher:users!periods_teacher_id_fkey(
             first_name,
             last_name
           )
@@ -127,7 +127,15 @@ export const useStudentTimetable = (studentId?: string) => {
         .order('period_no', { ascending: true });
 
       if (error) throw error;
-      return data as (Timetable & { teachers: { first_name: string; last_name: string } })[];
+      
+      // Transform data to match expected format  
+      return data.map((period: any) => ({
+        ...period,
+        teachers: period.teacher ? {
+          first_name: period.teacher.first_name,
+          last_name: period.teacher.last_name
+        } : null
+      })) as (Timetable & { teachers: { first_name: string; last_name: string } })[];
     },
     enabled: !!studentId,
   });

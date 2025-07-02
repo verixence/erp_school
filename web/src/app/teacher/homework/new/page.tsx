@@ -31,6 +31,9 @@ export default function NewHomework() {
     description: '',
     due_date: '',
   });
+  
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   // Get teacher's sections
   const { data: sections = [] } = useQuery({
@@ -68,9 +71,38 @@ export default function NewHomework() {
 
   const createHomeworkMutation = useMutation({
     mutationFn: async (homework: any) => {
+      let fileUrl = null;
+      
+      // Upload file if selected
+      if (selectedFile) {
+        setUploading(true);
+        const fileExt = selectedFile.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `homework/${user?.school_id}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('media')
+          .upload(filePath, selectedFile);
+
+        if (uploadError) {
+          throw new Error(`File upload failed: ${uploadError.message}`);
+        }
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('media')
+          .getPublicUrl(filePath);
+        
+        fileUrl = publicUrl;
+        setUploading(false);
+      }
+
       const { data, error } = await supabase
         .from('homeworks')
-        .insert(homework)
+        .insert({
+          ...homework,
+          file_url: fileUrl
+        })
         .select()
         .single();
 
@@ -83,6 +115,7 @@ export default function NewHomework() {
       router.push('/teacher/homework');
     },
     onError: (error: any) => {
+      setUploading(false);
       toast.error(error.message || 'Failed to create homework');
     },
   });
@@ -112,8 +145,29 @@ export default function NewHomework() {
     });
   };
 
-  const handleFileUpload = () => {
-    toast('File upload feature coming soon!');
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Check file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('File size must be less than 10MB');
+        return;
+      }
+      
+      // Check file type
+      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error('Only PDF, DOC, DOCX, and image files are allowed');
+        return;
+      }
+      
+      setSelectedFile(file);
+      toast.success('File selected successfully');
+    }
+  };
+
+  const removeFile = () => {
+    setSelectedFile(null);
   };
 
   if (isLoading) {
@@ -227,14 +281,46 @@ export default function NewHomework() {
               {/* File Upload */}
               <div>
                 <Label>Attachment</Label>
-                <div 
-                  className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-gray-400 transition-colors"
-                  onClick={handleFileUpload}
-                >
-                  <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                  <p className="text-gray-600">Click to upload file</p>
-                  <p className="text-sm text-gray-500">PDF, DOC, or image files</p>
-                </div>
+                {!selectedFile ? (
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                    <input
+                      type="file"
+                      onChange={handleFileSelect}
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif"
+                      className="hidden"
+                      id="file-upload"
+                    />
+                    <label htmlFor="file-upload" className="cursor-pointer">
+                      <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-gray-600">Click to upload file</p>
+                      <p className="text-sm text-gray-500">PDF, DOC, DOCX, or image files (max 10MB)</p>
+                    </label>
+                  </div>
+                ) : (
+                  <div className="border border-gray-300 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <Upload className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{selectedFile.name}</p>
+                          <p className="text-xs text-gray-500">
+                            {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={removeFile}
+                      >
+                        Remove
+                      </Button>
+                                         </div>
+                   </div>
+                 )}
               </div>
 
               {/* Submit Button */}
@@ -248,9 +334,10 @@ export default function NewHomework() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={createHomeworkMutation.isPending}
+                  disabled={createHomeworkMutation.isPending || uploading}
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-medium"
                 >
-                  {createHomeworkMutation.isPending ? 'Creating...' : 'Create Homework'}
+                  {uploading ? 'Uploading file...' : createHomeworkMutation.isPending ? 'Creating...' : 'Create Homework'}
                 </Button>
               </div>
             </form>

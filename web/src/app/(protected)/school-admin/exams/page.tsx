@@ -38,6 +38,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { 
   useExamGroups, 
   useCreateExamGroup, 
+  useUpdateExamGroup,
   useDeleteExamGroup, 
   useExamPapers,
   useCreateExamPaper,
@@ -78,6 +79,7 @@ export default function ExamsPage() {
   const { data: examPapers = [] } = useExamPapers(selectedExamGroup ?? undefined);
   
   const createExamGroupMutation = useCreateExamGroup();
+  const updateExamGroupMutation = useUpdateExamGroup();
   const deleteExamGroupMutation = useDeleteExamGroup();
   const createExamPaperMutation = useCreateExamPaper();
   const updateExamPaperMutation = useUpdateExamPaper();
@@ -444,6 +446,20 @@ export default function ExamsPage() {
     };
   };
 
+  const handlePublishExamGroup = async (examGroupId: string, isPublished: boolean) => {
+    try {
+      await updateExamGroupMutation.mutateAsync({
+        id: examGroupId,
+        is_published: !isPublished
+      });
+      
+      toast.success(`Exam group ${!isPublished ? 'published' : 'unpublished'} successfully!`);
+    } catch (error) {
+      console.error('Error updating exam group:', error);
+      toast.error('Failed to update exam group status.');
+    }
+  };
+
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-64">
@@ -707,15 +723,31 @@ export default function ExamsPage() {
 
                       {/* Actions */}
                       <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedExamGroup(examGroup.id)}
-                          className="text-blue-600 hover:text-blue-700"
-                        >
-                          <Eye className="w-4 h-4 mr-1" />
-                          Manage
-                        </Button>
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedExamGroup(examGroup.id)}
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            Manage
+                          </Button>
+                          
+                          <Button
+                            variant={examGroup.is_published ? "outline" : "default"}
+                            size="sm"
+                            onClick={() => handlePublishExamGroup(examGroup.id, examGroup.is_published)}
+                            disabled={updateExamGroupMutation.isPending}
+                            className={examGroup.is_published 
+                              ? "text-orange-600 hover:text-orange-700 border-orange-200" 
+                              : "bg-green-600 hover:bg-green-700 text-white"
+                            }
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            {examGroup.is_published ? 'Unpublish' : 'Activate'}
+                          </Button>
+                        </div>
                         
                         <div className="flex items-center space-x-1">
                           <Button

@@ -286,7 +286,7 @@ export default function ParentFormModal({
       });
       setSelectedChildren([]);
     }
-  }, [open, parent, students, form]);
+  }, [open, parent, students]);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

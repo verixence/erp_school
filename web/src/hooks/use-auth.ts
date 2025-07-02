@@ -18,6 +18,7 @@ interface User {
   employee_id?: string;
   subjects?: string[];
   relation?: string;
+  avatar_url?: string;
 }
 
 export function useAuth() {
@@ -67,10 +68,28 @@ export function useAuth() {
     retry: 1,
   });
 
+  const signOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Sign out error:', error);
+        return false;
+      }
+      
+      // Force reload to clear all state
+      window.location.href = '/login';
+      return true;
+    } catch (err) {
+      console.error('Sign out error:', err);
+      return false;
+    }
+  };
+
   return {
     user,
     isLoading,
     error,
     isAuthenticated: !!user,
+    signOut,
   };
 } 

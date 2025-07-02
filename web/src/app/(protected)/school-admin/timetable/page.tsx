@@ -178,10 +178,20 @@ export default function TimetablePage() {
         })
     : []; // No fallback - require configuration
 
+  // Calculate periods based on actual non-break periods in configuration
   const periodNumbers = periodConfig.length > 0 
-    ? Array.from({ length: Math.max(...periodConfig.map((c: any) => 
-        Math.max(...c.periods.map((p: any) => p.period_number))
-      )) }, (_, i) => i + 1)
+    ? (() => {
+        // Get all unique period numbers from all days, excluding breaks
+        const allPeriods = new Set<number>();
+        periodConfig.forEach((dayConfig: any) => {
+          dayConfig.periods.forEach((period: any) => {
+            if (!period.is_break) { // Only include non-break periods
+              allPeriods.add(period.period_number);
+            }
+          });
+        });
+        return Array.from(allPeriods).sort((a, b) => a - b);
+      })()
     : []; // No fallback - require configuration
 
   // Get period details for display

@@ -14,7 +14,9 @@ import {
   TrendingUp,
   FileText,
   PenTool,
-  Eye
+  Eye,
+  GraduationCap,
+  UserCheck
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,9 +27,13 @@ import {
   useExamPapers,
   useMarks,
   useReportCards,
+  useTeacherSections,
+  useSectionStudents,
   type ExamGroup,
   type ExamPaper 
 } from '@erp/common';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase-client';
 
 import Link from 'next/link';
 
@@ -35,11 +41,34 @@ export default function TeacherDashboard() {
   const { user } = useAuth();
   const [selectedExamGroup, setSelectedExamGroup] = useState<string | null>(null);
 
+  // Fetch teacher's assigned sections
+  const { data: teacherSections = [] } = useTeacherSections(user?.id);
+
+  // Get total students count across all sections
+  const { data: totalStudentsData } = useQuery({
+    queryKey: ['teacher-total-students', user?.id],
+    queryFn: async () => {
+      if (!user?.id || teacherSections.length === 0) return 0;
+      
+      const sectionIds = teacherSections.map(s => s.id);
+      const { data, error } = await supabase
+        .from('students')
+        .select('id', { count: 'exact' })
+        .in('section_id', sectionIds);
+      
+      if (error) throw error;
+      return data?.length || 0;
+    },
+    enabled: !!user?.id && teacherSections.length > 0,
+  });
+
+  // Get class teacher sections (sections where this teacher is the class teacher)
+  const classTeacherSections = teacherSections.filter(section => section.class_teacher === user?.id);
+
   // API hooks
   const { data: examGroups = [] } = useExamGroups(user?.school_id || undefined);
   const { data: examPapers = [] } = useExamPapers(selectedExamGroup || undefined);
   const { data: reportCards = [] } = useReportCards(user?.school_id || undefined);
-
 
   // Get recent exam groups (published ones)
   const recentExamGroups = examGroups
@@ -53,7 +82,7 @@ export default function TeacherDashboard() {
   }).slice(0, 5);
 
   // Calculate statistics
-  const totalStudents = 0; // This would come from teacher's sections
+  const totalStudents = totalStudentsData || 0;
   const completedExams = examPapers.filter(paper => 
     paper.exam_date && new Date(paper.exam_date) <= new Date()
   ).length;
@@ -63,10 +92,18 @@ export default function TeacherDashboard() {
     {
       title: "My Students",
       value: totalStudents,
-      description: "Students in your sections",
+      description: `Students across ${teacherSections.length} sections`,
       icon: Users,
       color: "bg-blue-500",
       trend: "+12%"
+    },
+    {
+      title: "Assigned Sections",
+      value: teacherSections.length,
+      description: `${classTeacherSections.length} as class teacher`,
+      icon: GraduationCap,
+      color: "bg-emerald-500",
+      trend: "Active"
     },
     {
       title: "Completed Exams",
@@ -84,14 +121,6 @@ export default function TeacherDashboard() {
       color: "bg-orange-500",
       trend: "-3%"
     },
-    {
-      title: "Active Exams",
-      value: recentExamGroups.length,
-      description: "Currently active exam groups",
-      icon: BookOpen,
-      color: "bg-purple-500",
-      trend: "+5%"
-    },
   ];
 
   const quickActions = [
@@ -105,7 +134,7 @@ export default function TeacherDashboard() {
     },
     {
       title: "View Timetable",
-      description: "Check your exam schedule",
+      description: "Check your class schedule",
       icon: Calendar,
       href: "/teacher/timetable",
       color: "bg-gradient-to-r from-green-600 to-green-700"
@@ -134,7 +163,9 @@ export default function TeacherDashboard() {
         animate={{ opacity: 1, y: 0 }}
         className="rounded-2xl p-8 text-white bg-gradient-to-r from-blue-600 to-purple-600"
       >
-        <h1 className="text-3xl font-bold mb-2">Welcome back, Teacher!</h1>
+        <h1 className="text-3xl font-bold mb-2">
+          Welcome back, {user?.first_name || 'Teacher'}!
+        </h1>
         <p className="text-blue-100 mb-6">
           Manage your classes, exams, and student progress from your dashboard
         </p>
@@ -174,13 +205,74 @@ export default function TeacherDashboard() {
                 <div className="mt-4 flex items-center">
                   <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
                   <span className="text-sm text-green-600 font-medium">{stat.trend}</span>
-                  <span className="text-sm text-gray-500 ml-1">from last month</span>
+                  <span className="text-sm text-gray-500 ml-1">this term</span>
                 </div>
               </CardContent>
             </Card>
           </motion.div>
         ))}
       </div>
+
+      {/* Assigned Sections */}
+      {teacherSections.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <GraduationCap className="w-5 h-5" />
+                My Assigned Sections
+              </CardTitle>
+              <CardDescription>
+                Sections where you teach or serve as class teacher
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {teacherSections.map((section) => (
+                  <div
+                    key={section.id}
+                    className="p-4 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-semibold">
+                        Grade {section.grade} - Section {section.section}
+                      </h3>
+                      {section.class_teacher === user?.id && (
+                        <Badge variant="secondary" className="text-xs">
+                          <UserCheck className="w-3 h-3 mr-1" />
+                          Class Teacher
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      {section.class_teacher === user?.id 
+                        ? 'You are the class teacher for this section'
+                        : 'You teach subjects in this section'
+                      }
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <Link href={`/teacher/attendance?section=${section.id}`}>
+                        <Button size="sm" variant="outline" className="text-xs">
+                          Take Attendance
+                        </Button>
+                      </Link>
+                      <Link href={`/teacher/timetable?section=${section.id}`}>
+                        <Button size="sm" variant="outline" className="text-xs">
+                          View Schedule
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Quick Actions */}
       <motion.div

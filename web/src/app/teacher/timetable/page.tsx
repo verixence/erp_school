@@ -19,6 +19,8 @@ interface Timetable {
   teacher_id: string;
   start_time?: string;
   end_time?: string;
+  is_break?: boolean;
+  venue?: string;
 }
 
 interface TimetableItemProps {
@@ -69,14 +71,23 @@ export default function TeacherTimetable() {
       if (!user?.id) return [];
 
       const { data, error } = await supabase
-        .from('timetables')
-        .select('*')
+        .from('periods')
+        .select(`
+          *,
+          sections!inner(id, grade, section, school_id)
+        `)
         .eq('teacher_id', user.id)
+        .eq('sections.school_id', user.school_id)
         .order('weekday', { ascending: true })
         .order('period_no', { ascending: true });
 
       if (error) throw error;
-      return data as Timetable[];
+      
+      // Transform data to match expected format
+      return data.map((period: any) => ({
+        ...period,
+        section: `Grade ${period.sections.grade} ${period.sections.section}`
+      })) as Timetable[];
     },
     enabled: !!user?.id,
   });
@@ -99,72 +110,202 @@ export default function TeacherTimetable() {
     return null;
   }
 
-  // Group timetable by weekday
-  const groupedTimetable = timetable.reduce((acc, item) => {
-    if (!acc[item.weekday]) {
-      acc[item.weekday] = [];
-    }
-    acc[item.weekday].push(item);
-    return acc;
-  }, {} as Record<number, Timetable[]>);
+  // Group timetable by weekday and period
+  const timetableGrid: Record<string, Timetable> = {};
+  timetable.forEach(item => {
+    const key = `${item.weekday}-${item.period_no}`;
+    timetableGrid[key] = item;
+  });
 
+  // Get unique weekdays and periods
   const weekdays = [
-    { day: 1, name: 'Monday' },
-    { day: 2, name: 'Tuesday' },
-    { day: 3, name: 'Wednesday' },
-    { day: 4, name: 'Thursday' },
-    { day: 5, name: 'Friday' },
-    { day: 6, name: 'Saturday' },
-    { day: 7, name: 'Sunday' },
+    { day: 1, name: 'Monday', short: 'Mon' },
+    { day: 2, name: 'Tuesday', short: 'Tue' },
+    { day: 3, name: 'Wednesday', short: 'Wed' },
+    { day: 4, name: 'Thursday', short: 'Thu' },
+    { day: 5, name: 'Friday', short: 'Fri' },
+    { day: 6, name: 'Saturday', short: 'Sat' },
+    { day: 7, name: 'Sunday', short: 'Sun' },
   ];
 
+  // Get max period number
+  const maxPeriod = Math.max(...timetable.map(t => t.period_no), 0);
+  const periods = Array.from({ length: maxPeriod }, (_, i) => i + 1);
+
+  // Get current day for highlighting
+  const currentDay = new Date().getDay() === 0 ? 7 : new Date().getDay();
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white shadow">
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <div className="border-b bg-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center h-16">
-            <Button
-              variant="ghost"
-              onClick={() => router.back()}
-              className="mr-4"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
-            </Button>
-            <div className="flex items-center">
-              <Calendar className="w-8 h-8 text-blue-600 mr-3" />
-              <h1 className="text-xl font-semibold text-gray-900">My Timetable</h1>
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-4">
+              <Button
+                variant="ghost"
+                onClick={() => router.back()}
+                className="flex items-center text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Dashboard
+              </Button>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Calendar className="w-5 h-5 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Weekly Schedule</span>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {timetable.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {weekdays.map(({ day, name }) => {
-              const dayClasses = groupedTimetable[day] || [];
-              
-              if (dayClasses.length === 0) return null;
-              
-              return (
-                <div key={day}>
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">{name}</h2>
-                  {dayClasses
-                    .sort((a, b) => a.period_no - b.period_no)
-                    .map(item => (
-                      <TimetableItem key={`${item.id}-${item.period_no}`} timetable={item} />
+          <Card className="overflow-hidden">
+            <CardContent className="p-0">
+              {/* Calendar Grid */}
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  {/* Header */}
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="p-4 text-left font-medium text-muted-foreground border-r">
+                        Period
+                      </th>
+                      {weekdays.map(({ day, name, short }) => (
+                        <th 
+                          key={day} 
+                          className={`p-4 text-center font-medium border-r min-w-[140px] ${
+                            day === currentDay 
+                              ? 'bg-primary/10 text-primary' 
+                              : 'text-muted-foreground'
+                          }`}
+                        >
+                          <div className="flex flex-col">
+                            <span className="hidden sm:block">{name}</span>
+                            <span className="block sm:hidden">{short}</span>
+                            {day === currentDay && (
+                              <span className="text-xs font-normal text-primary/80">Today</span>
+                            )}
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  
+                  {/* Body */}
+                  <tbody>
+                    {periods.map(period => (
+                      <tr key={period} className="border-b hover:bg-muted/30 transition-colors">
+                        <td className="p-4 border-r bg-muted/20 font-medium text-center">
+                          <div className="flex flex-col">
+                            <span className="text-sm">Period {period}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {/* You could add time slots here if available */}
+                            </span>
+                          </div>
+                        </td>
+                        {weekdays.map(({ day }) => {
+                          const periodData = timetableGrid[`${day}-${period}`];
+                          
+                          return (
+                            <td 
+                              key={`${day}-${period}`} 
+                              className={`p-2 border-r align-top ${
+                                day === currentDay ? 'bg-primary/5' : ''
+                              }`}
+                            >
+                              {periodData ? (
+                                <div className="h-full min-h-[80px]">
+                                  <div className={`
+                                    p-3 rounded-lg h-full border-l-4 transition-all hover:shadow-md
+                                    ${periodData.is_break 
+                                      ? 'bg-orange-50 border-orange-400 hover:bg-orange-100' 
+                                      : 'bg-blue-50 border-blue-400 hover:bg-blue-100'
+                                    }
+                                  `}>
+                                    <div className="space-y-1">
+                                      <h4 className={`
+                                        text-sm font-medium leading-tight
+                                        ${periodData.is_break ? 'text-orange-800' : 'text-blue-800'}
+                                      `}>
+                                        {periodData.is_break ? 'Break' : periodData.subject}
+                                      </h4>
+                                      
+                                      {!periodData.is_break && (
+                                        <>
+                                          <p className="text-xs text-blue-600 font-medium">
+                                            {periodData.section}
+                                          </p>
+                                          
+                                          {(periodData.start_time || periodData.end_time) && (
+                                            <div className="flex items-center text-xs text-blue-600">
+                                              <Clock className="w-3 h-3 mr-1" />
+                                              {periodData.start_time && periodData.end_time
+                                                ? `${periodData.start_time} - ${periodData.end_time}`
+                                                : periodData.start_time || periodData.end_time}
+                                            </div>
+                                          )}
+                                          
+                                          {periodData.venue && (
+                                            <p className="text-xs text-blue-600 truncate">
+                                              📍 {periodData.venue}
+                                            </p>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="h-[80px] flex items-center justify-center">
+                                  <span className="text-xs text-muted-foreground">Free</span>
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
                     ))}
-                </div>
-              );
-            })}
-          </div>
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         ) : (
           <Card>
-            <CardContent className="p-8 text-center">
-              <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No timetable data</h3>
-              <p className="text-gray-600">Your class schedule will appear here once it's been set up.</p>
+            <CardContent className="py-12">
+              <div className="text-center">
+                <Calendar className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-foreground mb-2">No Timetable Data</h3>
+                <p className="text-sm text-muted-foreground">
+                  Your class schedule will appear here once it's been set up by the administration.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        
+        {/* Legend */}
+        {timetable.length > 0 && (
+          <Card className="mt-6">
+            <CardContent className="p-4">
+              <h4 className="text-sm font-medium mb-3">Legend</h4>
+              <div className="flex flex-wrap gap-4 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-blue-50 border-l-4 border-blue-400 rounded"></div>
+                  <span>Class Period</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-orange-50 border-l-4 border-orange-400 rounded"></div>
+                  <span>Break Period</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-primary/10 rounded"></div>
+                  <span>Today</span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}

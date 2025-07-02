@@ -72,4 +72,8 @@ export const featureDescriptions: Record<FeatureKey, string> = {
 // Export API functionality
 export * from './api';
 
+// Export brand utilities
+export * from './api/brand';
+
+
  

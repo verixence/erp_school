@@ -35,7 +35,7 @@ export const useChildren = (parentId?: string) => {
         `)
         .in('id', studentIds)
         .order('grade', { ascending: true })
-        .order('first_name', { ascending: true });
+        .order('full_name', { ascending: true });
 
       if (error) throw error;
       return data as any[];
@@ -72,7 +72,7 @@ export const useParentDashboardStats = (parentId?: string) => {
       // Get children
       const { data: children } = await supabase
         .from('students')
-        .select('id, first_name, last_name, section_id')
+        .select('id, full_name, section_id')
         .in('id', studentIds);
 
       if (!children || children.length === 0) {
@@ -162,29 +162,121 @@ export const useChildHomework = (studentId?: string) => {
       // Get student's section to find homework assignments
       const { data: student, error: studentError } = await supabase
         .from('students')
-        .select('section_id, grade')
+        .select(`
+          *,
+          sections!inner(
+            grade,
+            section,
+            school_id
+          )
+        `)
         .eq('id', studentId)
         .single();
 
       if (studentError) throw studentError;
 
+      // Construct section format to match homework table (e.g., "1 A")
+      const homeworkSection = `${student.sections.grade} ${student.sections.section}`;
+
       const { data, error } = await supabase
         .from('homeworks')
-        .select(`
-          *,
-          homework_submissions!left(
-            id,
-            submitted_at,
-            status,
-            file_url,
-            notes
-          )
-        `)
-        .eq('section_id', student.section_id)
+        .select('*')
+        .eq('section', homeworkSection)
+        .eq('school_id', student.sections.school_id)
         .order('due_date', { ascending: true });
 
       if (error) throw error;
-      return data as any[];
+      // Return homework without submissions since homework_submissions table doesn't exist
+      return data.map(hw => ({
+        ...hw,
+        homework_submissions: [] // Empty array since table doesn't exist
+      })) as any[];
+    },
+    enabled: !!studentId,
+  });
+};
+
+// Get exam groups for child's school (all groups, not just published)
+export const useChildExamGroups = (studentId?: string) => {
+  return useQuery({
+    queryKey: ['child-exam-groups', studentId],
+    queryFn: async () => {
+      if (!studentId) return [];
+
+      // Get student's school through section
+      const { data: student, error: studentError } = await supabase
+        .from('students')
+        .select(`
+          *,
+          sections!inner(
+            school_id
+          )
+        `)
+        .eq('id', studentId)
+        .single();
+
+      if (studentError) throw studentError;
+
+      // Get all exam groups for the school (including unpublished ones)
+      const { data, error } = await supabase
+        .from('exam_groups')
+        .select('*')
+        .eq('school_id', student.sections.school_id)
+        .order('start_date', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!studentId,
+  });
+};
+
+// Get exam papers for child's section (all papers, not just published)
+export const useChildExams = (studentId?: string) => {
+  return useQuery({
+    queryKey: ['child-exams', studentId],
+    queryFn: async () => {
+      if (!studentId) return [];
+
+      // Get student's section to find exam papers
+      const { data: student, error: studentError } = await supabase
+        .from('students')
+        .select(`
+          *,
+          sections!inner(
+            grade,
+            section,
+            school_id
+          )
+        `)
+        .eq('id', studentId)
+        .single();
+
+      if (studentError) throw studentError;
+
+      // Construct section format to match exam papers (e.g., "Grade 1 A")
+      const examSection = `Grade ${student.sections.grade} ${student.sections.section}`;
+
+      // Get all exam papers for the section (including unpublished ones)
+      const { data, error } = await supabase
+        .from('exam_papers')
+        .select(`
+          *,
+          exam_groups!inner(
+            id,
+            name,
+            exam_type,
+            start_date,
+            end_date,
+            is_published
+          )
+        `)
+        .eq('section', examSection)
+        .eq('school_id', student.sections.school_id)
+        .order('exam_date', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!studentId,
   });
@@ -207,10 +299,10 @@ export const useChildTimetable = (studentId?: string) => {
       if (studentError) throw studentError;
 
       const { data, error } = await supabase
-        .from('timetables')
+        .from('periods')
         .select(`
           *,
-          teachers!inner(
+          teacher:users!periods_teacher_id_fkey(
             first_name,
             last_name
           )
@@ -220,7 +312,15 @@ export const useChildTimetable = (studentId?: string) => {
         .order('period_no', { ascending: true });
 
       if (error) throw error;
-      return data as any[];
+      
+      // Transform data to match expected format
+      return data.map((period: any) => ({
+        ...period,
+        teachers: period.teacher ? {
+          first_name: period.teacher.first_name,
+          last_name: period.teacher.last_name
+        } : null
+      })) as any[];
     },
     enabled: !!studentId,
   });

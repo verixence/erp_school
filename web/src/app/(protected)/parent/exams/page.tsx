@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/use-auth';
-import { useChildren } from '@/hooks/use-parent';
+import { useChildren, useChildExams, useChildExamGroups } from '@/hooks/use-parent';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -20,14 +20,6 @@ import {
   CheckCircle2,
   Eye
 } from 'lucide-react';
-import { 
-  useExamGroups,
-  useExamPapers,
-  useStudentReportCard,
-  useSchoolInfo,
-  type ExamGroup,
-  type ExamPaper
-} from '@erp/common';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -52,8 +44,8 @@ export default function ParentExamsPage() {
   const [selectedExamGroup, setSelectedExamGroup] = useState<string>('');
   
   const { data: children, isLoading: childrenLoading } = useChildren(user?.id);
-  const { data: examGroups = [], isLoading: examGroupsLoading } = useExamGroups(user?.school_id || undefined);
-  const { data: schoolInfo } = useSchoolInfo(user?.school_id || undefined);
+  const { data: examGroups = [], isLoading: examGroupsLoading } = useChildExamGroups(selectedChild);
+  const { data: examPapers = [] } = useChildExams(selectedChild);
   
   // Set default selected child when children load
   if (children && children.length > 0 && !selectedChild) {
@@ -62,18 +54,12 @@ export default function ParentExamsPage() {
 
   const currentChild = children?.find(child => child.id === selectedChild);
   const currentSection = currentChild?.sections?.section;
-
-  // Get exam papers for current child's section
-  const { data: examPapers = [] } = useExamPapers(selectedExamGroup || undefined);
-  const relevantExamPapers = examPapers.filter(paper => 
-    currentSection && paper.section === currentSection
-  );
-
-  // Get report card for selected child and exam group
-  const { data: reportCard } = useStudentReportCard(
-    selectedChild || '',
-    selectedExamGroup || ''
-  );
+  const currentGrade = currentChild?.sections?.grade;
+  
+  // Filter exams by selected exam group if one is selected
+  const relevantExamPapers = selectedExamGroup 
+    ? examPapers.filter(paper => paper.exam_groups?.id === selectedExamGroup)
+    : examPapers;
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -91,80 +77,6 @@ export default function ParentExamsPage() {
       minute: '2-digit',
       hour12: true
     });
-  };
-
-  const handleDownloadReport = () => {
-    if (!reportCard || !currentChild) return;
-    
-    const reportHTML = generateReportCardHTML(reportCard, currentChild, schoolInfo);
-    
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    
-    printWindow.document.write(reportHTML);
-    printWindow.document.close();
-    printWindow.print();
-  };
-
-  const generateReportCardHTML = (report: any, child: any, school: any) => {
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Report Card - ${child.full_name}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; background: white; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
-            .logo { width: 80px; height: 80px; margin: 0 auto 10px; }
-            .school-name { font-size: 24px; font-weight: bold; margin: 10px 0; }
-            .report-title { font-size: 18px; color: #666; margin: 5px 0; }
-            .student-info { display: flex; justify-content: space-between; margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; }
-            .info-section { flex: 1; }
-            .info-label { font-weight: bold; color: #666; font-size: 12px; }
-            .info-value { font-size: 14px; margin-bottom: 10px; }
-            .grade-info { text-align: center; margin: 30px 0; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 10px; }
-            .grade { font-size: 48px; font-weight: bold; margin: 0; }
-            .percentage { font-size: 24px; margin: 10px 0; }
-            .footer { margin-top: 50px; display: flex; justify-content: space-between; padding-top: 20px; border-top: 1px solid #ddd; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            ${school?.logo_url ? `<img src="${school.logo_url}" alt="School Logo" class="logo">` : ''}
-            <div class="school-name">${school?.name || 'School Name'}</div>
-            <div class="report-title">Academic Report Card</div>
-          </div>
-          
-          <div class="student-info">
-            <div class="info-section">
-              <div class="info-label">Student Name</div>
-              <div class="info-value">${child.full_name}</div>
-              <div class="info-label">Admission No.</div>
-              <div class="info-value">${child.admission_no || 'N/A'}</div>
-            </div>
-            <div class="info-section">
-              <div class="info-label">Class/Section</div>
-              <div class="info-value">${child.sections?.grade} - ${child.sections?.section}</div>
-            </div>
-          </div>
-          
-          <div class="grade-info">
-            <div class="grade">${report.grade}</div>
-            <div class="percentage">${report.percentage}%</div>
-            <div>Overall Performance</div>
-          </div>
-          
-          <div class="footer">
-            <div class="signature">
-              <div style="border-top: 1px solid #000; margin-top: 50px; padding-top: 5px;">Principal</div>
-            </div>
-            <div class="signature">
-              <div style="border-top: 1px solid #000; margin-top: 50px; padding-top: 5px;">Class Teacher</div>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
   };
 
   if (childrenLoading || examGroupsLoading) {
@@ -228,7 +140,7 @@ export default function ParentExamsPage() {
         <CardContent>
           {examGroups.length > 0 ? (
             <div className="space-y-4">
-              {examGroups.map((examGroup: ExamGroup) => (
+              {examGroups.map((examGroup: any) => (
                 <motion.div
                   key={examGroup.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -242,7 +154,7 @@ export default function ParentExamsPage() {
                     </div>
                     <div className="flex gap-2">
                       <Badge variant="outline">
-                        {examTypeLabels[examGroup.exam_type]}
+                        {examGroup.exam_type || 'Exam Group'}
                       </Badge>
                       {examGroup.is_published && (
                         <Badge className="bg-green-100 text-green-800">Published</Badge>
@@ -264,18 +176,6 @@ export default function ParentExamsPage() {
                       <Eye className="w-4 h-4" />
                       View Schedule
                     </Button>
-                    
-                    {reportCard && selectedExamGroup === examGroup.id && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleDownloadReport}
-                        className="flex items-center gap-1"
-                      >
-                        <Download className="w-4 h-4" />
-                        Download Report
-                      </Button>
-                    )}
                   </div>
                 </motion.div>
               ))}
@@ -301,7 +201,7 @@ export default function ParentExamsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {relevantExamPapers.map((paper: ExamPaper) => (
+              {relevantExamPapers.map((paper: any) => (
                 <div key={paper.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center gap-3">
                     <BookOpen className="h-5 w-5 text-blue-600" />
@@ -319,51 +219,6 @@ export default function ParentExamsPage() {
                   </div>
                 </div>
               ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Report Card Section */}
-      {selectedExamGroup && reportCard && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Report Card
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">Overall Grade: {reportCard.grade}</h3>
-                  <p className="text-gray-600">Percentage: {reportCard.percentage}%</p>
-                </div>
-                <Badge className={statusColors[reportCard.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}>
-                  {reportCard.status.charAt(0).toUpperCase() + reportCard.status.slice(1)}
-                </Badge>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div className="text-center p-3 bg-white rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">{reportCard.obtained_marks}</div>
-                  <div className="text-sm text-gray-600">Marks Obtained</div>
-                </div>
-                <div className="text-center p-3 bg-white rounded-lg">
-                  <div className="text-2xl font-bold text-gray-800">{reportCard.total_marks}</div>
-                  <div className="text-sm text-gray-600">Total Marks</div>
-                </div>
-                <div className="text-center p-3 bg-white rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">#{reportCard.rank}</div>
-                  <div className="text-sm text-gray-600">Class Rank</div>
-                </div>
-              </div>
-              
-              <Button onClick={handleDownloadReport} className="w-full">
-                <Download className="w-4 h-4 mr-2" />
-                Download Report Card
-              </Button>
             </div>
           </CardContent>
         </Card>

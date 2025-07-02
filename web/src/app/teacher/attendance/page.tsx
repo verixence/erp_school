@@ -312,11 +312,12 @@ export default function TeacherAttendancePage() {
               </div>
 
               <div className="flex items-end">
-                                 <Button
-                   onClick={() => saveAttendanceMutation.mutate()}
-                   disabled={!selectedSection || !(students?.length) || saveAttendanceMutation.isPending}
-                   className="w-full"
-                 >
+                <Button
+                  onClick={() => saveAttendanceMutation.mutate()}
+                  disabled={!selectedSection || !(students?.length) || saveAttendanceMutation.isPending}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-medium shadow-md"
+                  size="lg"
+                >
                   <Save className="w-4 h-4 mr-2" />
                   {saveAttendanceMutation.isPending ? 'Saving...' : 'Save Attendance'}
                 </Button>
