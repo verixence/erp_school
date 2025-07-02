@@ -72,12 +72,16 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-xl p-8 space-y-6">
           {/* Header */}
-          <div className="text-center space-y-4">
-            <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center">
-              <GraduationCap className="w-8 h-8 text-white" />
+          <div className="text-center space-y-2">
+            <div className="mx-auto w-44 h-44 flex items-center justify-center">
+              <img 
+                src="/logo.png" 
+                alt="CampusHoster Logo" 
+                className="w-40 h-40 object-contain"
+              />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">CampusHoster</h1>
+              {/* Removed h1 since logo already contains the name */}
               <p className="text-gray-600">School Management Platform</p>
             </div>
           </div>
@@ -163,23 +167,6 @@ export default function LoginPage() {
             <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
               <h3 className="font-medium text-blue-800 mb-3">🚀 Demo Credentials</h3>
               <div className="space-y-3">
-                <div className="bg-white px-3 py-2 rounded border border-blue-300">
-                  <p className="text-xs text-blue-600 font-medium mb-1">Super Admin:</p>
-                  <div className="flex items-center justify-between">
-                    <code className="text-sm font-mono text-blue-800">admin@school.edu</code>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEmail('admin@school.edu');
-                        setPassword('admin123');
-                      }}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      Use
-                    </button>
-                  </div>
-                  <code className="text-sm font-mono text-blue-800">Password: admin123</code>
-                </div>
                 <div className="bg-white px-3 py-2 rounded border border-blue-300">
                   <p className="text-xs text-blue-600 font-medium mb-1">School Admin:</p>
                   <div className="flex items-center justify-between">

@@ -5,12 +5,15 @@ import { useAuth } from '@/hooks/use-auth';
 import { DataGrid, DataGridColumn } from '@/components/data-grid';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Building2, Globe, ExternalLink, Users, MapPin, Phone, Mail } from 'lucide-react';
+import { ArrowLeft, Building2, Globe, ExternalLink, Users, MapPin, Phone, Mail, Trash2, Edit3 } from 'lucide-react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { formatDate } from '@/lib/utils';
 import { EnhancedSchoolForm } from '@/components/enhanced-school-form';
+import { DeleteSchoolModal } from '@/components/ui/delete-school-modal';
+import { toast } from 'react-hot-toast';
 
 interface School {
   id: string;
@@ -43,8 +46,54 @@ interface School {
 export default function SchoolsManagementPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
   
   const [showEnhancedForm, setShowEnhancedForm] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [schoolToDelete, setSchoolToDelete] = useState<School | null>(null);
+
+  // Delete school mutation
+  const deleteSchoolMutation = useMutation({
+    mutationFn: async ({ schoolId, confirmationText }: { schoolId: string; confirmationText: string }) => {
+      const response = await fetch('/api/admin/delete-school', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          schoolId,
+          confirmationText,
+          userId: user?.id,
+          confirmationToken: `${Date.now()}-${schoolId}`
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete school');
+      }
+
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast.success(`School "${data.deletedSchool.name}" has been permanently deleted`);
+      queryClient.invalidateQueries({ queryKey: ['schools'] });
+      setDeleteModalOpen(false);
+      setSchoolToDelete(null);
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to delete school');
+    },
+  });
+
+  const handleDeleteSchool = (school: School) => {
+    setSchoolToDelete(school);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async (schoolId: string, confirmationText: string) => {
+    await deleteSchoolMutation.mutateAsync({ schoolId, confirmationText });
+  };
 
   const columns: DataGridColumn<School>[] = [
     {
@@ -202,6 +251,36 @@ export default function SchoolsManagementPage() {
       label: 'Created',
       render: (value) => formatDate(value),
     },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (_, row) => (
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/super-admin/${row.id}`);
+            }}
+            className="h-8 w-8 p-0"
+          >
+            <Edit3 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteSchool(row);
+            }}
+            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
   ];
 
   const handleRowClick = (school: School) => {
@@ -247,6 +326,15 @@ export default function SchoolsManagementPage() {
       <EnhancedSchoolForm
         open={showEnhancedForm}
         onOpenChange={setShowEnhancedForm}
+      />
+
+      {/* Delete School Modal */}
+      <DeleteSchoolModal
+        open={deleteModalOpen}
+        onOpenChange={setDeleteModalOpen}
+        school={schoolToDelete}
+        onConfirm={handleConfirmDelete}
+        isDeleting={deleteSchoolMutation.isPending}
       />
     </div>
   );

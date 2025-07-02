@@ -9,7 +9,7 @@ import { getBrandForSchool, injectBrandCSS } from '@erp/common';
 import { CampusHeader } from '@/components/CampusHeader';
 import { CampusFooter } from '@/components/CampusFooter';
 import { KBarProviderWrapper } from '@/components/kbar-provider';
-import { BookOpen, Calendar, Bell, Settings, Home, GraduationCap, MessageSquare, FileText } from 'lucide-react';
+import { BookOpen, Calendar, Bell, Settings, Home, GraduationCap, MessageSquare, FileText, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase-client';
@@ -108,8 +108,15 @@ export default function StudentLayout({
           `}>
             {/* Sidebar Header */}
             <div className="p-6 border-b border-border">
-              <h2 className="text-xl font-bold text-foreground">Student Portal</h2>
-              <p className="text-sm text-muted-foreground mt-1">
+              <div className="flex items-center mb-3">
+                <img 
+                  src="/logo.png" 
+                  alt="CampusHoster Logo" 
+                  className="w-12 h-12 object-contain mr-3"
+                />
+                <h2 className="text-xl font-bold text-foreground">Student Portal</h2>
+              </div>
+              <p className="text-sm text-muted-foreground">
                 {user.email}
               </p>
             </div>
@@ -145,7 +152,7 @@ export default function StudentLayout({
                 }}
                 className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
               >
-                <GraduationCap className="w-5 h-5 mr-3" />
+                <LogOut className="w-5 h-5 mr-3" />
                 Sign Out
               </Button>
             </div>

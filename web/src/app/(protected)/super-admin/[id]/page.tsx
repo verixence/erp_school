@@ -37,6 +37,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { motion } from 'framer-motion';
 import { EnhancedSchoolForm } from '@/components/enhanced-school-form';
+import { DeleteSchoolModal } from '@/components/ui/delete-school-modal';
+import { toast } from 'react-hot-toast';
 
 interface School {
   id: string;
@@ -142,6 +144,7 @@ export default function EnhancedSchoolDetailsPage() {
   const [passwordResetModalOpen, setPasswordResetModalOpen] = useState(false);
   const [resetPasswordAdmin, setResetPasswordAdmin] = useState<SchoolAdmin | null>(null);
   const [schoolStatusModalOpen, setSchoolStatusModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   const { data: school, isLoading: schoolLoading, error: schoolError } = useQuery({
     queryKey: ['school', schoolId],
@@ -315,6 +318,38 @@ export default function EnhancedSchoolDetailsPage() {
     },
   });
 
+  const deleteSchoolMutation = useMutation({
+    mutationFn: async ({ schoolId, confirmationText }: { schoolId: string; confirmationText: string }) => {
+      const response = await fetch('/api/admin/delete-school', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          schoolId,
+          confirmationText,
+          userId: user?.id,
+          confirmationToken: `${Date.now()}-${schoolId}`
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete school');
+      }
+
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast.success(`School "${data.deletedSchool.name}" has been permanently deleted`);
+      // Redirect to schools list after successful deletion
+      router.push('/super-admin/schools');
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to delete school');
+    },
+  });
+
   const handleFeatureToggle = (featureKey: string, enabled: boolean) => {
     const newFeatures = { ...features, [featureKey]: enabled };
     setFeatures(newFeatures);
@@ -355,6 +390,14 @@ export default function EnhancedSchoolDetailsPage() {
 
   const handleToggleSchoolStatus = () => {
     setSchoolStatusModalOpen(true);
+  };
+
+  const handleDeleteSchool = () => {
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async (schoolId: string, confirmationText: string) => {
+    await deleteSchoolMutation.mutateAsync({ schoolId, confirmationText });
   };
 
   const formatAddress = (address: School['address']) => {
@@ -1103,6 +1146,19 @@ export default function EnhancedSchoolDetailsPage() {
                   <Settings className="w-4 h-4 mr-2" />
                   School Settings
                 </Button>
+                
+                {/* Danger Zone - Delete School */}
+                <div className="pt-2 border-t">
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/5" 
+                    size="sm"
+                    onClick={handleDeleteSchool}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete School Permanently
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -1432,6 +1488,15 @@ export default function EnhancedSchoolDetailsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete School Modal */}
+      <DeleteSchoolModal
+        open={deleteModalOpen}
+        onOpenChange={setDeleteModalOpen}
+        school={school}
+        onConfirm={handleConfirmDelete}
+        isDeleting={deleteSchoolMutation.isPending}
+      />
     </div>
   );
 }

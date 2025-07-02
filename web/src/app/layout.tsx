@@ -13,6 +13,11 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "CampusHoster - School Management Platform",
   description: "Advanced cloud-based school management platform for educational institutions",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

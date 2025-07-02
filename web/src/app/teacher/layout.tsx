@@ -9,7 +9,7 @@ import { getBrandForSchool, injectBrandCSS } from '@erp/common';
 import { CampusHeader } from '@/components/CampusHeader';
 import { CampusFooter } from '@/components/CampusFooter';
 import { KBarProviderWrapper } from '@/components/kbar-provider';
-import { BookOpen, Calendar, Users, Home, GraduationCap, FileText, MessageSquare, CheckCircle, Award } from 'lucide-react';
+import { BookOpen, Calendar, Users, Home, GraduationCap, FileText, MessageSquare, CheckCircle, Award, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase-client';
@@ -141,7 +141,11 @@ export default function TeacherLayout({
             {/* Sidebar Header */}
             <div className="px-6 py-4 border-b border-border">
               <div className="flex items-center">
-                <GraduationCap className="w-8 h-8 text-primary mr-3" />
+                <img 
+                  src="/logo.png" 
+                  alt="CampusHoster Logo" 
+                  className="w-12 h-12 object-contain mr-3"
+                />
                 <div>
                   <h1 className="text-lg font-semibold text-foreground">Teacher Portal</h1>
                   <p className="text-sm text-muted-foreground mt-1">
@@ -183,7 +187,7 @@ export default function TeacherLayout({
                 }}
                 className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
               >
-                <GraduationCap className="w-4 h-4 mr-2" />
+                <LogOut className="w-4 h-4 mr-2" />
                 Sign Out
               </Button>
             </div>
