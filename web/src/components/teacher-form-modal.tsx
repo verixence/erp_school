@@ -402,6 +402,7 @@ export default function TeacherFormModal({
                               variant="ghost"
                               size="sm"
                               onClick={handleGeneratePassword}
+                              className="btn-visible"
                             >
                               <Shuffle className="h-4 w-4" />
                             </Button>
@@ -411,6 +412,7 @@ export default function TeacherFormModal({
                             variant="ghost"
                             size="sm"
                             onClick={() => setShowPassword(!showPassword)}
+                            className="btn-visible"
                           >
                             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                           </Button>
@@ -424,12 +426,13 @@ export default function TeacherFormModal({
             )}
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleClose}>
+              <Button type="button" variant="outline" onClick={handleClose} className="btn-outline-visible">
                 Cancel
               </Button>
               <Button 
                 type="submit" 
                 disabled={createMutation.isPending || updateMutation.isPending}
+                className="btn-primary-visible"
               >
                 {createMutation.isPending || updateMutation.isPending
                   ? 'Saving...'

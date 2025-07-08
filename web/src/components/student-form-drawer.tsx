@@ -44,7 +44,8 @@ import {
   FileCheck,
   Plus,
   Calendar,
-  GraduationCap
+  GraduationCap,
+  Building2
 } from 'lucide-react';
 import ParentFormModal from './parent-form-modal';
 
@@ -62,10 +63,6 @@ const studentSchema = z.object({
   section_id: z.string().optional(),
   parent_id: z.string().optional(),
   student_email: z.string().email('Invalid email').optional().or(z.literal('')),
-  student_phone: z.string().optional().refine((val) => {
-    if (!val) return true; // Optional field
-    return /^\+91\s\d{10}$/.test(val);
-  }, 'Phone number must be in format +91 XXXXXXXXXX (10 digits after +91)'),
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -165,24 +162,7 @@ export default function StudentFormDrawer({
     return parts.join('/');
   };
 
-  // Helper function to format phone number
-  const handlePhoneInput = (value: string) => {
-    // Remove all non-numeric characters
-    let cleaned = value.replace(/[^\d]/g, '');
-    
-    // If it starts with 91, add +91 prefix
-    if (cleaned.startsWith('91') && cleaned.length > 2) {
-      cleaned = cleaned.slice(2);
-    }
-    
-    // Limit to 10 digits after +91
-    if (cleaned.length > 10) {
-      cleaned = cleaned.slice(0, 10);
-    }
-    
-    // Return with +91 prefix if there are digits
-    return cleaned ? `+91 ${cleaned}` : '+91 ';
-  };
+
 
   // Form setup
   const form = useForm<StudentFormData>({
@@ -197,7 +177,6 @@ export default function StudentFormDrawer({
       section_id: '',
       parent_id: 'none',
       student_email: '',
-      student_phone: '+91 ',
     },
   });
 
@@ -219,7 +198,7 @@ export default function StudentFormDrawer({
   });
 
   // Fetch sections for dropdown
-  const { data: sections = [] } = useQuery({
+  const { data: sections = [], isLoading: sectionsLoading } = useQuery({
     queryKey: ['sections', user?.school_id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -309,7 +288,6 @@ export default function StudentFormDrawer({
         section_id: data.section_id || null,
         school_id: user?.school_id,
         student_email: data.student_email || null,
-        student_phone: data.student_phone === '+91 ' ? null : data.student_phone,
       };
 
       // Create student
@@ -356,7 +334,6 @@ export default function StudentFormDrawer({
         section_id: '',
         parent_id: 'none',
         student_email: '',
-        student_phone: '+91 ',
       });
       setCurrentStep(1);
       setSelectedGrade('');
@@ -390,7 +367,6 @@ export default function StudentFormDrawer({
         section: data.section,
         section_id: data.section_id || null,
         student_email: data.student_email || null,
-        student_phone: data.student_phone === '+91 ' ? null : data.student_phone,
       };
 
       // Update student
@@ -445,7 +421,6 @@ export default function StudentFormDrawer({
         section_id: '',
         parent_id: 'none',
         student_email: '',
-        student_phone: '+91 ',
       });
       setCurrentStep(1);
       toast.success('Student updated successfully');
@@ -495,7 +470,6 @@ export default function StudentFormDrawer({
       section_id: '',
       parent_id: 'none',
       student_email: '',
-      student_phone: '+91 ',
     });
     setCurrentStep(1);
     setIsCreatingParent(false);
@@ -529,7 +503,6 @@ export default function StudentFormDrawer({
         section_id: student.section_id || '',
         parent_id: currentParent || 'none',
         student_email: student.student_email || '',
-        student_phone: student.student_phone || '+91 ',
       });
     } else {
       // Creating new student - ensure form is reset to defaults
@@ -543,7 +516,6 @@ export default function StudentFormDrawer({
         section_id: '',
         parent_id: 'none',
         student_email: '',
-        student_phone: '+91 ',
       });
     }
   }, [student, open, currentParent]);
@@ -662,13 +634,13 @@ export default function StudentFormDrawer({
                   <FormItem>
                     <FormLabel>Section *</FormLabel>
                     <Select onValueChange={(value) => {
-                      field.onChange(value);
-                      // Also set the section_id
-                      const selectedSection = availableSections.find(s => s.section === value);
+                      // Find the selected section by ID
+                      const selectedSection = availableSections.find(s => s.id === value);
                       if (selectedSection) {
-                        form.setValue('section_id', selectedSection.id);
+                        field.onChange(selectedSection.section); // Store section name in form
+                        form.setValue('section_id', selectedSection.id); // Store section ID
                       }
-                    }} value={field.value}>
+                    }} value={availableSections.find(s => s.section === field.value)?.id || ''}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select section" />
@@ -676,8 +648,8 @@ export default function StudentFormDrawer({
                       </FormControl>
                       <SelectContent>
                         {availableSections.map((section) => (
-                          <SelectItem key={section.id} value={section.section}>
-                            Section {section.section} ({section.students_count}/{section.capacity})
+                          <SelectItem key={section.id} value={section.id}>
+                            Grade {section.grade} - Section {section.section} ({section.students_count}/{section.capacity})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -731,7 +703,7 @@ export default function StudentFormDrawer({
                       variant="ghost"
                       size="sm"
                       onClick={() => setIsCreatingParent(true)}
-                      className="w-full text-sm text-muted-foreground hover:text-primary"
+                      className="w-full text-sm text-muted-foreground hover:text-primary btn-visible"
                     >
                       <Plus className="mr-2 h-4 w-4" />
                       Create New Parent
@@ -755,122 +727,39 @@ export default function StudentFormDrawer({
                 </FormItem>
               )}
             />
-
-            <FormField
-              control={form.control}
-              name="student_phone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Student Phone (Optional)</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="+91 XXXXXXXXXX" 
-                      {...field}
-                      onChange={(e) => {
-                        const formatted = handlePhoneInput(e.target.value);
-                        field.onChange(formatted);
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
           </div>
         );
 
       case 3:
         return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <h3 className="text-lg font-semibold">Review Student Information</h3>
-              <p className="text-sm text-muted-foreground">
-                Please review the information before creating the student record.
-              </p>
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">Review & Confirm</h3>
+            <div className="space-y-3 p-4 bg-muted rounded-lg">
+              <div>
+                <h4 className="font-medium text-sm">Student Information</h4>
+                <p>{formData.full_name}</p>
+                <p>DOB: {formData.date_of_birth}</p>
+                <p>Gender: {formData.gender}</p>
+                <p>Admission No: {formData.admission_no}</p>
+                <p>Grade: {formData.grade}</p>
+                <p>Section: {formData.section}</p>
+              </div>
+              
+              <div>
+                <h4 className="font-medium text-sm">Contact Information</h4>
+                <p>{formData.student_email || 'Not provided'}</p>
+              </div>
+              
+              <div>
+                <h4 className="font-medium text-sm">Parent/Guardian</h4>
+                <p>
+                  {formData.parent_id === 'none' ? 'No parent assigned' : 
+                    parents.find(p => p.id === formData.parent_id)?.first_name + ' ' + 
+                    parents.find(p => p.id === formData.parent_id)?.last_name || 'Unknown'
+                  }
+                </p>
+              </div>
             </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Personal Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="font-medium">Full Name:</span>
-                    <p>{formData.full_name}</p>
-                  </div>
-                  <div>
-                    <span className="font-medium">Date of Birth:</span>
-                    <p>{formData.date_of_birth}</p>
-                  </div>
-                  <div>
-                    <span className="font-medium">Gender:</span>
-                    <p className="capitalize">{formData.gender}</p>
-                  </div>
-                  <div>
-                    <span className="font-medium">Admission No:</span>
-                    <p>{formData.admission_no}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <GraduationCap className="h-5 w-5" />
-                  Academic Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="font-medium">Grade:</span>
-                    <p>Grade {formData.grade}</p>
-                  </div>
-                  <div>
-                    <span className="font-medium">Section:</span>
-                    <p>Section {formData.section}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Phone className="h-5 w-5" />
-                  Contact Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="grid grid-cols-1 gap-4 text-sm">
-                  <div>
-                    <span className="font-medium">Parent:</span>
-                    <p>
-                      {formData.parent_id && formData.parent_id !== 'none'
-                        ? (() => {
-                            const parent = parents.find(p => p.id === formData.parent_id);
-                            return parent ? `${parent.first_name} ${parent.last_name}` : 'Not found';
-                          })()
-                        : 'Not assigned'
-                      }
-                    </p>
-                  </div>
-                  <div>
-                    <span className="font-medium">Student Email:</span>
-                    <p>{formData.student_email || 'Not provided'}</p>
-                  </div>
-                  <div>
-                    <span className="font-medium">Student Phone:</span>
-                    <p>{formData.student_phone || 'Not provided'}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </div>
         );
 
@@ -878,6 +767,10 @@ export default function StudentFormDrawer({
         return null;
     }
   };
+
+  // Check if sections exist
+  const hasSections = sections.length > 0;
+  const isNewSchool = !sectionsLoading && !hasSections;
 
   return (
     <Drawer open={open} onOpenChange={handleClose}>
@@ -887,87 +780,153 @@ export default function StudentFormDrawer({
             {student ? 'Edit Student' : 'Add New Student'}
           </DrawerTitle>
           <DrawerDescription>
-            {student 
+            {isNewSchool 
+              ? 'Please create sections/classes first before adding students.'
+              : student 
               ? 'Update the student information below.'
               : 'Fill out the student information in the steps below.'
             }
           </DrawerDescription>
 
-          {/* Step Indicator */}
-          <div className="flex items-center justify-center mt-4">
-            {steps.map((step, index) => (
-              <div key={step.id} className="flex items-center">
-                <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                  currentStep >= step.id
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'border-muted-foreground text-muted-foreground'
-                }`}>
-                  {currentStep > step.id ? (
-                    <Check className="h-5 w-5" />
-                  ) : (
-                    <step.icon className="h-5 w-5" />
-                  )}
+          {/* Show setup required message for new schools */}
+          {isNewSchool && !student && (
+            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-amber-100 rounded-lg">
+                  <Building2 className="h-5 w-5 text-amber-600" />
                 </div>
-                {index < steps.length - 1 && (
-                  <div className={`w-16 h-0.5 mx-2 ${
-                    currentStep > step.id ? 'bg-primary' : 'bg-muted-foreground'
-                  }`} />
-                )}
+                <div className="flex-1">
+                  <h3 className="font-medium text-amber-800 mb-1">Setup Required</h3>
+                  <p className="text-sm text-amber-700 mb-3">
+                    Before adding students, you need to create classes/sections in your school. 
+                    Students must be assigned to specific grade sections.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      onClick={() => {
+                        handleClose();
+                        // Navigate to sections page
+                        window.location.href = '/school-admin/sections?action=create';
+                      }}
+                      className="bg-amber-600 hover:bg-amber-700 text-white"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Create Sections
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={handleClose}
+                      className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </div>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
 
-          <div className="text-center mt-2">
-            <h3 className="font-medium">{steps[currentStep - 1]?.title}</h3>
-            <p className="text-sm text-muted-foreground">
-              {steps[currentStep - 1]?.description}
-            </p>
-          </div>
+          {/* Step Indicator - only show if sections exist or editing */}
+          {(hasSections || student) && (
+            <>
+              <div className="flex items-center justify-center mt-4">
+                {steps.map((step, index) => (
+                  <div key={step.id} className="flex items-center">
+                    <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
+                      currentStep >= step.id
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'border-muted-foreground text-muted-foreground'
+                    }`}>
+                      {currentStep > step.id ? (
+                        <Check className="h-5 w-5" />
+                      ) : (
+                        <step.icon className="h-5 w-5" />
+                      )}
+                    </div>
+                    {index < steps.length - 1 && (
+                      <div className={`w-16 h-0.5 mx-2 ${
+                        currentStep > step.id ? 'bg-primary' : 'bg-muted-foreground'
+                      }`} />
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-center mt-2">
+                <h3 className="font-medium">{steps[currentStep - 1]?.title}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {steps[currentStep - 1]?.description}
+                </p>
+              </div>
+            </>
+          )}
         </DrawerHeader>
 
-        <div className="px-4 pb-4 overflow-y-auto">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
-              {renderStepContent()}
-            </form>
-          </Form>
-        </div>
+        {/* Only show form content if sections exist or editing */}
+        {(hasSections || student) && (
+          <>
+            <div className="px-4 pb-4 overflow-y-auto">
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)}>
+                  {renderStepContent()}
+                </form>
+              </Form>
+            </div>
 
-        <DrawerFooter>
-          <div className="flex justify-between">
+            <DrawerFooter>
+              <div className="flex justify-between">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={currentStep === 1 ? handleClose : prevStep}
+                  className="btn-outline-visible"
+                >
+                  {currentStep === 1 ? 'Cancel' : (
+                    <>
+                      <ChevronLeft className="mr-2 h-4 w-4" />
+                      Previous
+                    </>
+                  )}
+                </Button>
+
+                {currentStep < 3 ? (
+                  <Button type="button" onClick={nextStep} className="btn-primary-visible">
+                    Next
+                    <ChevronRight className="ml-2 h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button 
+                    onClick={form.handleSubmit(onSubmit)}
+                    disabled={createMutation.isPending || updateMutation.isPending}
+                    className="btn-primary-visible"
+                  >
+                    {createMutation.isPending || updateMutation.isPending
+                      ? 'Saving...'
+                      : student
+                      ? 'Update Student'
+                      : 'Create Student'
+                    }
+                  </Button>
+                )}
+              </div>
+            </DrawerFooter>
+          </>
+        )}
+
+        {/* Show close button when sections don't exist */}
+        {isNewSchool && !student && (
+          <DrawerFooter>
             <Button
-              type="button"
               variant="outline"
-              onClick={currentStep === 1 ? handleClose : prevStep}
+              onClick={handleClose}
+              className="btn-outline-visible w-full"
             >
-              {currentStep === 1 ? 'Cancel' : (
-                <>
-                  <ChevronLeft className="mr-2 h-4 w-4" />
-                  Previous
-                </>
-              )}
+              Close
             </Button>
-
-            {currentStep < 3 ? (
-              <Button type="button" onClick={nextStep}>
-                Next
-                <ChevronRight className="ml-2 h-4 w-4" />
-              </Button>
-            ) : (
-              <Button 
-                onClick={form.handleSubmit(onSubmit)}
-                disabled={createMutation.isPending || updateMutation.isPending}
-              >
-                {createMutation.isPending || updateMutation.isPending
-                  ? 'Saving...'
-                  : student
-                  ? 'Update Student'
-                  : 'Create Student'
-                }
-              </Button>
-            )}
-          </div>
-        </DrawerFooter>
+          </DrawerFooter>
+        )}
       </DrawerContent>
 
       {/* Parent Creation Modal */}

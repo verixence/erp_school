@@ -267,13 +267,22 @@ export function DataGrid<T extends Record<string, any>>({
         </div>
         <div className="flex items-center gap-2">
           {enableExport && (
-            <Button variant="outline" size="sm" onClick={handleExport}>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleExport}
+              className="btn-outline-visible hover:bg-accent hover:text-accent-foreground transition-all duration-200 font-medium"
+            >
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
           )}
           {onAdd && (
-            <Button onClick={onAdd}>
+            <Button 
+              onClick={onAdd}
+              variant="default"
+              className="btn-primary-visible transition-all duration-200 font-medium"
+            >
               <Plus className="w-4 h-4 mr-2" />
               Add {entity.slice(0, -1)}
             </Button>
@@ -301,13 +310,19 @@ export function DataGrid<T extends Record<string, any>>({
 
             {/* Column toggle */}
             {enableColumnToggle && (
-              <div className="flex items-center gap-2">
-                {columns.map(column => (
+              <div className="flex items-center gap-2 flex-wrap">
+                {columns.filter(col => col.key !== 'actions').map(column => (
                   <Button
                     key={column.key}
                     variant={visibleColumns.has(column.key) ? "default" : "outline"}
                     size="sm"
                     onClick={() => handleColumnToggle(column.key)}
+                    className={cn(
+                      "transition-all duration-200 font-medium",
+                      visibleColumns.has(column.key) 
+                        ? "btn-primary-visible hover:bg-primary/90" 
+                        : "btn-outline-visible hover:bg-accent hover:text-accent-foreground"
+                    )}
                   >
                     {visibleColumns.has(column.key) ? (
                       <Eye className="w-3 h-3 mr-1" />
@@ -408,14 +423,21 @@ export function DataGrid<T extends Record<string, any>>({
                       </div>
                     </TableHead>
                   ))}
-                  <TableHead className="w-12"></TableHead>
+                  {/* Only render actions header if no custom actions column is defined */}
+                  {!columns.some(col => col.key === 'actions') && (onEdit || onDelete) && (
+                    <TableHead className="w-12"></TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
                     <TableCell
-                      colSpan={visibleColumnsArray.length + (enableSelection ? 1 : 0) + 1}
+                      colSpan={
+                        visibleColumnsArray.length + 
+                        (enableSelection ? 1 : 0) + 
+                        (!columns.some(col => col.key === 'actions') && (onEdit || onDelete) ? 1 : 0)
+                      }
                       className="h-32 text-center"
                     >
                       <div className="flex items-center justify-center">
@@ -427,7 +449,11 @@ export function DataGrid<T extends Record<string, any>>({
                 ) : (items?.data?.length || 0) === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={visibleColumnsArray.length + (enableSelection ? 1 : 0) + 1}
+                      colSpan={
+                        visibleColumnsArray.length + 
+                        (enableSelection ? 1 : 0) + 
+                        (!columns.some(col => col.key === 'actions') && (onEdit || onDelete) ? 1 : 0)
+                      }
                       className="h-32 text-center text-muted-foreground"
                     >
                       No {entity} found.
@@ -469,34 +495,37 @@ export function DataGrid<T extends Record<string, any>>({
                               : item[column.key]}
                           </TableCell>
                         ))}
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            {onEdit && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onEdit(item);
-                                }}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                            )}
-                            {onDelete && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteDialog({ open: true, item });
-                                }}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
+                        {/* Only render default action buttons if no custom actions column is defined */}
+                        {!columns.some(col => col.key === 'actions') && (onEdit || onDelete) && (
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              {onEdit && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onEdit(item);
+                                  }}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {onDelete && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteDialog({ open: true, item });
+                                  }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        )}
                       </motion.tr>
                     ))}
                   </AnimatePresence>

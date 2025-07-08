@@ -451,12 +451,13 @@ export default function ParentFormModal({
             />
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleClose}>
+              <Button type="button" variant="outline" onClick={handleClose} className="btn-outline-visible">
                 Cancel
               </Button>
               <Button 
                 type="submit" 
                 disabled={createMutation.isPending || updateMutation.isPending}
+                className="btn-primary-visible"
               >
                 {createMutation.isPending || updateMutation.isPending
                   ? 'Saving...'

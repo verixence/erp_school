@@ -270,14 +270,14 @@ export function DeleteSchoolModal({
           <div className="flex justify-between pt-4">
             <div>
               {step !== 'warning' && (
-                <Button variant="outline" onClick={handleBack} disabled={isDeleting}>
+                <Button variant="outline" onClick={handleBack} disabled={isDeleting} className="btn-outline-visible">
                   Back
                 </Button>
               )}
             </div>
             
             <div className="flex space-x-2">
-              <Button variant="outline" onClick={handleClose} disabled={isDeleting}>
+              <Button variant="outline" onClick={handleClose} disabled={isDeleting} className="btn-outline-visible">
                 <X className="w-4 h-4 mr-2" />
                 Cancel
               </Button>
@@ -287,6 +287,7 @@ export function DeleteSchoolModal({
                   variant="destructive"
                   onClick={handleNext}
                   disabled={!canProceedFromWarning}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   Continue
                 </Button>
@@ -297,6 +298,7 @@ export function DeleteSchoolModal({
                   variant="destructive"
                   onClick={handleNext}
                   disabled={!canProceedFromConfirmation}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   Next
                 </Button>
@@ -307,7 +309,7 @@ export function DeleteSchoolModal({
                   variant="destructive"
                   onClick={handleConfirm}
                   disabled={!canConfirmDeletion || isDeleting}
-                  className="min-w-[120px]"
+                  className="min-w-[120px] bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   {isDeleting ? (
                     <>

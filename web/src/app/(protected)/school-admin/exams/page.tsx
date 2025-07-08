@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Plus, 
@@ -68,8 +68,11 @@ export default function ExamsPage() {
   const { user } = useAuth();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [selectedExamGroup, setSelectedExamGroup] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [editingPaper, setEditingPaper] = useState<ExamPaper | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: 'paper' | 'group' } | null>(null);
   
   // API hooks
   const { data: examGroups = [], isLoading, error } = useExamGroups(user?.school_id || undefined);
@@ -77,7 +80,7 @@ export default function ExamsPage() {
   const { data: teachers = [] } = useTeachers(user?.school_id || undefined);
   const { data: schoolInfo } = useSchoolInfo(user?.school_id || undefined);
   const { data: examPapers = [] } = useExamPapers(selectedExamGroup ?? undefined);
-  
+
   const createExamGroupMutation = useCreateExamGroup();
   const updateExamGroupMutation = useUpdateExamGroup();
   const deleteExamGroupMutation = useDeleteExamGroup();
@@ -108,6 +111,61 @@ export default function ExamsPage() {
     venue: '',
   });
 
+  // Compute available subjects from teachers
+  const availableSubjects = React.useMemo(() => {
+    const subjectSet = new Set<string>();
+    teachers.forEach(teacher => {
+      teacher.subjects?.forEach(subject => subjectSet.add(subject));
+    });
+    return Array.from(subjectSet).sort();
+  }, [teachers]);
+
+  // Get selected exam group details for date restrictions
+  const selectedExamGroupData = examGroups.find(eg => eg.id === selectedExamGroup);
+
+  // Filter teachers based on selected subject
+  const availableTeachers = React.useMemo(() => {
+    if (!paperFormData.subject) return teachers;
+    return teachers.filter(teacher => 
+      teacher.subjects?.includes(paperFormData.subject)
+    );
+  }, [teachers, paperFormData.subject]);
+
+  // Check for datetime conflicts
+  const checkDateTimeConflict = (
+    section: string, 
+    examDate: string, 
+    examTime: string, 
+    duration: number,
+    excludePaperId?: string
+  ) => {
+    if (!examDate || !examTime) return null;
+
+    const newExamStart = new Date(`${examDate}T${examTime}`);
+    const newExamEnd = new Date(newExamStart.getTime() + duration * 60000);
+
+    for (const paper of examPapers) {
+      if (excludePaperId && paper.id === excludePaperId) continue;
+      if (paper.section !== section) continue;
+      if (!paper.exam_date || !paper.exam_time) continue;
+
+      const existingStart = new Date(`${paper.exam_date}T${paper.exam_time}`);
+      const existingEnd = new Date(existingStart.getTime() + paper.duration_minutes * 60000);
+
+      // Check for overlap
+      if (newExamStart < existingEnd && newExamEnd > existingStart) {
+        return {
+          subject: paper.subject,
+          date: paper.exam_date,
+          time: paper.exam_time,
+          duration: paper.duration_minutes
+        };
+      }
+    }
+
+    return null;
+  };
+
   const handleCreateExamGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -136,21 +194,55 @@ export default function ExamsPage() {
   };
 
   const handleDeleteExamGroup = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this exam group? This will delete all associated papers and marks.')) {
-      return;
-    }
-    
+    setDeleteTarget({ id, type: 'group' });
+    setShowDeleteConfirmModal(true);
+  };
+
+  const handleDeleteExamPaper = async (id: string) => {
+    setDeleteTarget({ id, type: 'paper' });
+    setShowDeleteConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+
     try {
-      await deleteExamGroupMutation.mutateAsync(id);
-      toast.success('Exam group deleted successfully!');
-      if (selectedExamGroup === id) {
-        setSelectedExamGroup(null);
-        setActiveTab('overview');
+      if (deleteTarget.type === 'group') {
+        await deleteExamGroupMutation.mutateAsync(deleteTarget.id);
+        toast.success('Exam group deleted successfully!');
+        if (selectedExamGroup === deleteTarget.id) {
+          setSelectedExamGroup(null);
+          setActiveTab('overview');
+        }
+      } else {
+        await deleteExamPaperMutation.mutateAsync(deleteTarget.id);
+        toast.success('Exam paper deleted successfully!');
       }
+      
+      setShowDeleteConfirmModal(false);
+      setDeleteTarget(null);
     } catch (error) {
-      console.error('Error deleting exam group:', error);
-      toast.error('Failed to delete exam group. Please try again.');
+      console.error('Error deleting:', error);
+      toast.error(`Failed to delete exam ${deleteTarget.type}. Please try again.`);
     }
+  };
+
+  const handleEditPaper = (paper: ExamPaper) => {
+    setEditingPaper(paper);
+    setPaperFormData({
+      exam_group_id: paper.exam_group_id,
+      section: paper.section,
+      subject: paper.subject,
+      exam_date: paper.exam_date || '',
+      exam_time: paper.exam_time || '',
+      duration_minutes: paper.duration_minutes,
+      max_marks: paper.max_marks,
+      pass_marks: paper.pass_marks,
+      instructions: paper.instructions || '',
+      teacher_id: paper.teacher_id || '',
+      venue: paper.venue || '',
+    });
+    setShowScheduleModal(true);
   };
 
   const handleCreateExamPaper = async (e: React.FormEvent) => {
@@ -167,8 +259,26 @@ export default function ExamsPage() {
       return;
     }
 
+    // Check for datetime conflicts
+    if (paperFormData.exam_date && paperFormData.exam_time) {
+      const conflict = checkDateTimeConflict(
+        paperFormData.section,
+        paperFormData.exam_date,
+        paperFormData.exam_time,
+        paperFormData.duration_minutes || 180,
+        editingPaper?.id
+      );
+
+      if (conflict) {
+        toast.error(
+          `Schedule conflict! ${conflict.subject} exam is already scheduled for ${paperFormData.section} on ${new Date(conflict.date).toLocaleDateString()} at ${conflict.time} (${conflict.duration} minutes).`
+        );
+        return;
+      }
+    }
+
     try {
-      const createData = {
+      const formDataToSubmit = {
         ...paperFormData,
         exam_group_id: selectedExamGroup,
         // Ensure we send proper values for optional fields
@@ -176,12 +286,21 @@ export default function ExamsPage() {
         venue: paperFormData.venue || undefined,
       };
 
-      console.log('Creating exam paper with data:', createData);
+      if (editingPaper) {
+        // Update existing paper
+        await updateExamPaperMutation.mutateAsync({
+          id: editingPaper.id,
+          ...formDataToSubmit
+        });
+        toast.success('Exam paper updated successfully!');
+      } else {
+        // Create new paper
+        await createExamPaperMutation.mutateAsync(formDataToSubmit);
+        toast.success('Exam paper created successfully!');
+      }
       
-      await createExamPaperMutation.mutateAsync(createData);
-      
-      toast.success('Exam paper created successfully!');
       setShowScheduleModal(false);
+      setEditingPaper(null);
       setPaperFormData({
         exam_group_id: '',
         section: '',
@@ -196,10 +315,10 @@ export default function ExamsPage() {
         venue: '',
       });
     } catch (error) {
-      console.error('Error creating exam paper:', error);
+      console.error('Error saving exam paper:', error);
       
       // Better error handling
-      let errorMessage = 'Failed to create exam paper. Please try again.';
+      let errorMessage = `Failed to ${editingPaper ? 'update' : 'create'} exam paper. Please try again.`;
       
       if (error && typeof error === 'object') {
         if ('message' in error && error.message) {
@@ -210,20 +329,6 @@ export default function ExamsPage() {
       }
       
       toast.error(errorMessage);
-    }
-  };
-
-  const handleDeleteExamPaper = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this exam paper? This will delete all associated marks.')) {
-      return;
-    }
-    
-    try {
-      await deleteExamPaperMutation.mutateAsync(id);
-      toast.success('Exam paper deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting exam paper:', error);
-      toast.error('Failed to delete exam paper. Please try again.');
     }
   };
 
@@ -640,6 +745,7 @@ export default function ExamsPage() {
           }}
           onDeletePaper={handleDeleteExamPaper}
           onDeleteGroup={handleDeleteExamGroup}
+          onEditPaper={handleEditPaper}
         />
       ) : (
         <>
@@ -797,11 +903,64 @@ export default function ExamsPage() {
         </>
       )}
 
+      {/* Delete Confirmation Modal */}
+      <Dialog open={showDeleteConfirmModal} onOpenChange={setShowDeleteConfirmModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-600">
+              Are you sure you want to delete this exam {deleteTarget?.type}? 
+              {deleteTarget?.type === 'group' && ' This will delete all associated papers and marks.'}
+              {deleteTarget?.type === 'paper' && ' This will delete all associated marks.'}
+            </p>
+            <p className="text-sm text-gray-500 mt-2">This action cannot be undone.</p>
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowDeleteConfirmModal(false);
+                setDeleteTarget(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleteExamGroupMutation.isPending || deleteExamPaperMutation.isPending}
+            >
+              {(deleteExamGroupMutation.isPending || deleteExamPaperMutation.isPending) ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Schedule Paper Modal */}
-      <Dialog open={showScheduleModal} onOpenChange={setShowScheduleModal}>
+      <Dialog open={showScheduleModal} onOpenChange={(open) => {
+        setShowScheduleModal(open);
+        if (!open) {
+          setEditingPaper(null);
+          setPaperFormData({
+            exam_group_id: '',
+            section: '',
+            subject: '',
+            exam_date: '',
+            exam_time: '',
+            duration_minutes: 180,
+            max_marks: 100,
+            pass_marks: 40,
+            instructions: '',
+            teacher_id: '',
+            venue: '',
+          });
+        }
+      }}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Schedule Exam Paper</DialogTitle>
+            <DialogTitle>{editingPaper ? 'Edit Exam Paper' : 'Schedule Exam Paper'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreateExamPaper} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -826,13 +985,21 @@ export default function ExamsPage() {
               
               <div>
                 <Label htmlFor="subject">Subject *</Label>
-                <Input
-                  id="subject"
-                  value={paperFormData.subject}
-                  onChange={(e) => setPaperFormData({ ...paperFormData, subject: e.target.value })}
-                  placeholder="e.g., Mathematics"
-                  required
-                />
+                <Select 
+                  value={paperFormData.subject} 
+                  onValueChange={(value) => setPaperFormData({ ...paperFormData, subject: value, teacher_id: '' })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select subject" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableSubjects.map(subject => (
+                      <SelectItem key={subject} value={subject}>
+                        {subject}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             
@@ -844,7 +1011,14 @@ export default function ExamsPage() {
                   type="date"
                   value={paperFormData.exam_date}
                   onChange={(e) => setPaperFormData({ ...paperFormData, exam_date: e.target.value })}
+                  min={selectedExamGroupData?.start_date}
+                  max={selectedExamGroupData?.end_date}
                 />
+                {selectedExamGroupData && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Valid range: {new Date(selectedExamGroupData.start_date).toLocaleDateString()} - {new Date(selectedExamGroupData.end_date).toLocaleDateString()}
+                  </p>
+                )}
               </div>
               <div>
                 <Label htmlFor="examTime">Exam Time</Label>
@@ -868,22 +1042,28 @@ export default function ExamsPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="teacher">Assign Teacher (Invigilator)</Label>
+                <Label htmlFor="teacher">Assign Teacher</Label>
                 <Select 
                   value={paperFormData.teacher_id} 
                   onValueChange={(value) => setPaperFormData({ ...paperFormData, teacher_id: value })}
+                  disabled={!paperFormData.subject}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select teacher" />
+                    <SelectValue placeholder={paperFormData.subject ? "Select teacher" : "Select subject first"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {teachers.map(teacher => (
+                    {availableTeachers.map(teacher => (
                       <SelectItem key={teacher.id} value={teacher.id}>
                         {teacher.first_name} {teacher.last_name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {paperFormData.subject && availableTeachers.length === 0 && (
+                  <p className="text-sm text-orange-600 mt-1">
+                    No teachers found who can teach {paperFormData.subject}
+                  </p>
+                )}
               </div>
             </div>
             
@@ -944,9 +1124,12 @@ export default function ExamsPage() {
               <Button 
                 type="submit" 
                 className="bg-gradient-to-r from-green-600 to-emerald-600"
-                disabled={createExamPaperMutation.isPending}
+                disabled={createExamPaperMutation.isPending || updateExamPaperMutation.isPending}
               >
-                {createExamPaperMutation.isPending ? 'Creating...' : 'Schedule Paper'}
+                {(createExamPaperMutation.isPending || updateExamPaperMutation.isPending) 
+                  ? (editingPaper ? 'Updating...' : 'Creating...') 
+                  : (editingPaper ? 'Update Paper' : 'Schedule Paper')
+                }
               </Button>
             </div>
           </form>
@@ -965,6 +1148,7 @@ interface ExamGroupDetailsProps {
   onBack: () => void;
   onDeletePaper: (id: string) => void;
   onDeleteGroup: (id: string) => void;
+  onEditPaper: (paper: ExamPaper) => void;
 }
 
 function ExamGroupDetails({ 
@@ -974,7 +1158,8 @@ function ExamGroupDetails({
   sections, 
   onBack, 
   onDeletePaper, 
-  onDeleteGroup 
+  onDeleteGroup,
+  onEditPaper
 }: ExamGroupDetailsProps) {
   const examGroup = examGroups.find(eg => eg.id === examGroupId);
   
@@ -1067,6 +1252,7 @@ function ExamGroupDetails({
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => onEditPaper(paper)}
                           className="text-gray-600 hover:text-gray-700"
                         >
                           <Edit className="w-4 h-4 mr-1" />

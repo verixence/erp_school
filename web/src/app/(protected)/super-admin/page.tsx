@@ -201,7 +201,7 @@ export default function SuperAdminDashboard() {
                   await supabase.auth.signOut();
                   window.location.href = '/login';
                 }}
-                className="text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive btn-visible"
               >
                 <LogOut className="w-4 h-4 mr-2" />
                 Sign Out
@@ -421,7 +421,7 @@ export default function SuperAdminDashboard() {
                     </CardDescription>
                   </div>
                   <Link href="/super-admin/schools">
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" className="btn-outline-visible">
                       View All
                       <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
@@ -483,7 +483,7 @@ export default function SuperAdminDashboard() {
                     </CardDescription>
                   </div>
                   <Link href="/super-admin/schools">
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" className="btn-outline-visible">
                       View All
                       <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
@@ -614,18 +614,18 @@ export default function SuperAdminDashboard() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Link href="/super-admin/schools">
-                  <Button variant="outline" className="w-full h-20 flex flex-col gap-2">
+                  <Button variant="outline" className="w-full h-20 flex flex-col gap-2 btn-outline-visible">
                     <School2 className="w-6 h-6" />
                     <span>Manage Schools</span>
                   </Button>
                 </Link>
                 <Link href="/super-admin/audit-logs">
-                  <Button variant="outline" className="w-full h-20 flex flex-col gap-2">
+                  <Button variant="outline" className="w-full h-20 flex flex-col gap-2 btn-outline-visible">
                     <Database className="w-6 h-6" />
                     <span>Audit Logs</span>
                   </Button>
                 </Link>
-                <Button variant="outline" className="w-full h-20 flex flex-col gap-2" disabled>
+                <Button variant="outline" className="w-full h-20 flex flex-col gap-2 btn-outline-visible" disabled>
                   <Settings className="w-6 h-6" />
                   <span>System Settings</span>
                 </Button>

@@ -251,7 +251,7 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
                 Get the CSV template with required columns
               </p>
             </div>
-            <Button variant="outline" onClick={downloadTemplate}>
+            <Button variant="outline" onClick={downloadTemplate} className="btn-outline-visible">
               <Download className="h-4 w-4 mr-2" />
               Template
             </Button>
@@ -303,12 +303,13 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
+          <Button variant="outline" onClick={handleClose} className="btn-outline-visible">
             Cancel
           </Button>
           <Button 
             onClick={handleUpload}
             disabled={!csvData.length || errors.length > 0 || isProcessing}
+            className="btn-primary-visible"
           >
             <Upload className="h-4 w-4 mr-2" />
             {isProcessing ? 'Importing...' : `Import ${csvData.length} ${entity}`}

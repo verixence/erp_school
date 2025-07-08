@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase-client';
 
 // Parent API hooks using the web app's React Query instance
@@ -180,23 +180,37 @@ export const useChildHomework = (studentId?: string) => {
 
       const { data, error } = await supabase
         .from('homeworks')
-        .select('*')
+        .select(`
+          *,
+          homework_submissions(
+            id,
+            submitted_at,
+            status,
+            file_url,
+            notes,
+            submission_type,
+            student_id
+          )
+        `)
         .eq('section', homeworkSection)
         .eq('school_id', student.sections.school_id)
         .order('due_date', { ascending: true });
 
       if (error) throw error;
-      // Return homework without submissions since homework_submissions table doesn't exist
+      
+      // Filter submissions for this specific student
       return data.map(hw => ({
         ...hw,
-        homework_submissions: [] // Empty array since table doesn't exist
+        homework_submissions: (hw.homework_submissions || []).filter(
+          (sub: any) => sub && sub.student_id === studentId
+        )
       })) as any[];
     },
     enabled: !!studentId,
   });
 };
 
-// Get exam groups for child's school (all groups, not just published)
+// Get exam groups for child's school (only published ones for parents)
 export const useChildExamGroups = (studentId?: string) => {
   return useQuery({
     queryKey: ['child-exam-groups', studentId],
@@ -217,11 +231,12 @@ export const useChildExamGroups = (studentId?: string) => {
 
       if (studentError) throw studentError;
 
-      // Get all exam groups for the school (including unpublished ones)
+      // Get only published exam groups for the school (parents should only see published ones)
       const { data, error } = await supabase
         .from('exam_groups')
         .select('*')
         .eq('school_id', student.sections.school_id)
+        .eq('is_published', true)
         .order('start_date', { ascending: false });
 
       if (error) throw error;
@@ -257,12 +272,12 @@ export const useChildExams = (studentId?: string) => {
       // Construct section format to match exam papers (e.g., "Grade 1 A")
       const examSection = `Grade ${student.sections.grade} ${student.sections.section}`;
 
-      // Get all exam papers for the section (including unpublished ones)
+      // Get all exam papers for the section with exam group info
       const { data, error } = await supabase
         .from('exam_papers')
         .select(`
           *,
-          exam_groups!inner(
+          exam_groups(
             id,
             name,
             exam_type,
@@ -275,8 +290,17 @@ export const useChildExams = (studentId?: string) => {
         .eq('school_id', student.sections.school_id)
         .order('exam_date', { ascending: true });
 
-      if (error) throw error;
-      return data || [];
+      if (error) {
+        console.error('Error fetching exams:', error);
+        throw error;
+      }
+      
+      // Filter for published exams only (parents should only see published ones)
+      const publishedExams = data?.filter(exam => 
+        exam.exam_groups && exam.exam_groups.is_published === true
+      ) || [];
+      
+      return publishedExams;
     },
     enabled: !!studentId,
   });
@@ -323,5 +347,145 @@ export const useChildTimetable = (studentId?: string) => {
       })) as any[];
     },
     enabled: !!studentId,
+  });
+};
+
+// Submit homework on behalf of child
+export const useSubmitHomeworkForChild = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      homeworkId, 
+      studentId, 
+      fileUrl, 
+      notes, 
+      submissionType = 'online' 
+    }: {
+      homeworkId: string;
+      studentId: string;
+      fileUrl?: string;
+      notes?: string;
+      submissionType?: 'online' | 'offline';
+    }) => {
+      // Get student's school_id first
+      const { data: student, error: studentError } = await supabase
+        .from('students')
+        .select('sections!inner(school_id)')
+        .eq('id', studentId)
+        .single();
+
+      if (studentError) throw studentError;
+      if (!student?.sections) throw new Error('Student section not found');
+
+      const schoolId = (student.sections as any).school_id;
+      if (!schoolId) throw new Error('School ID not found');
+
+      // Create submission record
+      const { data, error } = await supabase
+        .from('homework_submissions')
+        .upsert({
+          homework_id: homeworkId,
+          student_id: studentId,
+          school_id: schoolId,
+          file_url: submissionType === 'online' ? fileUrl : null,
+          notes: notes || (submissionType === 'offline' ? 'Submitted offline by parent' : ''),
+          status: 'submitted',
+          submission_type: submissionType,
+          submitted_at: new Date().toISOString(),
+        }, {
+          onConflict: 'homework_id, student_id'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['child-homework'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-dashboard-stats'] });
+    },
+  });
+};
+
+// Media upload for homework submissions
+export const useUploadHomeworkFile = () => {
+  return useMutation({
+    mutationFn: async ({ file, schoolId }: { file: File; schoolId: string }) => {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `homework-submissions/${schoolId}/${fileName}`;
+
+      const { data, error } = await supabase.storage
+        .from('media')
+        .upload(filePath, file);
+
+      if (error) throw error;
+
+      const { data: publicData } = supabase.storage
+        .from('media')
+        .getPublicUrl(filePath);
+
+      return {
+        url: publicData.publicUrl,
+        name: file.name,
+        size: file.size
+      };
+    },
+  });
+};
+
+// Get announcements for parent (school-wide and parent-specific)
+export const useParentAnnouncements = (parentId?: string) => {
+  return useQuery({
+    queryKey: ['parent-announcements', parentId],
+    queryFn: async () => {
+      if (!parentId) return [];
+
+      // Get parent's school through children
+      const { data: studentParents, error: spError } = await supabase
+        .from('student_parents')
+        .select('student_id')
+        .eq('parent_id', parentId)
+        .limit(1);
+
+      if (spError) throw spError;
+      if (!studentParents || studentParents.length === 0) return [];
+
+      const { data: student, error: studentError } = await supabase
+        .from('students')
+        .select(`
+          sections!inner(
+            school_id
+          )
+        `)
+        .eq('id', studentParents[0].student_id)
+        .single();
+
+      if (studentError) throw studentError;
+      if (!student?.sections) throw new Error('Student section not found');
+
+      // Extract school_id from the joined data
+      const schoolId = (student.sections as any)[0]?.school_id || (student.sections as any).school_id;
+      if (!schoolId) throw new Error('School ID not found');
+
+      // Get announcements that are:
+      // 1. Published
+      // 2. For this school
+      // 3. Target audience is 'all', 'parents', or null
+      const { data, error } = await supabase
+        .from('announcements')
+        .select('*')
+        .eq('school_id', schoolId)
+        .eq('is_published', true)
+        .in('target_audience', ['all', 'parents'])
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!parentId,
   });
 }; 

@@ -296,7 +296,11 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
           </p>
         </div>
         {onAdd && (
-          <Button onClick={onAdd} className="gap-2">
+          <Button 
+            onClick={onAdd} 
+            variant="default"
+            className="gap-2 btn-primary-visible hover:bg-primary/90 transition-all duration-200 font-medium"
+          >
             <Plus className="h-4 w-4" />
             {addButtonText}
           </Button>
@@ -470,9 +474,9 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>
-              Cancel
-            </Button>
+                            <Button variant="outline" onClick={() => setIsDeleteOpen(false)} className="btn-outline-visible">
+                  Cancel
+                </Button>
             <Button
               variant="destructive"
               onClick={handleConfirmDelete}

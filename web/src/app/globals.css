@@ -114,6 +114,68 @@
   .text-balance {
     text-wrap: balance;
   }
+  
+  /* Ensure button text is always visible */
+  .btn-visible {
+    color: hsl(var(--foreground)) !important;
+    opacity: 1 !important;
+  }
+  
+  .btn-primary-visible {
+    background-color: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+    opacity: 1 !important;
+  }
+  
+  .btn-outline-visible {
+    background-color: hsl(var(--background)) !important;
+    color: hsl(var(--foreground)) !important;
+    border-color: hsl(var(--border)) !important;
+    opacity: 1 !important;
+  }
+}
+
+/* Global button visibility fix - ensure all buttons have visible text */
+@layer components {
+  .btn,
+  button,
+  [role="button"] {
+    color: inherit !important;
+    opacity: 1 !important;
+  }
+  
+  /* Specific button variants */
+  button[data-variant="default"],
+  .btn[data-variant="default"],
+  button:not([class*="variant"]):not([class*="ghost"]):not([class*="outline"]) {
+    background-color: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+  }
+  
+  button[data-variant="outline"],
+  .btn[data-variant="outline"],
+  button.outline,
+  .btn.outline {
+    background-color: hsl(var(--background)) !important;
+    color: hsl(var(--foreground)) !important;
+    border-color: hsl(var(--border)) !important;
+  }
+  
+  button[data-variant="ghost"],
+  .btn[data-variant="ghost"],
+  button.ghost,
+  .btn.ghost {
+    background-color: transparent !important;
+    color: hsl(var(--foreground)) !important;
+  }
+  
+  button[data-variant="destructive"],
+  .btn[data-variant="destructive"],
+  button.destructive,
+  .btn.destructive {
+    background-color: hsl(var(--destructive)) !important;
+    color: hsl(var(--destructive-foreground)) !important;
+  }
 }
 
 /* Custom scrollbar */

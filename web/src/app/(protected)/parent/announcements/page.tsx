@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/hooks/use-auth';
+import { useParentAnnouncements } from '@/hooks/use-parent';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,55 +28,8 @@ export default function ParentAnnouncements() {
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   
-  // Mock loading state and data until API is implemented
-  const isLoading = false;
-  const announcements: Announcement[] = [
-    {
-      id: '1',
-      title: 'Parent-Teacher Meeting Schedule',
-      content: 'We are pleased to announce the upcoming Parent-Teacher Meeting scheduled for next week. This is an excellent opportunity to discuss your child\'s academic progress, address any concerns, and collaborate on their educational journey. Please confirm your attendance by responding to this announcement.',
-      priority: 'high',
-      target_audience: 'parents',
-      published_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '2',
-      title: 'School Fee Payment Reminder',
-      content: 'This is a friendly reminder that the quarterly school fees are due by the end of this month. Please ensure timely payment to avoid any late fees. You can pay online through our parent portal or visit the school office during working hours.',
-      priority: 'normal',
-      target_audience: 'parents',
-      published_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '3',
-      title: 'School Health and Safety Guidelines',
-      content: 'In light of recent health concerns, we are implementing updated health and safety guidelines. Please ensure your child follows these protocols and inform the school immediately if your child shows any symptoms of illness.',
-      priority: 'urgent',
-      target_audience: 'all',
-      published_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '4',
-      title: 'Field Trip Permission Forms',
-      content: 'Permission forms for the upcoming educational field trip are now available. Please download, fill out, and return the signed forms by the specified deadline. This trip is part of our environmental science curriculum.',
-      priority: 'normal',
-      target_audience: 'parents',
-      published_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: '5',
-      title: 'Parent Workshop: Digital Learning Tools',
-      content: 'Join us for an informative workshop on digital learning tools and how to support your child\'s online education. Learn about the platforms we use, homework submission systems, and tips for creating an effective study environment at home.',
-      priority: 'low',
-      target_audience: 'parents',
-      published_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-      created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-  ];
+  // Fetch real announcements from API
+  const { data: announcements = [], isLoading } = useParentAnnouncements(user?.id);
 
   const getPriorityIcon = (priority: string) => {
     switch (priority) {
@@ -285,11 +239,11 @@ export default function ParentAnnouncements() {
                         <div className="flex items-center gap-4 text-sm text-gray-600">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-4 h-4" />
-                            <span>{format(new Date(announcement.published_at), 'MMM d, yyyy')}</span>
+                            <span>{format(new Date(announcement.published_at || announcement.created_at), 'MMM d, yyyy')}</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
-                            <span>{formatDistanceToNow(new Date(announcement.published_at), { addSuffix: true })}</span>
+                            <span>{formatDistanceToNow(new Date(announcement.published_at || announcement.created_at), { addSuffix: true })}</span>
                           </div>
                         </div>
                         
@@ -344,7 +298,7 @@ export default function ParentAnnouncements() {
                     {getAudienceBadge(selectedAnnouncement.target_audience)}
                   </div>
                   <div className="text-sm text-gray-600">
-                    Published {format(new Date(selectedAnnouncement.published_at), 'EEEE, MMMM d, yyyy \'at\' h:mm a')}
+                    Published {format(new Date(selectedAnnouncement.published_at || selectedAnnouncement.created_at), 'EEEE, MMMM d, yyyy \'at\' h:mm a')}
                   </div>
                 </div>
                 
@@ -359,7 +313,7 @@ export default function ParentAnnouncements() {
                 <div className="text-sm text-gray-500 border-t pt-4">
                   <div className="flex items-center gap-1">
                     <Clock className="w-4 h-4" />
-                    <span>Posted {formatDistanceToNow(new Date(selectedAnnouncement.published_at), { addSuffix: true })}</span>
+                    <span>Posted {formatDistanceToNow(new Date(selectedAnnouncement.published_at || selectedAnnouncement.created_at), { addSuffix: true })}</span>
                   </div>
                 </div>
               </div>

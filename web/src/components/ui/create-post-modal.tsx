@@ -321,13 +321,14 @@ export function CreatePostModal({ isOpen, onClose }: CreatePostModalProps) {
               variant="outline"
               onClick={onClose}
               disabled={isUploading || createPost.isPending}
+              className="btn-outline-visible"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={!formData.title.trim() || isUploading || createPost.isPending}
-              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 btn-primary-visible"
             >
               {isUploading ? (
                 <>

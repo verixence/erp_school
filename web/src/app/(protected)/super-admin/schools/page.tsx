@@ -254,8 +254,9 @@ export default function SchoolsManagementPage() {
     {
       key: 'actions',
       label: 'Actions',
+      sortable: false,
       render: (_, row) => (
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-1">
           <Button
             variant="ghost"
             size="sm"
@@ -263,7 +264,8 @@ export default function SchoolsManagementPage() {
               e.stopPropagation();
               router.push(`/super-admin/${row.id}`);
             }}
-            className="h-8 w-8 p-0"
+            className="h-8 w-8 p-0 btn-visible hover:text-foreground hover:bg-accent transition-all duration-200 rounded-md"
+            title="Edit school"
           >
             <Edit3 className="h-4 w-4" />
           </Button>
@@ -274,7 +276,8 @@ export default function SchoolsManagementPage() {
               e.stopPropagation();
               handleDeleteSchool(row);
             }}
-            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+            className="h-8 w-8 p-0 btn-visible hover:text-destructive hover:bg-destructive/10 transition-all duration-200 rounded-md"
+            title="Delete school"
           >
             <Trash2 className="h-4 w-4" />
           </Button>

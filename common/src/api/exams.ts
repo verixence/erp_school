@@ -218,6 +218,78 @@ export const useExamPapers = (examGroupId?: string) => {
   });
 };
 
+// New hook to fetch single exam paper by ID
+export const useExamPaper = (examPaperId?: string) => {
+  return useQuery({
+    queryKey: ['exam-paper', examPaperId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('exam_papers')
+        .select(`
+          *,
+          teacher:teachers(
+            id,
+            first_name,
+            last_name
+          ),
+          exam_group:exam_groups(
+            id,
+            name,
+            exam_type
+          )
+        `)
+        .eq('id', examPaperId!)
+        .single();
+      
+      if (error) throw error;
+      return data as ExamPaper & {
+        exam_group: {
+          id: string;
+          name: string;
+          exam_type: string;
+        };
+      };
+    },
+    enabled: !!examPaperId,
+  });
+};
+
+// Hook to fetch all exam papers for a school (for school admin)
+export const useSchoolExamPapers = (schoolId?: string) => {
+  return useQuery({
+    queryKey: ['school-exam-papers', schoolId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('exam_papers')
+        .select(`
+          *,
+          teacher:teachers(
+            id,
+            first_name,
+            last_name
+          ),
+          exam_group:exam_groups(
+            id,
+            name,
+            exam_type
+          )
+        `)
+        .eq('school_id', schoolId!)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data as (ExamPaper & {
+        exam_group: {
+          id: string;
+          name: string;
+          exam_type: string;
+        };
+      })[];
+    },
+    enabled: !!schoolId,
+  });
+};
+
 export const useCreateExamPaper = () => {
   const queryClient = useQueryClient();
   
@@ -301,7 +373,7 @@ export const useMarks = (examPaperId?: string) => {
         .from('marks')
         .select(`
           *,
-          student:students(id, full_name, admission_no)
+          student:students(id, full_name, admission_no, section, grade)
         `)
         .eq('exam_paper_id', examPaperId!)
         .order('student(full_name)', { ascending: true });
@@ -310,6 +382,134 @@ export const useMarks = (examPaperId?: string) => {
       return data as Mark[];
     },
     enabled: !!examPaperId,
+  });
+};
+
+// Hook for school admin to view all marks for a school
+export const useSchoolMarks = (schoolId?: string, examGroupId?: string) => {
+  return useQuery({
+    queryKey: ['school-marks', schoolId, examGroupId],
+    queryFn: async () => {
+      let query = supabase
+        .from('marks')
+        .select(`
+          *,
+          student:students(id, full_name, admission_no, section, grade),
+          exam_paper:exam_papers(
+            id,
+            subject,
+            section,
+            max_marks,
+            pass_marks,
+            exam_date,
+            exam_time,
+            exam_group:exam_groups(
+              id,
+              name,
+              exam_type
+            )
+          )
+        `)
+        .eq('school_id', schoolId!)
+        .order('exam_paper(exam_date)', { ascending: false });
+      
+      if (examGroupId) {
+        query = query.eq('exam_paper.exam_group_id', examGroupId);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as (Mark & {
+        exam_paper: ExamPaper & {
+          exam_group: {
+            id: string;
+            name: string;
+            exam_type: string;
+          };
+        };
+      })[];
+    },
+    enabled: !!schoolId,
+  });
+};
+
+// Hook to get marks summary for school admin dashboard
+export const useMarksSummary = (schoolId?: string) => {
+  return useQuery({
+    queryKey: ['marks-summary', schoolId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .rpc('get_marks_summary', { school_id: schoolId });
+      
+      if (error) throw error;
+      return data as {
+        total_marks_entered: number;
+        total_exams_conducted: number;
+        average_performance: number;
+        pending_mark_entries: number;
+        total_students_examined: number;
+      };
+    },
+    enabled: !!schoolId,
+  });
+};
+
+// Hook to automatically create marks entries for students when exam is completed
+export const useCreateMarksForExam = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (examPaperId: string) => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) throw new Error('Not authenticated');
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('school_id')
+        .eq('id', user.user.id)
+        .single();
+      
+      if (!userData?.school_id) throw new Error('No school associated');
+
+      // Get the exam paper details
+      const { data: examPaper, error: examPaperError } = await supabase
+        .from('exam_papers')
+        .select('*')
+        .eq('id', examPaperId)
+        .single();
+
+      if (examPaperError) throw examPaperError;
+
+      // Get all students in the section
+      const { data: students, error: studentsError } = await supabase
+        .from('students')
+        .select('id')
+        .eq('school_id', userData.school_id)
+        .eq('section', examPaper.section);
+
+      if (studentsError) throw studentsError;
+
+      // Create marks entries for all students
+      const marks = students.map(student => ({
+        exam_paper_id: examPaperId,
+        student_id: student.id,
+        school_id: userData.school_id,
+        entered_by: user.user.id,
+        is_absent: false,
+        marks_obtained: null,
+      }));
+
+      const { data, error } = await supabase
+        .from('marks')
+        .upsert(marks, { onConflict: 'exam_paper_id,student_id' })
+        .select();
+      
+      if (error) throw error;
+      return data as Mark[];
+    },
+    onSuccess: (_, examPaperId) => {
+      queryClient.invalidateQueries({ queryKey: ['marks', examPaperId] });
+    },
   });
 };
 
@@ -387,20 +587,26 @@ export const useBulkUpdateMarks = () => {
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) throw new Error('Not authenticated');
 
-      const updates = marks.map(mark => ({
-        id: mark.id,
-        marks_obtained: mark.marks_obtained,
-        is_absent: mark.is_absent,
-        remarks: mark.remarks,
-        entered_by: user.user.id,
-      }));
+      // Update each mark individually to ensure proper RLS policy evaluation
+      const updatePromises = marks.map(async (mark) => {
+        const { data, error } = await supabase
+          .from('marks')
+          .update({
+            marks_obtained: mark.marks_obtained,
+            is_absent: mark.is_absent,
+            remarks: mark.remarks,
+            entered_by: user.user.id,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', mark.id)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        return data;
+      });
 
-      const { data, error } = await supabase
-        .from('marks')
-        .upsert(updates)
-        .select();
-      
-      if (error) throw error;
+      const data = await Promise.all(updatePromises);
       return data as Mark[];
     },
     onSuccess: () => {
@@ -433,7 +639,7 @@ export interface ReportCard {
   student_id: string;
   exam_group_id: string;
   school_id: string;
-  template_id: string;
+  template_id?: string | null;
   total_marks: number;
   obtained_marks: number;
   percentage: number;
@@ -441,6 +647,8 @@ export interface ReportCard {
   rank: number;
   status: 'draft' | 'published' | 'distributed';
   generated_at: string;
+  created_at: string;
+  updated_at: string;
   student?: {
     id: string;
     full_name: string;
@@ -501,6 +709,14 @@ export const useGenerateReportCards = () => {
       
       if (!userData?.school_id) throw new Error('No school associated');
 
+      // Get the default template for the school
+      const { data: defaultTemplate } = await supabase
+        .from('report_templates')
+        .select('id')
+        .eq('school_id', userData.school_id)
+        .eq('is_default', true)
+        .single();
+
       // Get students for the sections
       let studentsQuery = supabase
         .from('students')
@@ -519,7 +735,7 @@ export const useGenerateReportCards = () => {
         student_id: student.id,
         exam_group_id: examGroupId,
         school_id: userData.school_id,
-        template_id: 'default', // Use default template for now
+        template_id: defaultTemplate?.id || null, // Use actual default template ID or null
         status: 'draft' as const,
       }));
 
@@ -529,6 +745,29 @@ export const useGenerateReportCards = () => {
         .select();
       
       if (error) throw error;
+
+      // Calculate data for each report card
+      if (data && data.length > 0) {
+        for (const reportCard of data) {
+          await supabase.rpc('calculate_report_card_data', {
+            p_report_card_id: reportCard.id
+          });
+        }
+
+        // Fetch the updated report cards with calculated data
+        const { data: updatedReportCards, error: fetchError } = await supabase
+          .from('report_cards')
+          .select(`
+            *,
+            student:students(id, full_name, admission_no, section),
+            exam_group:exam_groups(id, name, exam_type)
+          `)
+          .in('id', data.map(rc => rc.id));
+        
+        if (fetchError) throw fetchError;
+        return updatedReportCards as ReportCard[];
+      }
+      
       return data as ReportCard[];
     },
     onSuccess: (_, variables) => {
@@ -659,4 +898,6 @@ export const useSchoolSections = (schoolId?: string) => {
     },
     enabled: !!schoolId,
   });
-}; 
+};
+
+ 

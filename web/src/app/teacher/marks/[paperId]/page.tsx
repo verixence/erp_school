@@ -29,11 +29,12 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
 import { 
-  useExamPapers,
+  useExamPaper,
   useMarks,
   useUpdateMark,
   useBulkCreateMarks,
   useBulkUpdateMarks,
+  useCreateMarksForExam,
   type Mark,
   type UpdateMarkData
 } from '@erp/common';
@@ -49,14 +50,13 @@ export default function MarksEntryPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   // API hooks
-  const { data: examPapers = [] } = useExamPapers();
+  const { data: examPaper, isLoading: examPaperLoading } = useExamPaper(paperId);
   const { data: marks = [], isLoading: marksLoading } = useMarks(paperId);
   
   const updateMarkMutation = useUpdateMark();
   const bulkCreateMarksMutation = useBulkCreateMarks();
   const bulkUpdateMarksMutation = useBulkUpdateMarks();
-
-  const examPaper = examPapers.find(paper => paper.id === paperId);
+  const createMarksForExamMutation = useCreateMarksForExam();
 
   // Initialize marks data when marks are loaded
   useState(() => {
@@ -120,11 +120,15 @@ export default function MarksEntryPage() {
   };
 
   const handleCreateMarksEntries = async () => {
-    if (!examPaper) return;
+    if (!examPaper || !paperId) return;
     
-    // This would typically get students from the section
-    // For now, we'll assume marks entries already exist
-    toast.info('Marks entries already created for this exam');
+    try {
+      await createMarksForExamMutation.mutateAsync(paperId);
+      toast.success('Marks entries created successfully!');
+    } catch (error: any) {
+      console.error('Error creating marks entries:', error);
+      toast.error(error.message || 'Failed to create marks entries. Please try again.');
+    }
   };
 
   const validateAllMarks = () => {
@@ -169,6 +173,14 @@ export default function MarksEntryPage() {
     if (percentage >= 40) return 'D';
     return 'F';
   };
+
+  if (examPaperLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   if (!examPaper) {
     return (
@@ -215,6 +227,11 @@ export default function MarksEntryPage() {
             <p className="text-gray-600 mt-1">
               {examPaper.subject} - {examPaper.section}
             </p>
+            {examPaper.exam_group && (
+              <p className="text-sm text-gray-500">
+                {examPaper.exam_group.name} ({examPaper.exam_group.exam_type.replace('_', ' ')})
+              </p>
+            )}
           </div>
         </div>
         

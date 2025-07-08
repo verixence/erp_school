@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar, User, GraduationCap, Users, Upload, Plus, UserPlus, Key, MoreHorizontal } from 'lucide-react';
+import { Calendar, User, GraduationCap, Users, Upload, Plus, UserPlus, Key, MoreHorizontal, Building2, ArrowRight } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -175,8 +175,15 @@ export default function StudentsPage() {
     enabled: !!user?.school_id,
   });
 
+  // Check if sections exist
+  const hasSections = sectionsData.length > 0;
+
   // Handlers
   const handleAdd = () => {
+    if (!hasSections) {
+      toast.error('Please create sections/classes first before adding students.');
+      return;
+    }
     setEditingStudent(null);
     setIsDrawerOpen(true);
   };
@@ -228,6 +235,11 @@ export default function StudentsPage() {
   ];
 
   const handleBulkUpload = async (csvData: any[]) => {
+    if (!hasSections) {
+      toast.error('Please create sections/classes first before importing students.');
+      throw new Error('No sections available');
+    }
+
     try {
       // Use the database function for bulk creating students with smart parent handling
       const { data, error } = await supabase.rpc('bulk_create_students_with_parents', {
@@ -360,22 +372,67 @@ export default function StudentsPage() {
         </div>
         <div className="flex gap-2">
           <Button
-            onClick={() => setIsBulkUploadOpen(true)}
+            onClick={() => {
+              if (!hasSections) {
+                toast.error('Please create sections/classes first before importing students.');
+                return;
+              }
+              setIsBulkUploadOpen(true);
+            }}
             variant="outline"
+            disabled={!hasSections}
             className="flex items-center gap-2"
+            title={!hasSections ? "Create sections first" : ""}
           >
             <Upload className="w-4 h-4" />
             Bulk Upload
           </Button>
           <Button
             onClick={handleAdd}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700"
+            disabled={!hasSections}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400"
+            title={!hasSections ? "Create sections first" : ""}
           >
             <Plus className="w-4 h-4" />
             Add Student
           </Button>
         </div>
       </div>
+
+      {/* Setup guidance for new schools */}
+      {!hasSections && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <Building2 className="h-6 w-6 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-blue-900 mb-2">Setup Required: Create Sections First</h3>
+              <p className="text-blue-700 mb-4">
+                Before you can add students, you need to create classes/sections in your school. 
+                Students must be assigned to specific grade sections.
+              </p>
+              <div className="flex gap-3">
+                <Button 
+                  onClick={() => window.location.href = '/school-admin/sections'}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Building2 className="h-4 w-4 mr-2" />
+                  Create Sections
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => window.open('https://docs.example.com/setup-guide', '_blank')}
+                  className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                >
+                  View Setup Guide
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -425,18 +482,37 @@ export default function StudentsPage() {
         </Card>
       </div>
 
-      <EnhancedCrudTable
-        entity="students"
-        columns={columns}
-        title="Students"
-        searchPlaceholder="Search students..."
-        onAdd={handleAdd}
-        onEdit={handleEdit}
-        addButtonText="Add Student"
-        customData={studentsData}
-        isCustomDataLoading={false}
-        customActions={getCustomActions}
-      />
+      {hasSections ? (
+        <EnhancedCrudTable
+          entity="students"
+          columns={columns}
+          title="Students"
+          searchPlaceholder="Search students..."
+          onAdd={handleAdd}
+          onEdit={handleEdit}
+          addButtonText="Add Student"
+          customData={studentsData}
+          isCustomDataLoading={false}
+          customActions={getCustomActions}
+        />
+      ) : (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <GraduationCap className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-muted-foreground mb-2">No Students Yet</h3>
+            <p className="text-muted-foreground mb-4">
+              Create sections/classes first, then you can start adding students to your school.
+            </p>
+            <Button 
+              onClick={() => window.location.href = '/school-admin/sections'}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <Building2 className="h-4 w-4 mr-2" />
+              Create Sections First
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <StudentFormDrawer
         open={isDrawerOpen}

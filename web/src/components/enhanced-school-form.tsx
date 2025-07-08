@@ -759,7 +759,7 @@ export function EnhancedSchoolForm({ open, onOpenChange, editMode = false, initi
                   placeholder="Enter secure password"
                   className="flex-1"
                 />
-                <Button type="button" variant="outline" onClick={generatePassword}>
+                <Button type="button" variant="outline" onClick={generatePassword} className="btn-outline-visible">
                   Generate
                 </Button>
               </div>
@@ -894,7 +894,7 @@ export function EnhancedSchoolForm({ open, onOpenChange, editMode = false, initi
             variant="outline"
             onClick={handlePrevious}
             disabled={currentStepIndex === 0}
-            className="flex items-center space-x-2"
+            className="flex items-center space-x-2 btn-outline-visible"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Previous</span>
@@ -908,7 +908,7 @@ export function EnhancedSchoolForm({ open, onOpenChange, editMode = false, initi
             <Button
               onClick={handleSubmit}
               disabled={schoolMutation.isPending || uploadingLogo}
-              className="flex items-center space-x-2"
+              className="flex items-center space-x-2 btn-primary-visible"
             >
               {schoolMutation.isPending || uploadingLogo ? (
                 <>
@@ -923,14 +923,14 @@ export function EnhancedSchoolForm({ open, onOpenChange, editMode = false, initi
               )}
             </Button>
           ) : (
-            <Button
-              onClick={handleNext}
-              disabled={currentStepIndex === availableSteps.length - 1}
-              className="flex items-center space-x-2"
-            >
-              <span>Next</span>
-              <ArrowRight className="w-4 h-4" />
-            </Button>
+                      <Button
+            onClick={handleNext}
+            disabled={currentStepIndex === availableSteps.length - 1}
+            className="flex items-center space-x-2 btn-primary-visible"
+          >
+            <span>Next</span>
+            <ArrowRight className="w-4 h-4" />
+          </Button>
           )}
         </DialogFooter>
 

@@ -1,21 +1,36 @@
 'use client';
 
 import { useAuth } from '@/hooks/use-auth';
-import { useChildren, useChildHomework } from '@/hooks/use-parent';
+import { useChildren, useChildHomework, useSubmitHomeworkForChild, useUploadHomeworkFile } from '@/hooks/use-parent';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, Users, Calendar, FileText } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { BookOpen, Users, Calendar, FileText, Upload, CheckCircle, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 export default function ParentHomework() {
   const { user } = useAuth();
   const [selectedChild, setSelectedChild] = useState<string>('');
+  const [showSubmissionModal, setShowSubmissionModal] = useState(false);
+  const [selectedHomework, setSelectedHomework] = useState<any>(null);
+  const [submissionType, setSubmissionType] = useState<'online' | 'offline'>('online');
+  const [notes, setNotes] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
   const { data: children, isLoading: childrenLoading } = useChildren(user?.id);
   const { data: homework, isLoading: homeworkLoading } = useChildHomework(selectedChild);
+  
+  // Mutations
+  const submitHomeworkMutation = useSubmitHomeworkForChild();
+  const uploadFileMutation = useUploadHomeworkFile();
 
   // Set default selected child when children load
   if (children && children.length > 0 && !selectedChild) {
@@ -35,6 +50,71 @@ export default function ParentHomework() {
     const isSubmitted = hw.homework_submissions && hw.homework_submissions.length > 0;
     return isOverdue && !isSubmitted;
   }).length || 0;
+
+  // Handle homework submission
+  const handleSubmitHomework = async () => {
+    if (!selectedHomework || !selectedChild) return;
+
+    try {
+      let fileUrl = null;
+
+      // If it's an online submission with a file, upload it first
+      if (submissionType === 'online' && selectedFile) {
+        if (!user?.school_id) {
+          toast.error('School information not found');
+          return;
+        }
+
+        const uploadResult = await uploadFileMutation.mutateAsync({
+          file: selectedFile,
+          schoolId: user.school_id
+        });
+        fileUrl = uploadResult.url;
+      }
+
+      // Submit the homework
+      await submitHomeworkMutation.mutateAsync({
+        homeworkId: selectedHomework.id,
+        studentId: selectedChild,
+        fileUrl: fileUrl || undefined,
+        notes,
+        submissionType
+      });
+
+      toast.success(
+        submissionType === 'offline' 
+          ? 'Homework marked as submitted (offline)' 
+          : 'Homework submitted successfully'
+      );
+      
+      // Reset form and close modal
+      setShowSubmissionModal(false);
+      setSelectedHomework(null);
+      setNotes('');
+      setSelectedFile(null);
+      setSubmissionType('online');
+    } catch (error) {
+      console.error('Error submitting homework:', error);
+      toast.error('Failed to submit homework. Please try again.');
+    }
+  };
+
+  const openSubmissionModal = (homework: any) => {
+    setSelectedHomework(homework);
+    setShowSubmissionModal(true);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Check file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('File size must be less than 10MB');
+        return;
+      }
+      setSelectedFile(file);
+    }
+  };
 
   if (childrenLoading) {
     return (
@@ -234,6 +314,45 @@ export default function ParentHomework() {
                             </a>
                           </div>
                         )}
+
+                        {/* Submission Actions */}
+                        {!isSubmitted && !isOverdue && (
+                          <div className="mt-4 flex gap-2">
+                            <Button
+                              onClick={() => openSubmissionModal(assignment)}
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <Upload className="h-4 w-4 mr-1" />
+                              Submit
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                setSelectedHomework(assignment);
+                                setSubmissionType('offline');
+                                setShowSubmissionModal(true);
+                              }}
+                              variant="outline"
+                              size="sm"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Mark as Done
+                            </Button>
+                          </div>
+                        )}
+
+                        {isOverdue && !isSubmitted && (
+                          <div className="mt-4">
+                            <Button
+                              onClick={() => openSubmissionModal(assignment)}
+                              size="sm"
+                              variant="destructive"
+                            >
+                              <Upload className="h-4 w-4 mr-1" />
+                              Submit (Late)
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -264,6 +383,97 @@ export default function ParentHomework() {
           </CardContent>
         </Card>
       )}
+
+      {/* Submission Modal */}
+      <Dialog open={showSubmissionModal} onOpenChange={setShowSubmissionModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Submit Homework</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {selectedHomework && (
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <h4 className="font-medium">{selectedHomework.title}</h4>
+                <p className="text-sm text-gray-600">{selectedHomework.subject}</p>
+                <p className="text-sm text-gray-500">
+                  Due: {format(new Date(selectedHomework.due_date), 'MMMM do, yyyy')}
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Submission Type</Label>
+              <Select value={submissionType} onValueChange={(value: 'online' | 'offline') => setSubmissionType(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="online">Online Submission</SelectItem>
+                  <SelectItem value="offline">Mark as Done (Offline)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {submissionType === 'online' && (
+              <div className="space-y-2">
+                <Label htmlFor="file">Upload File (Optional)</Label>
+                <Input
+                  id="file"
+                  type="file"
+                  onChange={handleFileChange}
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt"
+                />
+                {selectedFile && (
+                  <p className="text-sm text-gray-600">
+                    Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes (Optional)</Label>
+              <Textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={
+                  submissionType === 'offline' 
+                    ? "Describe how the homework was completed offline..."
+                    : "Add any notes about this submission..."
+                }
+                rows={3}
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowSubmissionModal(false);
+                  setSelectedHomework(null);
+                  setNotes('');
+                  setSelectedFile(null);
+                  setSubmissionType('online');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmitHomework}
+                disabled={submitHomeworkMutation.isPending || uploadFileMutation.isPending}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {(submitHomeworkMutation.isPending || uploadFileMutation.isPending) && (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                )}
+                {submissionType === 'offline' ? 'Mark as Done' : 'Submit'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

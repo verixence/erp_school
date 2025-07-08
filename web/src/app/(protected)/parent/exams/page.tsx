@@ -191,13 +191,25 @@ export default function ParentExamsPage() {
       </Card>
 
       {/* Exam Schedule Details */}
-      {selectedExamGroup && relevantExamPapers.length > 0 && (
+      {relevantExamPapers.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Exam Schedule - {examGroups.find(eg => eg.id === selectedExamGroup)?.name}
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Exam Schedule {selectedExamGroup ? `- ${examGroups.find(eg => eg.id === selectedExamGroup)?.name}` : '(All Exams)'}
+              </CardTitle>
+              {selectedExamGroup && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedExamGroup('')}
+                  className="flex items-center gap-1"
+                >
+                  Clear Filter
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">

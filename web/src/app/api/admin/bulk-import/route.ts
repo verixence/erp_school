@@ -167,12 +167,19 @@ async function bulkImportStudents(data: any[], school_id: string) {
         continue;
       }
 
-      // Link parents if provided
+      // Create and link parents if provided
       if (row.parent_emails && student) {
         const parentEmails = row.parent_emails.split(';').map((email: string) => email.trim());
+        const parentNames = (row.parent_names || '').split(';').map((name: string) => name.trim());
+        const parentPhones = (row.parent_phones || '').split(';').map((phone: string) => phone.trim());
+        const parentRelations = (row.parent_relations || '').split(';').map((relation: string) => relation.trim());
         
-        for (const email of parentEmails) {
-          const { data: parent } = await supabase
+        for (let i = 0; i < parentEmails.length; i++) {
+          const email = parentEmails[i];
+          if (!email) continue;
+          
+          // Check if parent already exists
+          let { data: parent } = await supabase
             .from('users')
             .select('id')
             .eq('email', email)
@@ -180,6 +187,75 @@ async function bulkImportStudents(data: any[], school_id: string) {
             .eq('role', 'parent')
             .single();
 
+          // Create parent if doesn't exist
+          if (!parent) {
+            try {
+              const parentName = parentNames[i] || `Parent of ${row.full_name}`;
+              const [first_name, ...lastNameParts] = parentName.split(' ');
+              const last_name = lastNameParts.join(' ') || '';
+              
+              // Generate temporary password
+              const tempPassword = 'temp' + Math.random().toString(36).slice(-8) + '!';
+              
+              // Create auth user
+              const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+                email,
+                password: tempPassword,
+                email_confirm: true,
+                user_metadata: {
+                  role: 'parent',
+                  school_id,
+                  first_name,
+                  last_name,
+                }
+              });
+
+              if (authError) {
+                errors.push(`Parent ${parentName} (${email}): Auth creation failed - ${authError.message}`);
+                continue;
+              }
+
+              // Create user record
+              const userData = {
+                id: authUser.user.id,
+                email,
+                role: 'parent',
+                school_id,
+                first_name,
+                last_name,
+                phone: parentPhones[i] || null,
+                relation: (parentRelations[i] || 'parent').toLowerCase()
+              };
+
+              const { error: userError } = await supabase
+                .from('users')
+                .insert(userData);
+
+              if (userError) {
+                // Cleanup auth user if user record creation fails
+                await supabase.auth.admin.deleteUser(authUser.user.id);
+                errors.push(`Parent ${parentName} (${email}): Database user creation failed - ${userError.message}`);
+                continue;
+              }
+
+              parent = { id: authUser.user.id };
+              
+              // Log successful parent creation
+              successful.push({
+                type: 'parent',
+                email,
+                name: parentName,
+                temp_password: tempPassword,
+                message: `Created parent account for ${parentName} with login: ${email} | Temp password: ${tempPassword}`
+              });
+              
+            } catch (error: any) {
+              errors.push(`Parent creation for ${email}: ${error.message}`);
+              continue;
+            }
+          }
+
+          // Link parent to student
           if (parent) {
             await supabase
               .from('student_parents')
@@ -191,7 +267,11 @@ async function bulkImportStudents(data: any[], school_id: string) {
         }
       }
 
-      successful.push(studentData);
+      successful.push({
+        type: 'student',
+        ...studentData,
+        message: `Created student ${row.full_name} in ${row.grade}-${row.section}`
+      });
     } catch (error: any) {
       errors.push(`Student ${row.full_name}: ${error.message}`);
     }
