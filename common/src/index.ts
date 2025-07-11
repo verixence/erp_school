@@ -75,5 +75,28 @@ export * from './api';
 // Export brand utilities
 export * from './api/brand';
 
+// Report Templates
+export { 
+  useReportTemplates,
+  useReportTemplate, 
+  useCreateReportTemplate, 
+  useUpdateReportTemplate, 
+  useDeleteReportTemplate,
+  useDuplicateReportTemplate,
+  usePreviewReportTemplate,
+  useTemplateCategories,
+  getPublicTemplates,
+  cloneTemplateForSchool,
+  getTemplateDetails,
+  updateTemplateMetadata,
+  checkMigrations,
+  getTemplateUsageStats,
+  getSchoolTemplates,
+  type ReportTemplate,
+  type TemplateCategory,
+  type CreateReportTemplateData,
+  type UpdateReportTemplateData
+} from './api/report-templates';
+
 
  

@@ -92,6 +92,120 @@ export interface Database {
           updated_at?: string
         }
       }
+      report_templates: {
+        Row: {
+          id: string
+          school_id: string | null
+          name: string
+          board: string
+          class_range: string
+          grade_rules: Json
+          i18n_bundle: Json
+          template_html: string
+          template_css: string
+          meta: Json | null
+          is_default: boolean
+          created_at: string
+          updated_at: string
+          is_public: boolean
+          created_by: string | null
+          editable_by_school: boolean
+          origin_template_id: string | null
+          preview_image_url: string | null
+          usage_count: number
+          last_used_at: string | null
+        }
+        Insert: {
+          id?: string
+          school_id?: string | null
+          name: string
+          board: string
+          class_range: string
+          grade_rules: Json
+          i18n_bundle: Json
+          template_html: string
+          template_css: string
+          meta?: Json | null
+          is_default?: boolean
+          created_at?: string
+          updated_at?: string
+          is_public?: boolean
+          created_by?: string | null
+          editable_by_school?: boolean
+          origin_template_id?: string | null
+          preview_image_url?: string | null
+          usage_count?: number
+          last_used_at?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string | null
+          name?: string
+          board?: string
+          class_range?: string
+          grade_rules?: Json
+          i18n_bundle?: Json
+          template_html?: string
+          template_css?: string
+          meta?: Json | null
+          is_default?: boolean
+          created_at?: string
+          updated_at?: string
+          is_public?: boolean
+          created_by?: string | null
+          editable_by_school?: boolean
+          origin_template_id?: string | null
+          preview_image_url?: string | null
+          usage_count?: number
+          last_used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "report_templates_origin_template_id_fkey"
+            columns: ["origin_template_id"]
+            isOneToOne: false
+            referencedRelation: "report_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "report_templates_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      template_categories: {
+        Row: {
+          id: string
+          name: string
+          description: string
+          board: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description: string
+          board: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string
+          board?: string
+          created_at?: string
+        }
+      }
       homeworks: {
         Row: {
           id: string
@@ -291,47 +405,6 @@ export interface Database {
           updated_at?: string
         }
       }
-      timetables: {
-        Row: {
-          id: string
-          school_id: string
-          section: string
-          weekday: number
-          period_no: number
-          subject: string
-          teacher_id: string
-          start_time: string | null
-          end_time: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          school_id: string
-          section: string
-          weekday: number
-          period_no: number
-          subject: string
-          teacher_id: string
-          start_time?: string | null
-          end_time?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          school_id?: string
-          section?: string
-          weekday?: number
-          period_no?: number
-          subject?: string
-          teacher_id?: string
-          start_time?: string | null
-          end_time?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-      }
       users: {
         Row: {
           id: string
@@ -363,37 +436,7 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
-      attendance_pivot: {
-        Args: {
-          start_date: string
-          end_date: string
-          school_id_param: string
-        }
-        Returns: {
-          student_id: string
-          student_name: string
-          admission_no: string
-          grade: string
-          section: string
-          attendance_data: Json
-        }[]
-      }
-      get_attendance_stats: {
-        Args: {
-          start_date: string
-          end_date: string
-          school_id_param: string
-        }
-        Returns: {
-          total_students: number
-          total_records: number
-          present_count: number
-          absent_count: number
-          late_count: number
-          excused_count: number
-          attendance_rate: number
-        }[]
-      }
+      [_ in never]: never
     }
     Enums: {
       [_ in never]: never
@@ -402,4 +445,4 @@ export interface Database {
       [_ in never]: never
     }
   }
-} 
+}

@@ -91,6 +91,22 @@ export {
   type ExamSchedule
 } from './exams';
 
+// Report Templates API exports
+export {
+  useReportTemplates,
+  useReportTemplate,
+  useTemplateCategories,
+  useCreateReportTemplate,
+  useUpdateReportTemplate,
+  useDeleteReportTemplate,
+  useDuplicateReportTemplate,
+  usePreviewReportTemplate,
+  type ReportTemplate,
+  type TemplateCategory,
+  type CreateReportTemplateData,
+  type UpdateReportTemplateData
+} from './report-templates';
+
 // Basic brand export
 export { 
   getSchoolBrand,

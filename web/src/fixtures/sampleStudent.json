@@ -1,0 +1,174 @@
+{
+  "language": "en",
+  "student": {
+    "id": "sample-student-001",
+    "full_name": "John Michael Doe",
+    "admission_no": "ADM2024001",
+    "section": "Class 10-A",
+    "roll_no": "15",
+    "date_of_birth": "2008-05-15",
+    "photo_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
+    "father_name": "Robert Doe",
+    "mother_name": "Sarah Doe",
+    "address": "123 Student Lane, Education City, EC 12345"
+  },
+  "school": {
+    "name": "Green Valley International School",
+    "address": "456 Academic Boulevard, Learning District, LD 67890",
+    "logo_url": "https://images.unsplash.com/photo-1562774053-701939374585?w=100&h=100&fit=crop",
+    "phone": "+1-555-123-4567",
+    "website": "www.greenvalley.edu",
+    "principal_name": "Dr. Sarah Johnson",
+    "email": "info@greenvalley.edu",
+    "affiliation": "CBSE Board"
+  },
+  "exam": {
+    "name": "First Term Examination 2024",
+    "academic_year": "2024-25",
+    "exam_date": "2024-12-15",
+    "term": "Term 1",
+    "exam_type": "Summative Assessment",
+    "start_date": "2024-12-01",
+    "end_date": "2024-12-15"
+  },
+  "subjects": [
+    {
+      "name": "Mathematics",
+      "total_marks": 100,
+      "obtained_marks": 92,
+      "grade": "A+",
+      "teacher": "Ms. Anderson",
+      "remarks": "Excellent problem-solving skills"
+    },
+    {
+      "name": "Science",
+      "total_marks": 100,
+      "obtained_marks": 88,
+      "grade": "A",
+      "teacher": "Mr. Johnson",
+      "remarks": "Good understanding of concepts"
+    },
+    {
+      "name": "English",
+      "total_marks": 100,
+      "obtained_marks": 85,
+      "grade": "A",
+      "teacher": "Mrs. Davis",
+      "remarks": "Excellent writing and comprehension"
+    },
+    {
+      "name": "Social Studies",
+      "total_marks": 100,
+      "obtained_marks": 78,
+      "grade": "B+",
+      "teacher": "Mr. Wilson",
+      "remarks": "Shows good analytical thinking"
+    },
+    {
+      "name": "Hindi",
+      "total_marks": 100,
+      "obtained_marks": 82,
+      "grade": "A",
+      "teacher": "Mrs. Sharma",
+      "remarks": "Good command over language"
+    },
+    {
+      "name": "Computer Science",
+      "total_marks": 100,
+      "obtained_marks": 95,
+      "grade": "A+",
+      "teacher": "Mr. Thompson",
+      "remarks": "Outstanding programming skills"
+    }
+  ],
+  "overall": {
+    "total_marks": 600,
+    "obtained_marks": 520,
+    "percentage": 86.7,
+    "grade": "A",
+    "rank": 3,
+    "gpa": 3.8,
+    "class_strength": 45,
+    "highest_in_class": 540,
+    "class_average": 465
+  },
+  "attendance": {
+    "total_days": 180,
+    "present_days": 172,
+    "absent_days": 8,
+    "percentage": 95.6,
+    "late_arrivals": 2
+  },
+  "remarks": "John is an exceptional student who consistently demonstrates academic excellence and leadership qualities. He actively participates in class discussions and helps his peers. His dedication to learning and positive attitude make him a role model for other students. Continue the excellent work!",
+  "activities": [
+    {
+      "name": "Science Club",
+      "role": "Vice President",
+      "participation": "Excellent"
+    },
+    {
+      "name": "Mathematics Olympiad",
+      "role": "Participant",
+      "participation": "Outstanding"
+    },
+    {
+      "name": "School Debate Team",
+      "role": "Member",
+      "participation": "Very Good"
+    }
+  ],
+  "achievements": [
+    {
+      "title": "Mathematics Excellence Award",
+      "date": "2024-11-15",
+      "description": "For outstanding performance in mathematics"
+    },
+    {
+      "title": "Science Fair Winner",
+      "date": "2024-10-20",
+      "description": "First place in school science fair"
+    }
+  ],
+  "next_term_begins": "2025-01-05",
+  "report_generated_on": "2024-12-20",
+  "report_generated_by": "Academic System",
+  "t": {
+    "reportTitle": "Academic Report Card",
+    "studentName": "Student Name",
+    "admissionNo": "Admission No.",
+    "grade": "Grade",
+    "section": "Section",
+    "rollNo": "Roll No.",
+    "academicYear": "Academic Year",
+    "examName": "Examination",
+    "subjects": "Subjects",
+    "totalMarks": "Total Marks",
+    "obtainedMarks": "Marks Obtained",
+    "percentage": "Percentage",
+    "grade_display": "Grade",
+    "rank": "Rank",
+    "attendance": "Attendance",
+    "remarks": "Remarks",
+    "principalSignature": "Principal",
+    "classTeacherSignature": "Class Teacher",
+    "parentSignature": "Parent/Guardian",
+    "dateOfBirth": "Date of Birth",
+    "fatherName": "Father's Name",
+    "motherName": "Mother's Name",
+    "address": "Address",
+    "overallPerformance": "Overall Performance",
+    "attendanceRecord": "Attendance Record",
+    "teacherRemarks": "Teacher's Remarks",
+    "activities": "Co-curricular Activities",
+    "achievements": "Achievements",
+    "nextTermBegins": "Next Term Begins",
+    "reportGeneratedOn": "Report Generated On",
+    "totalDays": "Total Days",
+    "presentDays": "Present Days",
+    "absentDays": "Absent Days",
+    "classRank": "Class Rank",
+    "classStrength": "Class Strength",
+    "highestInClass": "Highest in Class",
+    "classAverage": "Class Average"
+  }
+} 
