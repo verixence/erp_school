@@ -5,7 +5,7 @@
  * and shows helpful error messages if they haven't.
  */
 
-import { createClient } from '@/lib/supabase-client';
+import { supabase } from '@/lib/supabase-client';
 import { toast } from 'sonner';
 
 /**
@@ -13,8 +13,6 @@ import { toast } from 'sonner';
  */
 export async function verifyReportTemplatesMigration(): Promise<boolean> {
   try {
-    const supabase = createClient();
-    
     // Try to query the report_templates table
     const { data, error } = await supabase
       .from('report_templates')

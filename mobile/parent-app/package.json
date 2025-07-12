@@ -1,5 +1,5 @@
 {
-  "name": "parent-app",
+  "name": "campushoster-parent",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
@@ -15,12 +15,13 @@
   "dependencies": {
     "@expo/vector-icons": "^14.0.0",
     "@react-native-async-storage/async-storage": "2.1.2",
-    "@react-navigation/bottom-tabs": "^7.4.2",
-    "@react-navigation/native": "^7.1.14",
+    "@react-navigation/bottom-tabs": "^6.5.20",
+    "@react-navigation/native": "^6.1.18",
     "@supabase/supabase-js": "^2.38.4",
     "@tanstack/react-query": "^5.12.2",
     "date-fns": "^3.0.6",
-    "expo": "~53.0.0",
+    "expo": "~53.0.19",
+    "expo-constants": "^17.1.7",
     "expo-font": "~13.3.2",
     "expo-linear-gradient": "^14.1.5",
     "expo-linking": "~7.1.7",
@@ -44,6 +45,7 @@
   "devDependencies": {
     "@babel/core": "^7.20.0",
     "@types/react": "~19.0.10",
+    "@types/react-native": "^0.72.8",
     "@typescript-eslint/eslint-plugin": "^7.7.0",
     "@typescript-eslint/parser": "^7.7.0",
     "eslint": "^8.57.0",

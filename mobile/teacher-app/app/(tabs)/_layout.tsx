@@ -1,3 +1,4 @@
+import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme } from 'react-native';
@@ -15,13 +16,22 @@ export default function TabsLayout() {
           backgroundColor: colorScheme === 'dark' ? '#1F2937' : '#ffffff',
           borderTopWidth: 1,
           borderTopColor: '#E5E7EB',
-          height: 80,
-          paddingBottom: 20,
+          height: 90,
+          paddingBottom: 25,
           paddingTop: 10,
+          elevation: 10,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 10,
         },
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '600',
+          marginTop: 5,
+        },
+        tabBarIconStyle: {
+          marginTop: 5,
         },
       }}
     >
@@ -44,15 +54,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="timetable"
-        options={{
-          title: 'Timetable',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="homework"
         options={{
           title: 'Homework',
@@ -67,15 +68,6 @@ export default function TabsLayout() {
           title: 'Exams',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="trophy" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="announcements"
-        options={{
-          title: 'Announcements',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="megaphone" size={size} color={color} />
           ),
         }}
       />

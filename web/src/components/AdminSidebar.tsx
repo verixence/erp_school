@@ -24,7 +24,10 @@ import {
   ChevronRight,
   Shield,
   School,
-  Palette
+  Palette,
+  Camera,
+  CalendarDays,
+  Mail
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -38,15 +41,20 @@ const navigation = [
   { name: 'Timetable', href: '/school-admin/timetable', icon: Calendar, description: 'Schedule Management' },
   { name: 'Exams', href: '/school-admin/exams', icon: BookOpen, description: 'Examination System' },
   { name: 'Marks', href: '/school-admin/marks', icon: Award, description: 'Marks & Assessment' },
-  { name: 'Reports', href: '/school-admin/reports', icon: FileText, description: 'Analytics & Reports' },
-  { name: 'Report Templates', href: '/school-admin/report-templates', icon: FileText, description: 'Customizable Report Cards' },
+  { name: 'Report Cards', href: '/school-admin/reports', icon: FileText, description: 'Generate Report Cards' },
+  
   { name: 'Community', href: '/school-admin/community', icon: MessageSquare, description: 'School Community' },
   { name: 'Announcements', href: '/school-admin/announcements', icon: Megaphone, description: 'School Announcements' },
+  
+  { name: 'Gallery', href: '/school-admin/gallery', icon: Camera, description: 'Photo Albums & Images' },
+  { name: 'Feedback', href: '/school-admin/feedback', icon: Mail, description: 'Feedback Management' },
+  { name: 'Calendar', href: '/school-admin/calendar', icon: CalendarDays, description: 'Academic Calendar' },
 ];
 
 const superAdminNavigation = [
   { name: 'Overview', href: '/super-admin', icon: Shield, description: 'System Overview' },
   { name: 'Schools', href: '/super-admin/schools', icon: School, description: 'Manage Schools' },
+  { name: 'Report Templates', href: '/super-admin/report-templates', icon: FileText, description: 'Board-wise Report Templates' },
   { name: 'Template Catalogue', href: '/super-admin/template-catalogue', icon: Palette, description: 'Manage Public Templates' },
   { name: 'Audit Logs', href: '/super-admin/audit-logs', icon: FileText, description: 'System Audit Logs' },
 ];

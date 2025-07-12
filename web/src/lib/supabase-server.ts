@@ -24,6 +24,8 @@ export function createServerSupabaseClient(request: NextRequest) {
   );
 }
 
+
+
 // Server-side function to get authenticated user
 export async function getUser() {
   const cookieStore = await cookies();

@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Teacher App",
-    "slug": "teacher-app",
+    "name": "CampusHoster Teacher",
+    "slug": "campushoster-teacher",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,22 +16,21 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.teacher.app.dev"
+      "bundleIdentifier": "com.campushoster.teacher"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.teacher.app.dev"
+      "package": "com.campushoster.teacher"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-dev-client",
       "expo-router"
     ],
-    "scheme": "teacher-app"
+    "scheme": "campushoster-teacher"
   }
 }

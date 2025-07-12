@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Parent Portal",
-    "slug": "parent-app",
+    "name": "CampusHoster",
+    "slug": "campushoster-parent",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -32,6 +32,6 @@
       "expo-secure-store",
       "expo-web-browser"
     ],
-    "scheme": "parent-app"
+    "scheme": "campushoster-parent"
   }
 }

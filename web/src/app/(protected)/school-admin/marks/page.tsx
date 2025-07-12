@@ -184,12 +184,7 @@ export default function MarksManagementPage() {
             <Download className="w-4 h-4 mr-2" />
             Export Marks
           </Button>
-          <Link href="/school-admin/reports">
-            <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
-              <FileText className="w-4 h-4 mr-2" />
-              Generate Reports
-            </Button>
-          </Link>
+
         </div>
       </motion.div>
 

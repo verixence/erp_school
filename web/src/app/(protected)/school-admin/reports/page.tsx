@@ -1,650 +1,723 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { 
   FileText, 
   Download, 
+  Eye, 
+  Users, 
+  Calendar,
+  BookOpen,
+  ArrowRight,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  Settings,
+  Send,
   Filter,
   Search,
-  GraduationCap,
-  Calendar,
-  Award,
-  TrendingUp,
-  Users,
-  BarChart3,
   Plus,
-  Eye,
-  CheckCircle2,
-  Clock,
-  Send,
-  PrinterIcon
+  Printer,
+  Mail
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
-import { useAuth } from '@/hooks/use-auth';
-import { 
-  useReportCards,
-  useGenerateReportCards,
-  useUpdateReportCardStatus,
-  useExamGroups,
-  useSchoolSections,
-  useSchoolInfo,
-  type ReportCard
-} from '@erp/common';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/use-auth';
+import { supabase } from '@/lib/supabase-client';
 
-const statusColors = {
-  draft: 'bg-gray-100 text-gray-800',
-  published: 'bg-blue-100 text-blue-800',
-  distributed: 'bg-green-100 text-green-800'
-};
+interface ExamGroup {
+  id: string;
+  name: string;
+  description?: string;
+  exam_type: string;
+  start_date: string;
+  end_date: string;
+  is_published: boolean;
+  created_at: string;
+}
 
-const gradeColors = {
-  'A+': 'bg-green-100 text-green-800',
-  'A': 'bg-green-100 text-green-700',
-  'B+': 'bg-blue-100 text-blue-800',
-  'B': 'bg-blue-100 text-blue-700',
-  'C+': 'bg-yellow-100 text-yellow-800',
-  'C': 'bg-yellow-100 text-yellow-700',
-  'D': 'bg-orange-100 text-orange-800',
-  'F': 'bg-red-100 text-red-800'
-};
+interface BoardTemplate {
+  id: string;
+  name: string;
+  board_type: string;
+  description?: string;
+  is_default: boolean;
+  is_active: boolean;
+  usage_count: number;
+}
+
+interface GeneratedReport {
+  id: string;
+  student_id: string;
+  exam_group_id: string;
+  template_id: string;
+  status: 'draft' | 'generated' | 'published' | 'distributed';
+  published: boolean;
+  published_at?: string;
+  generated_at?: string;
+  pdf_url?: string;
+  student?: {
+    id: string;
+    full_name: string;
+    admission_no?: string;
+    section?: string;
+    grade?: string;
+  };
+  template?: {
+    name: string;
+    board_type: string;
+  };
+}
+
+interface School {
+  id: string;
+  name: string;
+  board_affiliation?: string;
+  logo_url?: string;
+}
 
 export default function ReportsPage() {
   const { user } = useAuth();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSection, setSelectedSection] = useState('all');
-  const [selectedExam, setSelectedExam] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState('all');
-  const [showGenerateModal, setShowGenerateModal] = useState(false);
-  const [selectedExamGroup, setSelectedExamGroup] = useState('');
-  const [selectedSections, setSelectedSections] = useState<string[]>([]);
-
-  // API hooks
-  const { data: reportCards = [], isLoading, error } = useReportCards(user?.school_id || undefined);
-  const { data: examGroups = [] } = useExamGroups(user?.school_id || undefined);
-  const { data: sections = [] } = useSchoolSections(user?.school_id || undefined);
-  const { data: schoolInfo } = useSchoolInfo(user?.school_id || undefined);
+  const queryClient = useQueryClient();
   
-  const generateReportCardsMutation = useGenerateReportCards();
-  const updateReportCardStatusMutation = useUpdateReportCardStatus();
+  const [selectedExamGroup, setSelectedExamGroup] = useState<string>('');
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'generate' | 'manage'>('generate');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const filteredReports = reportCards.filter(report => {
-    const matchesSearch = 
-      report.student?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.student?.admission_no?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesSection = selectedSection === 'all' || report.student?.section === selectedSection;
-    const matchesExam = selectedExam === 'all' || report.exam_group?.name === selectedExam;
-    const matchesStatus = selectedStatus === 'all' || report.status === selectedStatus;
-    
-    return matchesSearch && matchesSection && matchesExam && matchesStatus;
+  // Fetch school details with board affiliation
+  const { data: school } = useQuery({
+    queryKey: ['school-details', user?.school_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('schools')
+        .select('id, name, board_affiliation, logo_url')
+        .eq('id', user?.school_id!)
+        .single();
+      
+      if (error) throw error;
+      return data as School;
+    },
+    enabled: !!user?.school_id,
   });
 
-  const getPerformanceColor = (percentage: number) => {
-    if (percentage >= 90) return 'text-green-600';
-    if (percentage >= 80) return 'text-blue-600';
-    if (percentage >= 70) return 'text-yellow-600';
-    if (percentage >= 60) return 'text-orange-600';
-    return 'text-red-600';
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  const handleGenerateReports = async () => {
-    if (!selectedExamGroup) {
-      toast.error('Please select an exam group');
-      return;
-    }
-
-    try {
-      await generateReportCardsMutation.mutateAsync({
-        examGroupId: selectedExamGroup,
-        sectionIds: selectedSections.length > 0 ? selectedSections : undefined
-      });
+  // Fetch exam groups
+  const { data: examGroups = [] } = useQuery({
+    queryKey: ['exam-groups', user?.school_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('exam_groups')
+        .select('*')
+        .eq('school_id', user?.school_id!)
+        .order('created_at', { ascending: false });
       
-      toast.success('Report cards generated successfully!');
-      setShowGenerateModal(false);
-      setSelectedExamGroup('');
-      setSelectedSections([]);
-    } catch (error) {
-      console.error('Error generating report cards:', error);
-      toast.error('Failed to generate report cards. Please try again.');
+      if (error) throw error;
+      return data as ExamGroup[];
+    },
+    enabled: !!user?.school_id,
+  });
+
+  // Fetch available board templates
+  const { data: templates = [] } = useQuery({
+    queryKey: ['board-templates', school?.board_affiliation],
+    queryFn: async () => {
+      let query = supabase
+        .from('board_report_templates')
+        .select('id, name, board_type, description, is_default, is_active, usage_count')
+        .eq('is_active', true);
+      
+      // Filter by school's board affiliation if available
+      if (school?.board_affiliation) {
+        query = query.eq('board_type', school.board_affiliation);
+      }
+      
+      const { data, error } = await query.order('is_default', { ascending: false });
+      
+      if (error) throw error;
+      return data as BoardTemplate[];
+    },
+    enabled: !!school,
+  });
+
+  // Fetch generated reports
+  const { data: reports = [] } = useQuery({
+    queryKey: ['generated-reports', user?.school_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('generated_reports')
+        .select(`
+          *,
+          student:students(id, full_name, admission_no, section, grade),
+          template:board_report_templates(name, board_type)
+        `)
+        .eq('school_id', user?.school_id!)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data as GeneratedReport[];
+    },
+    enabled: !!user?.school_id,
+  });
+
+  // Get students for selected exam group
+  const { data: studentsData } = useQuery({
+    queryKey: ['exam-students', selectedExamGroup],
+    queryFn: async () => {
+      if (!selectedExamGroup) return { students: [], marks: [] };
+      
+      // Get all students who have marks for this exam group
+      const { data: marks, error: marksError } = await supabase
+        .from('marks')
+        .select(`
+          student_id,
+          exam_paper:exam_papers(
+            id,
+            section,
+            subject,
+            max_marks,
+            exam_group_id
+          ),
+          student:students(
+            id,
+            full_name,
+            admission_no,
+            section,
+            grade
+          ),
+          marks_obtained,
+          is_absent
+        `)
+        .eq('school_id', user?.school_id!)
+        .eq('exam_paper.exam_group_id', selectedExamGroup);
+      
+      if (marksError) throw marksError;
+      
+      // Group marks by student
+      const studentMarks = marks?.reduce((acc: any, mark: any) => {
+        const studentId = mark.student_id;
+        if (!acc[studentId]) {
+          acc[studentId] = {
+            student: mark.student,
+            marks: []
+          };
+        }
+        acc[studentId].marks.push(mark);
+        return acc;
+      }, {});
+      
+      return {
+        students: Object.values(studentMarks || {}),
+        totalStudents: Object.keys(studentMarks || {}).length
+      };
+    },
+    enabled: !!selectedExamGroup,
+  });
+
+  // Generate reports mutation
+  const generateReportsMutation = useMutation({
+    mutationFn: async ({ examGroupId, templateId }: { examGroupId: string; templateId: string }) => {
+      setIsGenerating(true);
+      setGenerationProgress(0);
+      
+      // Get all students for this exam group
+      const students = studentsData?.students || [];
+      
+      if (students.length === 0) {
+        throw new Error('No students found with marks for this exam group');
+      }
+      
+      const totalStudents = students.length;
+      let processed = 0;
+      
+      // Generate reports for each student
+      for (const studentData of students) {
+        const student = studentData.student;
+        const marks = studentData.marks;
+        
+        // Calculate total marks and grades
+        const totalMarks = marks.reduce((sum: number, mark: any) => {
+          return sum + (mark.marks_obtained || 0);
+        }, 0);
+        
+        const totalMaxMarks = marks.reduce((sum: number, mark: any) => {
+          return sum + (mark.exam_paper?.max_marks || 0);
+        }, 0);
+        
+        const percentage = totalMaxMarks > 0 ? (totalMarks / totalMaxMarks) * 100 : 0;
+        
+        // Determine grade based on percentage
+        let grade = 'F';
+        if (percentage >= 90) grade = 'A+';
+        else if (percentage >= 80) grade = 'A';
+        else if (percentage >= 70) grade = 'B+';
+        else if (percentage >= 60) grade = 'B';
+        else if (percentage >= 50) grade = 'C';
+        else if (percentage >= 40) grade = 'D';
+        
+        // Prepare report data
+        const reportData = {
+          student: {
+            id: student.id,
+            name: student.full_name,
+            admission_no: student.admission_no,
+            section: student.section,
+            grade: student.grade
+          },
+          marks: marks.map((mark: any) => ({
+            subject: mark.exam_paper?.subject,
+            marks_obtained: mark.marks_obtained,
+            max_marks: mark.exam_paper?.max_marks,
+            percentage: mark.exam_paper?.max_marks ? 
+              ((mark.marks_obtained || 0) / mark.exam_paper.max_marks) * 100 : 0,
+            is_absent: mark.is_absent
+          })),
+          totals: {
+            total_marks: totalMarks,
+            total_max_marks: totalMaxMarks,
+            percentage: percentage,
+            grade: grade,
+            result: percentage >= 40 ? 'PASS' : 'FAIL'
+          }
+        };
+        
+        // Insert/update report record
+        const { error } = await supabase
+          .from('generated_reports')
+          .upsert({
+            school_id: user?.school_id,
+            student_id: student.id,
+            exam_group_id: examGroupId,
+            template_id: templateId,
+            report_data: reportData,
+            status: 'generated',
+            generated_at: new Date().toISOString()
+          }, {
+            onConflict: 'school_id,student_id,exam_group_id'
+          });
+        
+        if (error) throw error;
+        
+        processed++;
+        setGenerationProgress(Math.round((processed / totalStudents) * 100));
+        
+        // Small delay to show progress
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      return { processed: totalStudents };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['generated-reports'] });
+      toast.success(`Successfully generated ${data.processed} report cards`);
+      setIsGenerating(false);
+      setGenerationProgress(0);
+      setActiveTab('manage');
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to generate reports: ${error.message}`);
+      setIsGenerating(false);
+      setGenerationProgress(0);
+    },
+  });
+
+  // Publish reports mutation
+  const publishReportsMutation = useMutation({
+    mutationFn: async (reportIds: string[]) => {
+      const { error } = await supabase
+        .from('generated_reports')
+        .update({
+          published: true,
+          published_at: new Date().toISOString(),
+          status: 'published'
+        })
+        .in('id', reportIds);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['generated-reports'] });
+      toast.success('Reports published successfully');
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to publish reports: ${error.message}`);
+    },
+  });
+
+  const filteredReports = reports.filter(report => {
+    const matchesSearch = !searchTerm || 
+      report.student?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.student?.admission_no?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || report.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'draft': return 'bg-gray-100 text-gray-800';
+      case 'generated': return 'bg-blue-100 text-blue-800';
+      case 'published': return 'bg-green-100 text-green-800';
+      case 'distributed': return 'bg-purple-100 text-purple-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const handleUpdateStatus = async (reportId: string, status: 'draft' | 'published' | 'distributed') => {
-    try {
-      await updateReportCardStatusMutation.mutateAsync({ id: reportId, status });
-      toast.success(`Report card ${status} successfully!`);
-    } catch (error) {
-      console.error('Error updating report card status:', error);
-      toast.error('Failed to update report card status. Please try again.');
-    }
+  const getBoardColor = (boardType: string) => {
+    const colors: Record<string, string> = {
+      'CBSE': 'bg-blue-100 text-blue-800',
+      'ICSE': 'bg-green-100 text-green-800',
+      'SSC': 'bg-orange-100 text-orange-800',
+      'IB': 'bg-purple-100 text-purple-800',
+      'IGCSE': 'bg-pink-100 text-pink-800',
+    };
+    return colors[boardType] || 'bg-gray-100 text-gray-800';
   };
-
-  const handleDownloadReport = (report: ReportCard) => {
-    // Create downloadable report card
-    const reportHTML = generateReportCardHTML(report, schoolInfo);
-    
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    
-    printWindow.document.write(reportHTML);
-    printWindow.document.close();
-    printWindow.print();
-  };
-
-  const generateReportCardHTML = (report: ReportCard, school: any) => {
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Report Card - ${report.student?.full_name}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; background: white; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
-            .logo { width: 80px; height: 80px; margin: 0 auto 10px; }
-            .school-name { font-size: 24px; font-weight: bold; margin: 10px 0; }
-            .report-title { font-size: 18px; color: #666; margin: 5px 0; }
-            .student-info { display: flex; justify-content: space-between; margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; }
-            .info-section { flex: 1; }
-            .info-label { font-weight: bold; color: #666; font-size: 12px; }
-            .info-value { font-size: 14px; margin-bottom: 10px; }
-            .grade-info { text-align: center; margin: 30px 0; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 10px; }
-            .grade { font-size: 48px; font-weight: bold; margin: 0; }
-            .percentage { font-size: 24px; margin: 10px 0; }
-            .marks-summary { display: flex; justify-content: space-around; margin: 20px 0; }
-            .summary-item { text-align: center; }
-            .summary-value { font-size: 20px; font-weight: bold; color: #333; }
-            .summary-label { font-size: 12px; color: #666; }
-            .footer { margin-top: 50px; display: flex; justify-content: space-between; padding-top: 20px; border-top: 1px solid #ddd; }
-            .signature { text-align: center; width: 200px; }
-            .signature-line { border-top: 1px solid #000; margin-top: 50px; padding-top: 5px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            ${school?.logo_url ? `<img src="${school.logo_url}" alt="School Logo" class="logo">` : ''}
-            <div class="school-name">${school?.name || 'School Name'}</div>
-            <div class="report-title">Academic Report Card</div>
-            <div>${report.exam_group?.name} - ${report.exam_group?.exam_type?.replace('_', ' ').toUpperCase()}</div>
-          </div>
-          
-          <div class="student-info">
-            <div class="info-section">
-              <div class="info-label">Student Name</div>
-              <div class="info-value">${report.student?.full_name}</div>
-              <div class="info-label">Admission No.</div>
-              <div class="info-value">${report.student?.admission_no || 'N/A'}</div>
-            </div>
-            <div class="info-section">
-              <div class="info-label">Class/Section</div>
-              <div class="info-value">${report.student?.section || 'N/A'}</div>
-              <div class="info-label">Roll No.</div>
-              <div class="info-value">${report.rank}</div>
-            </div>
-            <div class="info-section">
-              <div class="info-label">Academic Year</div>
-              <div class="info-value">2024-25</div>
-              <div class="info-label">Report Generated</div>
-              <div class="info-value">${formatDate(report.generated_at)}</div>
-            </div>
-          </div>
-          
-          <div class="grade-info">
-            <div class="grade">${report.grade}</div>
-            <div class="percentage">${report.percentage}%</div>
-            <div>Overall Performance</div>
-          </div>
-          
-          <div class="marks-summary">
-            <div class="summary-item">
-              <div class="summary-value">${report.total_marks}</div>
-              <div class="summary-label">Total Marks</div>
-            </div>
-            <div class="summary-item">
-              <div class="summary-value">${report.obtained_marks}</div>
-              <div class="summary-label">Marks Obtained</div>
-            </div>
-            <div class="summary-item">
-              <div class="summary-value">${report.rank}</div>
-              <div class="summary-label">Class Rank</div>
-            </div>
-          </div>
-          
-          <div class="footer">
-            <div class="signature">
-              <div class="signature-line">Class Teacher</div>
-            </div>
-            <div class="signature">
-              <div class="signature-line">Principal</div>
-            </div>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; font-size: 12px; color: #666;">
-            <p>${school?.address || 'School Address'} | ${school?.phone || 'Phone'} | ${school?.email || 'Email'}</p>
-          </div>
-        </body>
-      </html>
-    `;
-  };
-
-  const clearFilters = () => {
-    setSearchTerm('');
-    setSelectedSection('all');
-    setSelectedExam('all');
-    setSelectedStatus('all');
-  };
-
-  // Calculate statistics
-  const totalReports = reportCards.length;
-  const avgPerformance = reportCards.length > 0 
-    ? Math.round(reportCards.reduce((sum, report) => sum + report.percentage, 0) / reportCards.length * 10) / 10 
-    : 0;
-  const topPerformers = reportCards.filter(report => report.percentage >= 90).length;
-  const distributedCount = reportCards.filter(report => report.status === 'distributed').length;
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-64">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">Error loading report cards</p>
-          <Button onClick={() => window.location.reload()}>
-            Try Again
-          </Button>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
-      >
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Report Cards</h1>
-          <p className="text-gray-600 mt-1">Generate and manage student report cards</p>
-        </div>
-        
-        <Dialog open={showGenerateModal} onOpenChange={setShowGenerateModal}>
-          <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Generate Reports
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Generate Report Cards</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Select Exam Group *</Label>
-                <Select value={selectedExamGroup} onValueChange={setSelectedExamGroup}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose exam group" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {examGroups.map(exam => (
-                      <SelectItem key={exam.id} value={exam.id}>
-                        {exam.name} - {exam.exam_type.replace('_', ' ')}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <Label>Select Sections (Optional)</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All sections (leave empty for all)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Sections</SelectItem>
-                    {sections.map(section => (
-                      <SelectItem key={section.id} value={`${section.grade}-${section.section}`}>
-                        Grade {section.grade} - {section.section}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button variant="outline" onClick={() => setShowGenerateModal(false)}>
-                  Cancel
-                </Button>
-                <Button 
-                  onClick={handleGenerateReports}
-                  disabled={generateReportCardsMutation.isPending}
-                >
-                  {generateReportCardsMutation.isPending ? 'Generating...' : 'Generate Reports'}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </motion.div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <Card className="glass-morphism border-0 p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <FileText className="w-6 h-6 text-blue-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Total Reports</p>
-                <p className="text-2xl font-bold text-gray-900">{totalReports}</p>
-              </div>
-            </div>
-          </Card>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <Card className="glass-morphism border-0 p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Award className="w-6 h-6 text-green-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Avg Performance</p>
-                <p className="text-2xl font-bold text-gray-900">{avgPerformance}%</p>
-              </div>
-            </div>
-          </Card>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <Card className="glass-morphism border-0 p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <TrendingUp className="w-6 h-6 text-purple-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Top Performers</p>
-                <p className="text-2xl font-bold text-gray-900">{topPerformers}</p>
-              </div>
-            </div>
-          </Card>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <Card className="glass-morphism border-0 p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <Users className="w-6 h-6 text-orange-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Distributed</p>
-                <p className="text-2xl font-bold text-gray-900">{distributedCount}</p>
-              </div>
-            </div>
-          </Card>
-        </motion.div>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-foreground">Report Cards</h1>
+        <p className="text-muted-foreground mt-2">
+          Generate and manage student report cards using board-specific templates
+        </p>
       </div>
 
-      {/* Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-      >
-        <Card className="glass-morphism border-0 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div>
-              <Label className="text-sm font-medium text-gray-700">Search Students</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Student name or ID..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+      {/* School Info Alert */}
+      {school && (
+        <Alert className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>{school.name}</strong> - Board Affiliation: {school.board_affiliation || 'Not Set'}
+            {!school.board_affiliation && (
+              <span className="text-destructive ml-2">
+                Please set board affiliation in school settings to see relevant templates.
+              </span>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{reports.length}</div>
+            <p className="text-xs text-muted-foreground">Generated reports</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Published</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {reports.filter(r => r.published).length}
             </div>
-            
-            <div>
-              <Label className="text-sm font-medium text-gray-700">Section</Label>
-              <Select value={selectedSection} onValueChange={setSelectedSection}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                                  <SelectContent>
-                    <SelectItem value="all">All Sections</SelectItem>
-                    {sections.map(section => (
-                      <SelectItem key={section.id} value={`${section.grade}-${section.section}`}>
-                        Grade {section.grade} - {section.section}
+            <p className="text-xs text-muted-foreground">Available to parents</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Exam Groups</CardTitle>
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{examGroups.length}</div>
+            <p className="text-xs text-muted-foreground">Available for reports</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Templates</CardTitle>
+            <Settings className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{templates.length}</div>
+            <p className="text-xs text-muted-foreground">Available templates</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Content Tabs */}
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="generate" className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Generate Reports
+          </TabsTrigger>
+          <TabsTrigger value="manage" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Manage Reports
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Generate Reports Tab */}
+        <TabsContent value="generate" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Generate New Report Cards</CardTitle>
+              <CardDescription>
+                Select an exam group and template to generate report cards for all students
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Exam Group Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="examGroup">Select Exam Group</Label>
+                <Select value={selectedExamGroup} onValueChange={setSelectedExamGroup}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose an exam group..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {examGroups.map((exam) => (
+                      <SelectItem key={exam.id} value={exam.id}>
+                        <div className="flex items-center justify-between w-full">
+                          <span>{exam.name}</span>
+                          <Badge variant="outline" className="ml-2">
+                            {exam.exam_type}
+                          </Badge>
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
-              </Select>
-            </div>
-            
-            <div>
-              <Label className="text-sm font-medium text-gray-700">Exam</Label>
-              <Select value={selectedExam} onValueChange={setSelectedExam}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Exams</SelectItem>
-                  {examGroups.map(exam => (
-                    <SelectItem key={exam.id} value={exam.name}>
-                      {exam.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div>
-              <Label className="text-sm font-medium text-gray-700">Status</Label>
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="published">Published</SelectItem>
-                  <SelectItem value="distributed">Distributed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="flex items-end">
-              <Button variant="outline" className="w-full" onClick={clearFilters}>
-                <Filter className="w-4 h-4 mr-2" />
-                Clear Filters
-              </Button>
-            </div>
-          </div>
-        </Card>
-      </motion.div>
+                </Select>
+              </div>
 
-      {/* Report Cards List */}
-      {isLoading ? (
-        <div className="flex items-center justify-center min-h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredReports.map((report, index) => (
-            <motion.div
-              key={report.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 + index * 0.1 }}
-            >
-              <Card className="glass-morphism border-0 hover:shadow-lg transition-shadow">
-                <div className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                        <GraduationCap className="w-6 h-6 text-white" />
-                      </div>
-                      
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">{report.student?.full_name}</h3>
-                        <p className="text-sm text-gray-500">
-                          ID: {report.student?.admission_no || 'N/A'} • {report.student?.section || 'N/A'}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-4">
-                                      <Badge className={statusColors[report.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}>
-                  {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-                </Badge>
-                      
-                      <div className="flex items-center space-x-2">
-                        {report.status === 'draft' && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleUpdateStatus(report.id, 'published')}
-                            disabled={updateReportCardStatusMutation.isPending}
-                          >
-                            <CheckCircle2 className="w-4 h-4 mr-1" />
-                            Publish
-                          </Button>
-                        )}
-                        {report.status === 'published' && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleUpdateStatus(report.id, 'distributed')}
-                            disabled={updateReportCardStatusMutation.isPending}
-                          >
-                            <Send className="w-4 h-4 mr-1" />
-                            Distribute
-                          </Button>
-                        )}
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => handleDownloadReport(report)}
-                        >
-                          <Download className="w-4 h-4 mr-1" />
-                          Download
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <div>
-                      <p className="text-xs text-gray-500">Exam</p>
-                      <p className="text-sm font-medium text-gray-900">{report.exam_group?.name || 'N/A'}</p>
-                    </div>
-                    
-                    <div>
-                      <p className="text-xs text-gray-500">Marks</p>
-                      <p className="text-sm font-medium text-gray-900">
-                        {report.obtained_marks}/{report.total_marks}
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <p className="text-xs text-gray-500">Percentage</p>
-                      <p className={`text-sm font-medium ${getPerformanceColor(report.percentage)}`}>
-                        {report.percentage}%
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <p className="text-xs text-gray-500">Grade</p>
-                      <Badge className={gradeColors[report.grade as keyof typeof gradeColors] || 'bg-gray-100 text-gray-800'}>
-                        {report.grade}
-                      </Badge>
-                    </div>
-                    
-                    <div>
-                      <p className="text-xs text-gray-500">Rank</p>
-                      <p className="text-sm font-medium text-gray-900">#{report.rank}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
-                    <div className="flex items-center space-x-4">
-                      <span>Generated: {formatDate(report.generated_at)}</span>
-                    </div>
+              {/* Template Selection */}
+              {selectedExamGroup && (
+                <div className="space-y-2">
+                  <Label htmlFor="template">Select Report Template</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {templates.map((template) => (
+                      <Card 
+                        key={template.id}
+                        className={`cursor-pointer transition-colors ${
+                          selectedTemplate === template.id ? 'ring-2 ring-primary' : ''
+                        }`}
+                        onClick={() => setSelectedTemplate(template.id)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <h4 className="font-medium">{template.name}</h4>
+                            <div className="flex items-center gap-2">
+                              <Badge className={getBoardColor(template.board_type)}>
+                                {template.board_type}
+                              </Badge>
+                              {template.is_default && (
+                                <Badge variant="secondary">Default</Badge>
+                              )}
+                            </div>
+                          </div>
+                          {template.description && (
+                            <p className="text-sm text-muted-foreground">
+                              {template.description}
+                            </p>
+                          )}
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            Used by {template.usage_count} schools
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
                 </div>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-      )}
+              )}
 
-      {/* Empty State */}
-      {!isLoading && filteredReports.length === 0 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center py-12"
-        >
-          <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No report cards found</h3>
-          <p className="text-gray-500 mb-6">
-            {reportCards.length === 0 
-              ? 'Generate your first report cards to get started.' 
-              : 'Try adjusting your filters or generate new report cards.'
-            }
-          </p>
-          {reportCards.length === 0 && (
-            <Button
-              onClick={() => setShowGenerateModal(true)}
-              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Generate First Report Cards
-            </Button>
+              {/* Student Preview */}
+              {selectedExamGroup && studentsData && (
+                <div className="space-y-2">
+                  <Label>Students with Marks</Label>
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Users className="h-5 w-5 text-muted-foreground" />
+                          <span className="font-medium">
+                            {studentsData.totalStudents} students
+                          </span>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          Reports will be generated for all students with marks
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {/* Generate Button */}
+              <div className="flex justify-end">
+                <Button 
+                  onClick={() => {
+                    if (selectedExamGroup && selectedTemplate) {
+                      generateReportsMutation.mutate({
+                        examGroupId: selectedExamGroup,
+                        templateId: selectedTemplate
+                      });
+                    }
+                  }}
+                  disabled={!selectedExamGroup || !selectedTemplate || isGenerating}
+                  className="flex items-center gap-2"
+                >
+                  {isGenerating ? (
+                    <>
+                      <Clock className="h-4 w-4 animate-spin" />
+                      Generating... ({generationProgress}%)
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRight className="h-4 w-4" />
+                      Generate Report Cards
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Manage Reports Tab */}
+        <TabsContent value="manage" className="space-y-6">
+          {/* Filters */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search by student name or admission number..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full md:w-48">
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="generated">Generated</SelectItem>
+                    <SelectItem value="published">Published</SelectItem>
+                    <SelectItem value="distributed">Distributed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Reports List */}
+          <div className="space-y-4">
+            {filteredReports.map((report) => (
+              <Card key={report.id}>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h4 className="font-medium">{report.student?.full_name}</h4>
+                        <Badge className={getStatusColor(report.status)}>
+                          {report.status}
+                        </Badge>
+                        {report.template && (
+                          <Badge className={getBoardColor(report.template.board_type)}>
+                            {report.template.board_type}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span>Admission: {report.student?.admission_no}</span>
+                        <span>Section: {report.student?.section}</span>
+                        <span>Grade: {report.student?.grade}</span>
+                        {report.generated_at && (
+                          <span>Generated: {new Date(report.generated_at).toLocaleDateString()}</span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm">
+                        <Eye className="h-4 w-4 mr-2" />
+                        Preview
+                      </Button>
+                      <Button variant="outline" size="sm">
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
+                      </Button>
+                      {!report.published && (
+                        <Button 
+                          variant="default" 
+                          size="sm"
+                          onClick={() => publishReportsMutation.mutate([report.id])}
+                        >
+                          <Send className="h-4 w-4 mr-2" />
+                          Publish
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {filteredReports.length === 0 && (
+            <div className="text-center py-12">
+              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">No reports found</h3>
+              <p className="text-muted-foreground mb-4">
+                {reports.length === 0 
+                  ? "Generate your first report cards to get started."
+                  : "No reports match your current filters."
+                }
+              </p>
+              {reports.length === 0 && (
+                <Button onClick={() => setActiveTab('generate')}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Generate Reports
+                </Button>
+              )}
+            </div>
           )}
-        </motion.div>
-      )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 } 

@@ -1,27 +1,25 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { View } from 'react-native';
 import { theme } from '../../src/theme/colors';
-import { NotificationBell } from '../../src/components/NotificationBell';
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: theme.colors.primary[500],
-        tabBarInactiveTintColor: theme.colors.text.muted,
+        tabBarActiveTintColor: theme.colors.primary[600],
+        tabBarInactiveTintColor: theme.colors.text.secondary,
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.border,
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
+          height: 70,
+          paddingBottom: 10,
+          paddingTop: 10,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
+          fontSize: 11,
+          fontWeight: '600',
         },
         headerStyle: {
           backgroundColor: theme.colors.surface,
@@ -36,7 +34,6 @@ export default function TabLayout() {
           fontWeight: '600',
         },
         headerTintColor: theme.colors.text.primary,
-        headerRight: () => <NotificationBell />,
       }}
     >
       <Tabs.Screen
@@ -45,24 +42,6 @@ export default function TabLayout() {
           title: 'Dashboard',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="dashboard" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="feed"
-        options={{
-          title: 'Community',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="forum" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="attendance"
-        options={{
-          title: 'Attendance',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="event-available" color={color} size={size} />
           ),
         }}
       />
@@ -76,29 +55,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="timetable"
+        name="attendance"
         options={{
-          title: 'Timetable',
+          title: 'Attendance',
           tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="schedule" color={color} size={size} />
+            <MaterialIcons name="event-available" color={color} size={size} />
           ),
         }}
       />
       <Tabs.Screen
-        name="exams"
+        name="gallery"
         options={{
-          title: 'Exams',
+          title: 'Gallery',
           tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="school" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="announcements"
-        options={{
-          title: 'News',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="campaign" color={color} size={size} />
+            <MaterialIcons name="photo-library" color={color} size={size} />
           ),
         }}
       />

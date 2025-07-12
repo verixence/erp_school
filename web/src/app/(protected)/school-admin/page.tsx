@@ -152,7 +152,7 @@ const quickActions = [
   { name: 'Add Teacher', href: '/school-admin/teachers?action=create', icon: UserCheck },
   { name: 'Create Class', href: '/school-admin/sections?action=create', icon: Building2 },
   { name: 'Schedule Exam', href: '/school-admin/exams?action=create', icon: BookOpen },
-  { name: 'Create Report', href: '/school-admin/reports?action=create', icon: FileText },
+  
   { name: 'New Announcement', href: '/school-admin/announcements?action=create', icon: Megaphone },
 ];
 

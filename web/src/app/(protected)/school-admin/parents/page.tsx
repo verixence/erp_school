@@ -52,11 +52,21 @@ export default function ParentsPage() {
 
   // Password reset mutation
   const passwordResetMutation = useMutation({
-    mutationFn: async ({ user_id, new_password }: { user_id: string; new_password: string }) => {
+    mutationFn: async ({ parent, new_password }: { parent: Parent; new_password: string }) => {
       const response = await fetch('/api/admin/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id, new_password, school_id: user?.school_id }),
+        body: JSON.stringify({ 
+          user_id: parent.id, 
+          new_password, 
+          school_id: user?.school_id,
+          // Include user creation fields in case user doesn't exist
+          email: parent.email,
+          first_name: parent.first_name,
+          last_name: parent.last_name,
+          phone: parent.phone,
+          role: 'parent'
+        }),
       });
 
       if (!response.ok) {
@@ -226,7 +236,7 @@ export default function ParentsPage() {
     }
 
     passwordResetMutation.mutate({
-      user_id: selectedParent.id,
+      parent: selectedParent,
       new_password: newPassword.trim(),
     });
   };

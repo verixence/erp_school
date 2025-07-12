@@ -50,7 +50,7 @@ export function CampusHeader({ brand, onMenuToggle }: CampusHeaderProps) {
     { name: 'Add Teacher', href: '/school-admin/teachers?action=create', icon: UserCheck },
     { name: 'Create Class', href: '/school-admin/sections?action=create', icon: Users },
     { name: 'Schedule Exam', href: '/school-admin/exams?action=create', icon: Calendar },
-    { name: 'Create Report', href: '/school-admin/reports?action=create', icon: FileText },
+    
     { name: 'New Announcement', href: '/school-admin/announcements?action=create', icon: Megaphone },
   ];
 

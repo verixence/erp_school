@@ -111,15 +111,7 @@ export function KBarProviderWrapper({ children }: KBarProviderWrapperProps) {
       perform: () => router.push('/school-admin/exams'),
       icon: <BookOpen className="w-4 h-4" />,
     },
-    {
-      id: 'reports',
-      name: 'Reports',
-      shortcut: ['r'],
-      keywords: 'reports analytics data',
-      section: 'Navigation',
-      perform: () => router.push('/school-admin/reports'),
-      icon: <FileText className="w-4 h-4" />,
-    },
+
     {
       id: 'community',
       name: 'Community',

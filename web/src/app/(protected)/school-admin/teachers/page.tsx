@@ -78,11 +78,23 @@ export default function TeachersPage() {
 
   // Password reset mutation
   const passwordResetMutation = useMutation({
-    mutationFn: async ({ user_id, new_password }: { user_id: string; new_password: string }) => {
+    mutationFn: async ({ teacher, new_password }: { teacher: Teacher; new_password: string }) => {
       const response = await fetch('/api/admin/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id, new_password, school_id: user?.school_id }),
+        body: JSON.stringify({ 
+          user_id: teacher.id, 
+          new_password, 
+          school_id: user?.school_id,
+          // Include user creation fields in case user doesn't exist
+          email: teacher.email,
+          first_name: teacher.first_name,
+          last_name: teacher.last_name,
+          phone: teacher.phone,
+          role: 'teacher',
+          employee_id: teacher.employee_id,
+          subjects: teacher.subjects
+        }),
       });
 
       if (!response.ok) {
@@ -185,7 +197,7 @@ export default function TeachersPage() {
     }
 
     passwordResetMutation.mutate({
-      user_id: selectedTeacher.id,
+      teacher: selectedTeacher,
       new_password: newPassword.trim(),
     });
   };

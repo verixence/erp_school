@@ -5,6 +5,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { useTeacherDashboardStats, useTeacherSections, useExamPapers } from '../../src/hooks/useTeacherData';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import FloatingActionButton from '../../src/components/FloatingActionButton';
 
 export default function DashboardScreen() {
   const { user } = useAuth();
@@ -208,6 +209,7 @@ export default function DashboardScreen() {
           </View>
         </View>
       </ScrollView>
+      <FloatingActionButton />
     </View>
   );
 }

@@ -34,7 +34,7 @@ export default function IndexScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <ActivityIndicator animating size="large" color="#2563eb" />
-        <Title style={styles.title}>Parent Portal</Title>
+        <Title style={styles.title}>CampusHoster</Title>
       </View>
     </SafeAreaView>
   );
@@ -43,17 +43,17 @@ export default function IndexScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
   },
   content: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 16,
   },
   title: {
+    marginTop: 20,
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: '#2563eb',
   },
 }); 
