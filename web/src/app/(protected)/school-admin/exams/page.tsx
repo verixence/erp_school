@@ -41,6 +41,7 @@ import {
   useUpdateExamGroup,
   useDeleteExamGroup, 
   useExamPapers,
+  useSchoolExamPapers,
   useCreateExamPaper,
   useUpdateExamPaper,
   useDeleteExamPaper,
@@ -72,6 +73,7 @@ export default function ExamsPage() {
   const [selectedExamGroup, setSelectedExamGroup] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [editingPaper, setEditingPaper] = useState<ExamPaper | null>(null);
+  const [editingExamGroup, setEditingExamGroup] = useState<any | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: 'paper' | 'group' } | null>(null);
   
   // API hooks
@@ -79,6 +81,7 @@ export default function ExamsPage() {
   const { data: sections = [] } = useSchoolSections(user?.school_id || undefined);
   const { data: teachers = [] } = useTeachers(user?.school_id || undefined);
   const { data: schoolInfo } = useSchoolInfo(user?.school_id || undefined);
+  const { data: allExamPapers = [] } = useSchoolExamPapers(user?.school_id || undefined);
   const { data: examPapers = [] } = useExamPapers(selectedExamGroup ?? undefined);
 
   const createExamGroupMutation = useCreateExamGroup();
@@ -144,7 +147,7 @@ export default function ExamsPage() {
     const newExamStart = new Date(`${examDate}T${examTime}`);
     const newExamEnd = new Date(newExamStart.getTime() + duration * 60000);
 
-    for (const paper of examPapers) {
+    for (const paper of allExamPapers) {
       if (excludePaperId && paper.id === excludePaperId) continue;
       if (paper.section !== section) continue;
       if (!paper.exam_date || !paper.exam_time) continue;
@@ -175,10 +178,21 @@ export default function ExamsPage() {
     }
 
     try {
-      await createExamGroupMutation.mutateAsync(formData);
+      if (editingExamGroup) {
+        // Update existing exam group
+        await updateExamGroupMutation.mutateAsync({
+          id: editingExamGroup.id,
+          ...formData
+        });
+        toast.success('Exam group updated successfully!');
+      } else {
+        // Create new exam group
+        await createExamGroupMutation.mutateAsync(formData);
+        toast.success('Exam group created successfully!');
+      }
       
-      toast.success('Exam group created successfully!');
       setShowCreateModal(false);
+      setEditingExamGroup(null);
       setFormData({
         name: '',
         description: '',
@@ -188,9 +202,22 @@ export default function ExamsPage() {
         is_published: false,
       });
     } catch (error) {
-      console.error('Error creating exam group:', error);
-      toast.error('Failed to create exam group. Please try again.');
+      console.error('Error saving exam group:', error);
+      toast.error(`Failed to ${editingExamGroup ? 'update' : 'create'} exam group. Please try again.`);
     }
+  };
+
+  const handleEditExamGroup = (examGroup: any) => {
+    setEditingExamGroup(examGroup);
+    setFormData({
+      name: examGroup.name,
+      description: examGroup.description || '',
+      exam_type: examGroup.exam_type,
+      start_date: examGroup.start_date,
+      end_date: examGroup.end_date,
+      is_published: examGroup.is_published,
+    });
+    setShowCreateModal(true);
   };
 
   const handleDeleteExamGroup = async (id: string) => {
@@ -257,6 +284,20 @@ export default function ExamsPage() {
     if (!paperFormData.section || !paperFormData.subject) {
       toast.error('Please fill in section and subject fields');
       return;
+    }
+
+    // Validate exam date is within exam group range
+    if (paperFormData.exam_date && selectedExamGroupData) {
+      const examDate = new Date(paperFormData.exam_date);
+      const startDate = new Date(selectedExamGroupData.start_date);
+      const endDate = new Date(selectedExamGroupData.end_date);
+      
+      if (examDate < startDate || examDate > endDate) {
+        toast.error(
+          `Exam date must be between ${formatDate(selectedExamGroupData.start_date)} and ${formatDate(selectedExamGroupData.end_date)}`
+        );
+        return;
+      }
     }
 
     // Check for datetime conflicts
@@ -534,7 +575,10 @@ export default function ExamsPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    // Parse the date as local date to avoid timezone issues
+    const [year, month, day] = dateString.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString('en-IN', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
@@ -542,7 +586,7 @@ export default function ExamsPage() {
   };
 
   const getExamGroupStats = (examGroupId: string) => {
-    const papers = examPapers.filter(p => p.exam_group_id === examGroupId);
+    const papers = allExamPapers.filter(p => p.exam_group_id === examGroupId);
     const sections = [...new Set(papers.map(p => p.section))];
     return {
       papers: papers.length,
@@ -621,7 +665,20 @@ export default function ExamsPage() {
           )}
           
           {!selectedExamGroup && (
-            <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+            <Dialog open={showCreateModal} onOpenChange={(open) => {
+              setShowCreateModal(open);
+              if (!open) {
+                setEditingExamGroup(null);
+                setFormData({
+                  name: '',
+                  description: '',
+                  exam_type: 'monthly',
+                  start_date: '',
+                  end_date: '',
+                  is_published: false,
+                });
+              }
+            }}>
               <DialogTrigger asChild>
                 <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
                   <Plus className="w-4 h-4 mr-2" />
@@ -630,7 +687,7 @@ export default function ExamsPage() {
               </DialogTrigger>
               <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                  <DialogTitle>Create New Exam Group</DialogTitle>
+                  <DialogTitle>{editingExamGroup ? 'Edit Exam Group' : 'Create New Exam Group'}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleCreateExamGroup} className="space-y-4">
                   <div>
@@ -712,17 +769,30 @@ export default function ExamsPage() {
                     <Button 
                       type="button" 
                       variant="outline"
-                      onClick={() => setShowCreateModal(false)}
-                      disabled={createExamGroupMutation.isPending}
+                      onClick={() => {
+                        setShowCreateModal(false);
+                        setEditingExamGroup(null);
+                        setFormData({
+                          name: '',
+                          description: '',
+                          exam_type: 'monthly',
+                          start_date: '',
+                          end_date: '',
+                          is_published: false,
+                        });
+                      }}
+                      disabled={createExamGroupMutation.isPending || updateExamGroupMutation.isPending}
                     >
                       Cancel
                     </Button>
                     <Button 
                       type="submit" 
                       className="bg-gradient-to-r from-blue-600 to-purple-600"
-                      disabled={createExamGroupMutation.isPending}
+                      disabled={createExamGroupMutation.isPending || updateExamGroupMutation.isPending}
                     >
-                      {createExamGroupMutation.isPending ? 'Creating...' : 'Create Exam Group'}
+                      {(createExamGroupMutation.isPending || updateExamGroupMutation.isPending) 
+                        ? (editingExamGroup ? 'Updating...' : 'Creating...') 
+                        : (editingExamGroup ? 'Update Exam Group' : 'Create Exam Group')}
                     </Button>
                   </div>
                 </form>
@@ -859,6 +929,7 @@ export default function ExamsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => handleEditExamGroup(examGroup)}
                             className="text-gray-600 hover:text-gray-700"
                           >
                             <Edit className="w-4 h-4" />
@@ -1016,7 +1087,7 @@ export default function ExamsPage() {
                 />
                 {selectedExamGroupData && (
                   <p className="text-xs text-gray-500 mt-1">
-                    Valid range: {new Date(selectedExamGroupData.start_date).toLocaleDateString()} - {new Date(selectedExamGroupData.end_date).toLocaleDateString()}
+                    Valid range: {formatDate(selectedExamGroupData.start_date)} - {formatDate(selectedExamGroupData.end_date)}
                   </p>
                 )}
               </div>
@@ -1166,7 +1237,10 @@ function ExamGroupDetails({
   if (!examGroup) return null;
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    // Parse the date as local date to avoid timezone issues
+    const [year, month, day] = dateString.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString('en-IN', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'

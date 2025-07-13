@@ -77,6 +77,10 @@ export default function TeacherExamsPage() {
           instructions,
           created_at,
           teacher_id,
+          teachers!inner(
+            id,
+            user_id
+          ),
           exam_groups(
             name,
             exam_type,
@@ -86,26 +90,13 @@ export default function TeacherExamsPage() {
           )
         `)
         .eq('school_id', user.school_id)
+        .eq('teachers.user_id', user.id)
         .order('exam_date', { ascending: true });
 
       if (error) throw error;
 
-      // Filter exams assigned to this teacher or for sections they teach
-      const { data: teacherSections } = await supabase
-        .from('section_teachers')
-        .select('section_id, sections(grade, section)')
-        .eq('teacher_id', user.id);
-
-      const teacherSectionNames = teacherSections?.map((ts: any) => 
-        `Grade ${ts.sections.grade} ${ts.sections.section}`
-      ) || [];
-
-      // Transform and filter exam data
-      const filteredExams = examData?.filter(exam => 
-        // Show exams where teacher is assigned as invigilator OR exams for sections they teach
-        exam.teacher_id === user.id || 
-        teacherSectionNames.includes(exam.section)
-      ).map((exam: any) => ({
+      // Transform exam data (already filtered by the query)
+      const filteredExams = examData?.map((exam: any) => ({
         id: exam.id,
         exam_name: exam.exam_groups?.name || exam.subject,
         subject: exam.subject,

@@ -31,7 +31,6 @@ import { toast } from 'react-hot-toast';
 
 interface Teacher {
   id: string;
-  user_id: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -59,9 +58,11 @@ export default function TeachersPage() {
 
   // Fetch teachers data
   const { data: teachersData = [], isLoading } = useQuery({
-    queryKey: ['teachers', user?.school_id],
+    queryKey: ['teachers-users-table', user?.school_id], // Static key to avoid infinite refetch
     queryFn: async () => {
       if (!user?.school_id) return [];
+      
+      console.log('🔍 Fetching teachers from users table for school:', user.school_id);
       
       const { data, error } = await supabase
         .from('users')
@@ -70,35 +71,46 @@ export default function TeachersPage() {
         .eq('role', 'teacher')
         .order('first_name');
       
-      if (error) throw error;
-      return data || [];
+      if (error) {
+        console.error('❌ Error fetching teachers:', error);
+        throw error;
+      }
+      
+      console.log('✅ Teachers data from users table:', data?.slice(0, 3));
+      console.log('📊 Sample teacher ID:', data?.[0]?.id);
+      
+      // Transform data to match Teacher interface (add missing fields)
+      const transformedData = (data || []).map(teacher => ({
+        ...teacher,
+        status: 'active', // Default status since users table doesn't have this
+        department: teacher.department || null,
+      }));
+      
+      return transformedData;
     },
     enabled: !!user?.school_id,
   });
 
-  // Password reset mutation
+  // Password reset mutation - using simple endpoint
   const passwordResetMutation = useMutation({
     mutationFn: async ({ teacher, new_password }: { teacher: Teacher; new_password: string }) => {
-      const response = await fetch('/api/admin/reset-password', {
+      console.log('🔑 Password reset mutation called for teacher:', teacher);
+      console.log('🆔 Sending user_id:', teacher.id);
+      console.log('🏫 School ID:', user?.school_id);
+      
+      const response = await fetch('/api/admin/simple-password-reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           user_id: teacher.id, 
           new_password, 
-          school_id: user?.school_id,
-          // Include user creation fields in case user doesn't exist
-          email: teacher.email,
-          first_name: teacher.first_name,
-          last_name: teacher.last_name,
-          phone: teacher.phone,
-          role: 'teacher',
-          employee_id: teacher.employee_id,
-          subjects: teacher.subjects
+          school_id: user?.school_id
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('❌ Password reset failed:', errorData);
         throw new Error(errorData.error || 'Password reset failed');
       }
 

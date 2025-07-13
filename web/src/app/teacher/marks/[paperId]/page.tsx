@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useParams, useRouter } from 'next/navigation';
 import { 
@@ -48,6 +48,7 @@ export default function MarksEntryPage() {
   
   const [marksData, setMarksData] = useState<Record<string, { marks?: number; isAbsent: boolean; remarks?: string }>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // API hooks
   const { data: examPaper, isLoading: examPaperLoading } = useExamPaper(paperId);
@@ -59,28 +60,56 @@ export default function MarksEntryPage() {
   const createMarksForExamMutation = useCreateMarksForExam();
 
   // Initialize marks data when marks are loaded
-  useState(() => {
+  useEffect(() => {
     if (marks.length > 0) {
       const initialData: Record<string, { marks?: number; isAbsent: boolean; remarks?: string }> = {};
       marks.forEach(mark => {
         initialData[mark.id] = {
-          marks: mark.marks_obtained || undefined,
+          marks: mark.marks_obtained !== null && mark.marks_obtained !== undefined ? mark.marks_obtained : undefined,
           isAbsent: mark.is_absent,
           remarks: mark.remarks || undefined
         };
       });
       setMarksData(initialData);
     }
-  });
+  }, [marks]);
 
   const handleMarksChange = (markId: string, field: 'marks' | 'isAbsent' | 'remarks', value: any) => {
-    setMarksData(prev => ({
-      ...prev,
-      [markId]: {
-        ...prev[markId],
-        [field]: value
+    setMarksData(prev => {
+      const currentData = prev[markId] || {};
+      
+      // If marking as absent, clear the marks
+      if (field === 'isAbsent' && value === true) {
+        return {
+          ...prev,
+          [markId]: {
+            ...currentData,
+            isAbsent: true,
+            marks: undefined
+          }
+        };
       }
-    }));
+      
+      // If unmarking as absent, ensure marks field exists
+      if (field === 'isAbsent' && value === false) {
+        return {
+          ...prev,
+          [markId]: {
+            ...currentData,
+            isAbsent: false,
+            marks: currentData.marks || undefined
+          }
+        };
+      }
+      
+      return {
+        ...prev,
+        [markId]: {
+          ...currentData,
+          [field]: value
+        }
+      };
+    });
   };
 
   const handleSaveMarks = async () => {
@@ -109,11 +138,28 @@ export default function MarksEntryPage() {
         }
       });
 
-      await bulkUpdateMarksMutation.mutateAsync(updates);
-      toast.success('Marks saved successfully!');
+      const result = await bulkUpdateMarksMutation.mutateAsync(updates);
+      
+      // Enhanced success message with better feedback
+      if (result && Array.isArray(result)) {
+        toast.success(`✅ Success! All ${result.length} marks have been saved successfully!`, {
+          duration: 4000,
+          position: 'top-center'
+        });
+      } else {
+        toast.success('✅ Success! Marks have been saved successfully!', {
+          duration: 4000,
+          position: 'top-center'
+        });
+      }
+      
+      // Show success animation
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error: any) {
       console.error('Error saving marks:', error);
-      toast.error(error.message || 'Failed to save marks. Please try again.');
+      const errorMessage = error?.message || error?.error?.message || 'Failed to save marks. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -236,6 +282,18 @@ export default function MarksEntryPage() {
         </div>
         
         <div className="flex items-center space-x-3">
+          {saveSuccess && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              className="flex items-center space-x-2 bg-green-100 text-green-800 px-3 py-2 rounded-md"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span className="text-sm font-medium">Marks Saved!</span>
+            </motion.div>
+          )}
+          
           <Button
             variant="outline"
             onClick={() => {/* Export logic */}}
@@ -247,6 +305,7 @@ export default function MarksEntryPage() {
             variant="outline"
             onClick={handleSaveMarks}
             disabled={isSaving}
+            className={saveSuccess ? 'bg-green-50 border-green-200' : ''}
           >
             <Save className="w-4 h-4 mr-2" />
             {isSaving ? 'Saving...' : 'Save Draft'}
@@ -350,7 +409,10 @@ export default function MarksEntryPage() {
                   </TableHeader>
                   <TableBody>
                     {marks.map((mark, index) => {
-                      const markData = marksData[mark.id] || { isAbsent: mark.is_absent, marks: mark.marks_obtained };
+                      const markData = marksData[mark.id] || { 
+                        isAbsent: mark.is_absent, 
+                        marks: mark.marks_obtained !== null && mark.marks_obtained !== undefined ? mark.marks_obtained : undefined 
+                      };
                       const grade = markData.marks && !markData.isAbsent 
                         ? calculateGrade(markData.marks, examPaper.max_marks) 
                         : markData.isAbsent ? 'AB' : '';
@@ -377,8 +439,18 @@ export default function MarksEntryPage() {
                               type="number"
                               min="0"
                               max={examPaper.max_marks}
-                              value={markData.isAbsent ? '' : markData.marks || ''}
-                              onChange={(e) => handleMarksChange(mark.id, 'marks', parseFloat(e.target.value) || undefined)}
+                              value={markData.isAbsent ? '' : (markData.marks !== undefined && markData.marks !== null ? markData.marks.toString() : '')}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === '' || value === null) {
+                                  handleMarksChange(mark.id, 'marks', undefined);
+                                } else {
+                                  const numValue = parseFloat(value);
+                                  if (!isNaN(numValue)) {
+                                    handleMarksChange(mark.id, 'marks', numValue);
+                                  }
+                                }
+                              }}
                               disabled={markData.isAbsent}
                               className="w-20 text-center"
                               placeholder={markData.isAbsent ? 'AB' : '0'}
@@ -409,7 +481,7 @@ export default function MarksEntryPage() {
                           </TableCell>
                           <TableCell>
                             <Input
-                              value={markData.remarks || ''}
+                              value={markData.remarks !== undefined ? markData.remarks : ''}
                               onChange={(e) => handleMarksChange(mark.id, 'remarks', e.target.value)}
                               placeholder="Optional remarks..."
                               className="min-w-32"
@@ -466,7 +538,7 @@ export default function MarksEntryPage() {
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold text-gray-900">
-                  {marks.length - Object.values(marksData).filter(data => !data.isAbsent && data.marks !== undefined).length}
+                  {marks.length - Object.values(marksData).filter(data => data.isAbsent).length - Object.values(marksData).filter(data => !data.isAbsent && data.marks !== undefined).length}
                 </p>
                 <p className="text-sm text-gray-500">Pending</p>
               </div>

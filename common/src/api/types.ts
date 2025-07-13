@@ -109,8 +109,70 @@ export interface AttendanceRecord {
   status: 'present' | 'absent' | 'late' | 'excused';
   recorded_by?: string;
   notes?: string;
+  // Enhanced fields for period-wise attendance
+  period_id?: string;
+  period_number?: number;
+  subject?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface AttendanceSettings {
+  id: string;
+  school_id: string;
+  attendance_mode: 'daily' | 'per_period';
+  notify_parents: boolean;
+  notification_delay_minutes: number;
+  auto_mark_present: boolean;
+  grace_period_minutes: number;
+  weekend_attendance: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AttendanceNotification {
+  id: string;
+  school_id: string;
+  student_id: string;
+  parent_id: string;
+  attendance_record_id: string;
+  notification_type: 'absent' | 'late' | 'excused';
+  message: string;
+  is_sent: boolean;
+  sent_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EnhancedAttendanceStats {
+  total_students: number;
+  total_records: number;
+  present_count: number;
+  absent_count: number;
+  late_count: number;
+  excused_count: number;
+  attendance_rate: number;
+  daily_averages: Array<{
+    date: string;
+    total: number;
+    present: number;
+    rate: number;
+  }>;
+  by_grade: Array<{
+    grade: string;
+    total: number;
+    present: number;
+    rate: number;
+  }>;
+}
+
+export interface StudentAttendancePercentage {
+  total_days: number;
+  present_days: number;
+  absent_days: number;
+  late_days: number;
+  excused_days: number;
+  attendance_percentage: number;
 }
 
 // API Response types

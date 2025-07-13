@@ -142,7 +142,7 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
     enabled: !!user?.school_id && !customData, // Only query if no custom data
   });
 
-  // Count query for pagination
+  // Count query for pagination - only when no custom data provided
   const { data: totalCount = 0 } = useQuery({
     queryKey: [entity, 'count', user?.school_id, search, filters],
     queryFn: async () => {
@@ -174,7 +174,7 @@ export default function EnhancedCrudTable<T extends Record<string, any>>({
       if (error) throw error;
       return count || 0;
     },
-    enabled: !!user?.school_id && enablePagination,
+    enabled: !!user?.school_id && enablePagination && !customData,
   });
 
   // Delete mutation

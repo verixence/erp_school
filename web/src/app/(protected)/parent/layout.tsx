@@ -81,7 +81,7 @@ export default function ParentLayout({
   const sidebarItems = [
     { href: '/parent', label: 'Dashboard', icon: Home },
     { href: '/feed', label: 'Community Feed', icon: MessageSquare },
-    { href: '/parent/attendance', label: 'Attendance', icon: Calendar },
+    { href: '/parent/attendance/enhanced', label: 'Attendance', icon: Calendar },
     { href: '/parent/homework', label: 'Homework', icon: BookOpen },
     { href: '/parent/timetable', label: 'Timetable', icon: GraduationCap },
     { href: '/parent/exams', label: 'Exams', icon: FileText },

@@ -7,14 +7,16 @@ import { useAuth } from '@/hooks/use-auth';
 import { 
   Calendar, 
   Users, 
-  ArrowLeft,
+  Settings,
+  BarChart3,
+  ClipboardCheck,
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle,
+  ArrowRight,
   Download,
-  Check,
-  X,
-  Clock,
-  FileX,
   Filter,
-  BarChart3
+  Clock
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,6 +32,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { motion } from 'framer-motion';
+import AttendanceMetrics from '../dashboard/components/AttendanceMetrics';
+
+interface AttendanceSettings {
+  attendance_mode: 'daily' | 'per_period';
+  notify_parents: boolean;
+  grace_period_minutes: number;
+  auto_mark_present: boolean;
+}
 
 interface AttendancePivotData {
   student_id: string;
@@ -54,7 +64,7 @@ interface AttendanceStats {
   attendance_rate: number;
 }
 
-export default function SchoolAdminAttendancePage() {
+export default function SchoolAdminAttendanceHub() {
   const { user } = useAuth();
   
   const [startDate, setStartDate] = useState<string>(
@@ -65,6 +75,31 @@ export default function SchoolAdminAttendancePage() {
   );
   const [gradeFilter, setGradeFilter] = useState<string>('all');
   const [sectionFilter, setSectionFilter] = useState<string>('all');
+
+  // Fetch attendance settings
+  const { data: attendanceSettings } = useQuery({
+    queryKey: ['attendance-settings', user?.school_id],
+    queryFn: async (): Promise<AttendanceSettings> => {
+      if (!user?.school_id) throw new Error('No school ID');
+
+      const { data, error } = await supabase
+        .from('attendance_settings')
+        .select('*')
+        .eq('school_id', user.school_id)
+        .single();
+
+      if (error) {
+        return {
+          attendance_mode: 'daily',
+          notify_parents: true,
+          grace_period_minutes: 15,
+          auto_mark_present: false,
+        };
+      }
+      return data;
+    },
+    enabled: !!user?.school_id,
+  });
 
   // Fetch attendance pivot data
   const { data: attendanceData, isLoading } = useQuery({
@@ -116,364 +151,398 @@ export default function SchoolAdminAttendancePage() {
   const grades = [...new Set(attendanceData?.map(d => d.grade) || [])].sort();
   const sections = [...new Set(attendanceData?.map(d => d.section) || [])].sort();
 
-  // Filter attendance data
-  const filteredData = attendanceData?.filter(student => {
-    if (gradeFilter !== 'all' && student.grade !== gradeFilter) return false;
-    if (sectionFilter !== 'all' && student.section !== sectionFilter) return false;
+  // Filter data based on selected filters
+  const filteredData = attendanceData?.filter(d => {
+    if (gradeFilter !== 'all' && d.grade !== gradeFilter) return false;
+    if (sectionFilter !== 'all' && d.section !== sectionFilter) return false;
     return true;
   }) || [];
 
-  // Get date range for columns
-  const getDateRange = () => {
-    const dates = [];
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      dates.push(new Date(d).toISOString().split('T')[0]);
-    }
-    return dates;
-  };
-
-  const dateRange = getDateRange();
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'present': return <Check className="w-3 h-3 text-green-600" />;
-      case 'absent': return <X className="w-3 h-3 text-red-600" />;
-      case 'late': return <Clock className="w-3 h-3 text-yellow-600" />;
-      case 'excused': return <FileX className="w-3 h-3 text-blue-600" />;
-      default: return <div className="w-3 h-3 rounded-full bg-gray-300" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'present': return 'bg-green-100 hover:bg-green-200';
-      case 'absent': return 'bg-red-100 hover:bg-red-200';
-      case 'late': return 'bg-yellow-100 hover:bg-yellow-200';
-      case 'excused': return 'bg-blue-100 hover:bg-blue-200';
-      default: return 'bg-gray-50 hover:bg-gray-100';
-    }
-  };
-
-  const exportToCSV = () => {
-    if (!filteredData.length) return;
-
-    const headers = ['Student Name', 'Admission No', 'Grade', 'Section', ...dateRange];
-    const rows = filteredData.map(student => [
-      student.student_name,
-      student.admission_no,
-      student.grade,
-      student.section,
-      ...dateRange.map(date => student.attendance_data[date]?.status || '-')
-    ]);
-
-    const csvContent = [headers, ...rows]
-      .map(row => row.map(cell => `"${cell}"`).join(','))
-      .join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `attendance-${startDate}-to-${endDate}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const isPeriodMode = attendanceSettings?.attendance_mode === 'per_period';
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="border-b bg-card">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
-              <Link
-                href="/school-admin"
-                className="flex items-center text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5 mr-2" />
-                Back to Dashboard
-              </Link>
-            </div>
-            <div className="flex items-center space-x-4">
-              <BarChart3 className="w-5 h-5 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Attendance Master Grid</span>
-            </div>
-          </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+            <ClipboardCheck className="h-8 w-8" />
+            Attendance Management
+          </h1>
+          <p className="text-muted-foreground">
+            Manage school attendance system and view comprehensive reports
+          </p>
+        </div>
+        <div className="flex items-center gap-4">
+          <Badge variant={isPeriodMode ? 'default' : 'secondary'} className="text-sm">
+            {isPeriodMode ? 'Period-wise Mode' : 'Daily Mode'}
+          </Badge>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Controls */}
-        <Card className="mb-8">
+      {/* Quick Action Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <Card className="border-2 border-primary/20 hover:border-primary/40 transition-colors">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Settings className="h-6 w-6 text-primary" />
+                  <CardTitle>Attendance Settings</CardTitle>
+                </div>
+                <Badge variant="secondary">Configure</Badge>
+              </div>
+              <CardDescription>
+                Configure attendance modes, notifications, and school policies
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <span>Attendance mode configuration</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <span>Parent notification settings</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <span>Automation preferences</span>
+                </div>
+                
+                <Link href="/school-admin/settings/attendance">
+                  <Button className="w-full" size="lg">
+                    Configure Settings
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Card className="border-2 border-blue-200 hover:border-blue-400 transition-colors">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="h-6 w-6 text-blue-600" />
+                  <CardTitle>Analytics Dashboard</CardTitle>
+                </div>
+                <Badge variant="secondary">View</Badge>
+              </div>
+              <CardDescription>
+                View comprehensive attendance analytics and trends
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <TrendingUp className="h-4 w-4 text-blue-500" />
+                  <span>School-wide metrics</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <BarChart3 className="h-4 w-4 text-blue-500" />
+                  <span>Grade-wise breakdowns</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Calendar className="h-4 w-4 text-blue-500" />
+                  <span>Historical trends</span>
+                </div>
+                
+                <Link href="/school-admin">
+                  <Button variant="outline" className="w-full" size="lg">
+                    View Dashboard
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <Card className="border-2 border-amber-200 hover:border-amber-400 transition-colors">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Download className="h-6 w-6 text-amber-600" />
+                  <CardTitle>Export Reports</CardTitle>
+                </div>
+                <Badge variant="secondary">Export</Badge>
+              </div>
+              <CardDescription>
+                Generate and download detailed attendance reports
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Calendar className="h-4 w-4 text-amber-500" />
+                  <span>Date range selection</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Filter className="h-4 w-4 text-amber-500" />
+                  <span>Grade/section filtering</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Download className="h-4 w-4 text-amber-500" />
+                  <span>Multiple format support</span>
+                </div>
+                
+                <Button variant="outline" className="w-full" size="lg" disabled>
+                  Generate Report
+                  <Download className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+
+      {/* Enhanced Metrics Display */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+      >
+        <AttendanceMetrics />
+      </motion.div>
+
+      {/* Detailed Reports Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+      >
+        <Card>
           <CardHeader>
-            <CardTitle>Attendance Overview</CardTitle>
-            <CardDescription>
-              View and analyze attendance data across date ranges
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Detailed Attendance Records
+                </CardTitle>
+                <CardDescription>
+                  View and analyze individual student attendance patterns
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+            {/* Filters */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
               <div className="space-y-2">
-                <Label htmlFor="start-date">Start Date</Label>
+                <Label>Start Date</Label>
                 <Input
-                  id="start-date"
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
                 />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="end-date">End Date</Label>
+                <Label>End Date</Label>
                 <Input
-                  id="end-date"
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  max={new Date().toISOString().split('T')[0]}
                 />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="grade">Grade</Label>
+                <Label>Grade</Label>
                 <Select value={gradeFilter} onValueChange={setGradeFilter}>
                   <SelectTrigger>
                     <SelectValue placeholder="All Grades" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Grades</SelectItem>
-                    {grades.map((grade) => (
-                      <SelectItem key={grade} value={grade}>
-                        {grade}
-                      </SelectItem>
+                    {grades.map(grade => (
+                      <SelectItem key={grade} value={grade}>{grade}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="section">Section</Label>
+                <Label>Section</Label>
                 <Select value={sectionFilter} onValueChange={setSectionFilter}>
                   <SelectTrigger>
                     <SelectValue placeholder="All Sections" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Sections</SelectItem>
-                    {sections.map((section) => (
-                      <SelectItem key={section} value={section}>
-                        {section}
-                      </SelectItem>
+                    {sections.map(section => (
+                      <SelectItem key={section} value={section}>{section}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="flex items-end">
-                <Button
-                  onClick={exportToCSV}
-                  disabled={!filteredData.length}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Export CSV
-                </Button>
-              </div>
-
-              <div className="flex items-end">
-                <Button
-                  onClick={() => window.location.reload()}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Filter className="w-4 h-4 mr-2" />
-                  Refresh
-                </Button>
-              </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Statistics */}
-        {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <Card>
-                <CardContent className="p-6">
-                  <div className="text-2xl font-bold">{stats.total_students}</div>
-                  <p className="text-xs text-muted-foreground">Total Students</p>
-                </CardContent>
-              </Card>
-            </motion.div>
+            {/* Summary Stats */}
+            {stats && (
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+                <div className="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="text-lg font-bold text-blue-600">{stats.total_students}</div>
+                  <div className="text-xs text-blue-600">Students</div>
+                </div>
+                <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
+                  <div className="text-lg font-bold text-green-600">{stats.present_count}</div>
+                  <div className="text-xs text-green-600">Present</div>
+                </div>
+                <div className="text-center p-3 bg-red-50 rounded-lg border border-red-200">
+                  <div className="text-lg font-bold text-red-600">{stats.absent_count}</div>
+                  <div className="text-xs text-red-600">Absent</div>
+                </div>
+                <div className="text-center p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                  <div className="text-lg font-bold text-yellow-600">{stats.late_count}</div>
+                  <div className="text-xs text-yellow-600">Late</div>
+                </div>
+                <div className="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="text-lg font-bold text-blue-600">{stats.excused_count}</div>
+                  <div className="text-xs text-blue-600">Excused</div>
+                </div>
+                <div className="text-center p-3 bg-primary/10 rounded-lg border border-primary/20">
+                  <div className="text-lg font-bold text-primary">{stats.attendance_rate.toFixed(1)}%</div>
+                  <div className="text-xs text-primary">Rate</div>
+                </div>
+              </div>
+            )}
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Card>
-                <CardContent className="p-6">
-                  <div className="text-2xl font-bold text-green-600">{stats.present_count}</div>
-                  <p className="text-xs text-muted-foreground">Present</p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card>
-                <CardContent className="p-6">
-                  <div className="text-2xl font-bold text-red-600">{stats.absent_count}</div>
-                  <p className="text-xs text-muted-foreground">Absent</p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Card>
-                <CardContent className="p-6">
-                  <div className="text-2xl font-bold text-yellow-600">{stats.late_count}</div>
-                  <p className="text-xs text-muted-foreground">Late</p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-            >
-              <Card>
-                <CardContent className="p-6">
-                  <div className="text-2xl font-bold text-blue-600">{stats.excused_count}</div>
-                  <p className="text-xs text-muted-foreground">Excused</p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-            >
-              <Card>
-                <CardContent className="p-6">
-                  <div className="text-2xl font-bold text-primary">{stats.attendance_rate}%</div>
-                  <p className="text-xs text-muted-foreground">Attendance Rate</p>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
-        )}
-
-        {/* Attendance Grid */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Attendance Grid</CardTitle>
-            <CardDescription>
-              Daily attendance matrix for all students
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            {/* Student Records Table */}
             {isLoading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <p className="text-sm text-muted-foreground mt-4">Loading attendance data...</p>
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
             ) : filteredData.length > 0 ? (
-              <div className="overflow-auto">
-                <table className="min-w-full divide-y divide-border">
-                  <thead className="bg-muted">
-                    <tr>
-                      <th className="sticky left-0 bg-muted px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Student
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Grade/Section
-                      </th>
-                      {dateRange.map((date) => (
-                        <th key={date} className="px-2 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                          {new Date(date).toLocaleDateString('en-US', { 
-                            month: 'short', 
-                            day: 'numeric' 
-                          })}
-                        </th>
-                      ))}
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-200">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="border border-gray-200 px-4 py-2 text-left">Student</th>
+                      <th className="border border-gray-200 px-4 py-2 text-left">Grade</th>
+                      <th className="border border-gray-200 px-4 py-2 text-left">Section</th>
+                      <th className="border border-gray-200 px-4 py-2 text-center">Records</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-background divide-y divide-border">
-                    {filteredData.map((student, index) => (
-                      <motion.tr
-                        key={student.student_id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.02 }}
-                        className="hover:bg-muted/50"
-                      >
-                        <td className="sticky left-0 bg-background px-6 py-4 whitespace-nowrap">
+                  <tbody>
+                    {filteredData.slice(0, 10).map((student) => (
+                      <tr key={student.student_id} className="hover:bg-gray-50">
+                        <td className="border border-gray-200 px-4 py-2">
                           <div>
-                            <div className="text-sm font-medium text-foreground">
-                              {student.student_name}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {student.admission_no}
-                            </div>
+                            <div className="font-medium">{student.student_name}</div>
+                            <div className="text-sm text-gray-500">{student.admission_no}</div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <Badge variant="outline">
-                            {student.grade} {student.section}
-                          </Badge>
+                        <td className="border border-gray-200 px-4 py-2">{student.grade}</td>
+                        <td className="border border-gray-200 px-4 py-2">{student.section}</td>
+                        <td className="border border-gray-200 px-4 py-2">
+                          <div className="flex items-center justify-center gap-1 flex-wrap">
+                            {Object.entries(student.attendance_data).slice(0, 7).map(([date, record]) => (
+                              <div
+                                key={date}
+                                className={`w-3 h-3 rounded-full ${
+                                  record.status === 'present' ? 'bg-green-500' :
+                                  record.status === 'absent' ? 'bg-red-500' :
+                                  record.status === 'late' ? 'bg-yellow-500' :
+                                  'bg-blue-500'
+                                }`}
+                                title={`${date}: ${record.status}`}
+                              />
+                            ))}
+                          </div>
                         </td>
-                        {dateRange.map((date) => {
-                          const attendance = student.attendance_data[date];
-                          return (
-                            <td key={date} className="px-2 py-4 text-center">
-                              {attendance ? (
-                                <div
-                                  className={`inline-flex items-center justify-center w-8 h-8 rounded-full ${getStatusColor(attendance.status)} transition-colors`}
-                                  title={`${attendance.status}${attendance.notes ? ': ' + attendance.notes : ''}`}
-                                >
-                                  {getStatusIcon(attendance.status)}
-                                </div>
-                              ) : (
-                                <div className="w-8 h-8 rounded-full bg-gray-100 mx-auto" />
-                              )}
-                            </td>
-                          );
-                        })}
-                      </motion.tr>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
+                
+                {filteredData.length > 10 && (
+                  <div className="mt-4 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      Showing 10 of {filteredData.length} students. Use export for complete data.
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="text-center py-12">
-                <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-foreground mb-2">No Attendance Data</h3>
-                <p className="text-sm text-muted-foreground">
-                  No attendance records found for the selected date range and filters.
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Data Found</h3>
+                <p className="text-gray-600">
+                  No attendance records found for the selected criteria.
                 </p>
               </div>
             )}
           </CardContent>
         </Card>
-      </div>
+      </motion.div>
+
+      {/* System Information */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.6 }}
+      >
+        <Card className="bg-muted/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Settings className="h-5 w-5" />
+              Current System Configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Attendance Mode:</span>
+                <Badge variant={isPeriodMode ? 'default' : 'secondary'}>
+                  {isPeriodMode ? 'Period-wise' : 'Daily'}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Parent Notifications:</span>
+                <Badge variant={attendanceSettings?.notify_parents ? 'default' : 'secondary'}>
+                  {attendanceSettings?.notify_parents ? 'Enabled' : 'Disabled'}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Grace Period:</span>
+                <span className="text-muted-foreground">
+                  {attendanceSettings?.grace_period_minutes || 15} minutes
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Auto-mark Present:</span>
+                <Badge variant={attendanceSettings?.auto_mark_present ? 'default' : 'secondary'}>
+                  {attendanceSettings?.auto_mark_present ? 'Enabled' : 'Disabled'}
+                </Badge>
+              </div>
+            </div>
+            
+            <p className="text-xs text-muted-foreground mt-4">
+              To modify these settings, visit the Attendance Settings page. Changes will affect how teachers mark attendance and how parents receive notifications.
+            </p>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 } 

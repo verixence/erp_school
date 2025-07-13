@@ -480,14 +480,37 @@ export const useCreateMarksForExam = () => {
 
       if (examPaperError) throw examPaperError;
 
-      // Get all students in the section
-      const { data: students, error: studentsError } = await supabase
-        .from('students')
-        .select('id')
-        .eq('school_id', userData.school_id)
-        .eq('section', examPaper.section);
+      // Parse section format (e.g., "Grade 1 A" -> grade: "1", section: "A")
+      const sectionMatch = examPaper.section.match(/Grade (\d+) ([A-Z]+)/);
+      let students = [];
+      
+      if (sectionMatch) {
+        const [, grade, section] = sectionMatch;
+        // Get all students in the grade and section
+        const { data: studentsData, error: studentsError } = await supabase
+          .from('students')
+          .select('id')
+          .eq('school_id', userData.school_id)
+          .eq('grade', grade)
+          .eq('section', section);
+        
+        if (studentsError) throw studentsError;
+        students = studentsData || [];
+      } else {
+        // Fallback: try exact section match
+        const { data: studentsData, error: studentsError } = await supabase
+          .from('students')
+          .select('id')
+          .eq('school_id', userData.school_id)
+          .eq('section', examPaper.section);
+        
+                 if (studentsError) throw studentsError;
+         students = studentsData || [];
+       }
 
-      if (studentsError) throw studentsError;
+      if (!students || students.length === 0) {
+        throw new Error(`No students found in section ${examPaper.section}. Please ensure students are enrolled in this section.`);
+      }
 
       // Create marks entries for all students
       const marks = students.map(student => ({
@@ -587,26 +610,47 @@ export const useBulkUpdateMarks = () => {
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) throw new Error('Not authenticated');
 
-      // Update each mark individually to ensure proper RLS policy evaluation
-      const updatePromises = marks.map(async (mark) => {
-        const { data, error } = await supabase
-          .from('marks')
-          .update({
-            marks_obtained: mark.marks_obtained,
-            is_absent: mark.is_absent,
-            remarks: mark.remarks,
-            entered_by: user.user.id,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', mark.id)
-          .select()
-          .single();
-        
-        if (error) throw error;
-        return data;
+      // Simple and efficient approach - use a single bulk update
+      const updateTime = new Date().toISOString();
+      const markIds = marks.map(mark => mark.id);
+      
+      // First, get all existing marks to merge the updates
+      const { data: existingMarks, error: fetchError } = await supabase
+        .from('marks')
+        .select('*')
+        .in('id', markIds);
+
+      if (fetchError) {
+        throw new Error(`Failed to fetch existing marks: ${fetchError.message}`);
+      }
+
+      // Merge the updates with existing data
+      const marksToUpdate = existingMarks.map(existingMark => {
+        const update = marks.find(m => m.id === existingMark.id);
+        return {
+          ...existingMark,
+          marks_obtained: update?.marks_obtained !== undefined ? update.marks_obtained : existingMark.marks_obtained,
+          is_absent: update?.is_absent !== undefined ? update.is_absent : existingMark.is_absent,
+          remarks: update?.remarks !== undefined ? update.remarks : existingMark.remarks,
+          entered_by: user.user.id,
+          updated_at: updateTime
+        };
       });
 
-      const data = await Promise.all(updatePromises);
+      // Use upsert to update all marks in one operation
+      const { data, error } = await supabase
+        .from('marks')
+        .upsert(marksToUpdate, {
+          onConflict: 'id',
+          ignoreDuplicates: false
+        })
+        .select();
+
+      if (error) {
+        console.error('Bulk update failed:', error);
+        throw new Error(error.message || 'Failed to update marks');
+      }
+
       return data as Mark[];
     },
     onSuccess: () => {

@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar, User, GraduationCap, Users, Upload, Plus, UserPlus, Key, MoreHorizontal, Building2, ArrowRight } from 'lucide-react';
+import { Calendar, User, GraduationCap, Users, Upload, Plus, Key, MoreHorizontal, Building2, ArrowRight } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,37 +51,7 @@ export default function StudentsPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
-  const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [temporaryPassword, setTemporaryPassword] = useState('');
-
-  // Invite user mutation
-  const inviteUserMutation = useMutation({
-    mutationFn: async ({ user_id, temporary_password }: { user_id: string; temporary_password: string }) => {
-      const response = await fetch('/api/admin/invite-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id, temporary_password, school_id: user?.school_id }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Invite failed');
-      }
-
-      return response.json();
-    },
-    onSuccess: (data) => {
-      toast.success(data.message);
-      setIsInviteOpen(false);
-      setSelectedStudent(null);
-      setTemporaryPassword('');
-      queryClient.invalidateQueries({ queryKey: ['students'] });
-    },
-    onError: (error: any) => {
-      toast.error(`Invite failed: ${error.message}`);
-    },
-  });
+  // Removed invite functionality - students don't need login accounts
 
   // Fetch students with parent information - SIMPLE APPROACH
   const { data: studentsData = [] } = useQuery({
@@ -193,45 +163,11 @@ export default function StudentsPage() {
     setIsDrawerOpen(true);
   };
 
-  const handleInvite = (student: Student) => {
-    setSelectedStudent(student);
-    setTemporaryPassword('');
-    setIsInviteOpen(true);
-  };
-
-  const handleConfirmInvite = () => {
-    if (!selectedStudent || !temporaryPassword.trim()) {
-      toast.error('Please enter a temporary password');
-      return;
-    }
-
-    if (temporaryPassword.length < 8) {
-      toast.error('Password must be at least 8 characters long');
-      return;
-    }
-
-    inviteUserMutation.mutate({
-      user_id: selectedStudent.id,
-      temporary_password: temporaryPassword.trim(),
-    });
-  };
-
-  const needsInvite = (student: Student) => {
-    // Check if student has login account (assuming we have this info)
-    return !student.has_login && student.student_email;
-  };
+  // Removed invite handlers - students don't need login accounts
 
   const getCustomActions = (student: Student) => [
-    ...(needsInvite(student)
-      ? [
-          {
-            label: 'Create Login',
-            icon: <UserPlus className="w-4 h-4" />,
-            onClick: (item: Student) => handleInvite(item),
-            variant: 'default' as const,
-          },
-        ]
-      : []),
+    // Students don't need login accounts in this system
+    // Removed "Create Login" action
   ];
 
   const handleBulkUpload = async (csvData: any[]) => {
@@ -528,54 +464,7 @@ export default function StudentsPage() {
         onUpload={handleBulkUpload}
       />
 
-      {/* Invite Dialog */}
-      <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create Student Login</DialogTitle>
-            <DialogDescription>
-              Create a login account for {selectedStudent?.full_name}
-              <br />
-              <span className="text-sm text-muted-foreground">
-                Email: {selectedStudent?.student_email}
-              </span>
-              <br />
-              <span className="text-sm text-muted-foreground">
-                Admission No: {selectedStudent?.admission_no}
-              </span>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="temporaryPassword">Temporary Password</Label>
-              <Input
-                id="temporaryPassword"
-                type="password"
-                value={temporaryPassword}
-                onChange={(e) => setTemporaryPassword(e.target.value)}
-                placeholder="Enter temporary password (min 8 characters)"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Share this password with the student so they can login.
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setIsInviteOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleConfirmInvite}
-              disabled={inviteUserMutation.isPending}
-            >
-              {inviteUserMutation.isPending ? 'Creating Account...' : 'Create Login'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Removed invite dialog - students don't need login accounts */}
     </div>
   );
 } 

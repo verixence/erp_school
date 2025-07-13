@@ -81,7 +81,7 @@ export default function StudentLayout({
   const sidebarItems = [
     { href: '/student', label: 'Dashboard', icon: Home },
     { href: '/feed', label: 'Community Feed', icon: MessageSquare },
-    { href: '/student/attendance', label: 'My Attendance', icon: Calendar },
+    { href: '/student/attendance/enhanced', label: 'My Attendance', icon: Calendar },
     { href: '/student/homework', label: 'Homework', icon: BookOpen },
     { href: '/student/timetable', label: 'My Timetable', icon: GraduationCap },
     { href: '/student/exams', label: 'My Exams & Reports', icon: FileText },

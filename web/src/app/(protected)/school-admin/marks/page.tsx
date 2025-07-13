@@ -82,9 +82,9 @@ export default function MarksManagementPage() {
   // Calculate statistics
   const stats = useMemo(() => {
     const totalMarks = filteredMarks.length;
-    const marksEntered = filteredMarks.filter(mark => mark.marks_obtained !== null && mark.marks_obtained !== undefined).length;
-    const pendingMarks = totalMarks - marksEntered;
     const absentStudents = filteredMarks.filter(mark => mark.is_absent).length;
+    const marksEntered = filteredMarks.filter(mark => mark.marks_obtained !== null && mark.marks_obtained !== undefined).length;
+    const pendingMarks = totalMarks - marksEntered - absentStudents;
     
     const validMarks = filteredMarks.filter(mark => 
       mark.marks_obtained !== null && 
@@ -193,7 +193,7 @@ export default function MarksManagementPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6"
       >
         <Card className="glass-morphism border-0">
           <CardContent className="p-6">
@@ -233,6 +233,20 @@ export default function MarksManagementPage() {
               </div>
               <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
                 <Clock className="w-6 h-6 text-orange-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-morphism border-0">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Absent Students</p>
+                <p className="text-2xl font-bold text-gray-600">{stats.absentStudents}</p>
+              </div>
+              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-gray-600" />
               </div>
             </div>
           </CardContent>
@@ -407,7 +421,12 @@ export default function MarksManagementPage() {
                             )}
                           </TableCell>
                           <TableCell className="text-center">
-                            {mark.marks_obtained !== null && mark.marks_obtained !== undefined ? (
+                            {mark.is_absent ? (
+                              <Badge className="bg-gray-100 text-gray-800">
+                                <AlertCircle className="w-3 h-3 mr-1" />
+                                Absent
+                              </Badge>
+                            ) : mark.marks_obtained !== null && mark.marks_obtained !== undefined ? (
                               <Badge className="bg-green-100 text-green-800">
                                 <CheckCircle2 className="w-3 h-3 mr-1" />
                                 Entered

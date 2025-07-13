@@ -66,6 +66,8 @@ interface BoardTemplate {
   is_default: boolean;
   is_active: boolean;
   usage_count: number;
+  template_html?: string;
+  template_css?: string;
 }
 
 interface GeneratedReport {
@@ -89,6 +91,7 @@ interface GeneratedReport {
     name: string;
     board_type: string;
   };
+  report_data?: any; // Added for preview/download
 }
 
 interface School {
@@ -148,7 +151,7 @@ export default function ReportsPage() {
     queryFn: async () => {
       let query = supabase
         .from('board_report_templates')
-        .select('id, name, board_type, description, is_default, is_active, usage_count')
+        .select('id, name, board_type, description, is_default, is_active, usage_count, template_html, template_css')
         .eq('is_active', true);
       
       // Filter by school's board affiliation if available
@@ -256,8 +259,8 @@ export default function ReportsPage() {
       
       // Generate reports for each student
       for (const studentData of students) {
-        const student = studentData.student;
-        const marks = studentData.marks;
+        const student = (studentData as any).student;
+        const marks = (studentData as any).marks;
         
         // Calculate total marks and grades
         const totalMarks = marks.reduce((sum: number, mark: any) => {
@@ -367,6 +370,114 @@ export default function ReportsPage() {
       toast.error(`Failed to publish reports: ${error.message}`);
     },
   });
+
+  // Preview report function
+  const handlePreviewReport = (report: GeneratedReport) => {
+    // Get the template data
+    const template = templates.find(t => t.id === report.template_id);
+    if (!template?.template_html || !template?.template_css) {
+      toast.error('Template data not available for preview');
+      return;
+    }
+
+    // Find exam group for metadata
+    const examGroup = examGroups.find(eg => eg.id === report.exam_group_id);
+    
+    // Prepare data for PDF generation
+    const pdfData = {
+      student: {
+        id: report.student?.id || '',
+        name: report.student?.full_name || '',
+        admission_no: report.student?.admission_no || '',
+        section: report.student?.section || '',
+        grade: report.student?.grade || ''
+      },
+      school: {
+        name: school?.name || '',
+        address: '', // Add if available in school data
+        logo_url: school?.logo_url || '',
+        principal_name: '' // Add if available in school data
+      },
+      exam: {
+        name: examGroup?.name || 'Exam',
+        type: examGroup?.exam_type || '',
+        academic_year: new Date().getFullYear().toString(),
+        date_range: examGroup ? `${examGroup.start_date} to ${examGroup.end_date}` : ''
+      },
+      marks: (report.report_data as any)?.marks || [],
+      totals: (report.report_data as any)?.totals || {},
+      template: {
+        html: template.template_html,
+        css: template.template_css,
+        board_type: template.board_type
+      }
+    };
+
+    // Generate and show preview
+    try {
+      // Import the PDF generator dynamically
+      import('@/lib/pdf-generator').then(({ generateReportCardPDF }) => {
+        generateReportCardPDF(pdfData);
+      });
+    } catch (error) {
+      console.error('Preview error:', error);
+      toast.error('Failed to generate preview');
+    }
+  };
+
+  // Download report function
+  const handleDownloadReport = (report: GeneratedReport) => {
+    // Get the template data
+    const template = templates.find(t => t.id === report.template_id);
+    if (!template?.template_html || !template?.template_css) {
+      toast.error('Template data not available for download');
+      return;
+    }
+
+    // Find exam group for metadata
+    const examGroup = examGroups.find(eg => eg.id === report.exam_group_id);
+    
+    // Prepare data for PDF generation
+    const pdfData = {
+      student: {
+        id: report.student?.id || '',
+        name: report.student?.full_name || '',
+        admission_no: report.student?.admission_no || '',
+        section: report.student?.section || '',
+        grade: report.student?.grade || ''
+      },
+      school: {
+        name: school?.name || '',
+        address: '', // Add if available in school data
+        logo_url: school?.logo_url || '',
+        principal_name: '' // Add if available in school data
+      },
+      exam: {
+        name: examGroup?.name || 'Exam',
+        type: examGroup?.exam_type || '',
+        academic_year: new Date().getFullYear().toString(),
+        date_range: examGroup ? `${examGroup.start_date} to ${examGroup.end_date}` : ''
+      },
+      marks: (report.report_data as any)?.marks || [],
+      totals: (report.report_data as any)?.totals || {},
+      template: {
+        html: template.template_html,
+        css: template.template_css,
+        board_type: template.board_type
+      }
+    };
+
+    try {
+      // Import the PDF generator dynamically and download as HTML
+      import('@/lib/pdf-generator').then(({ downloadReportAsHTML }) => {
+        downloadReportAsHTML(pdfData);
+        toast.success('Download started!');
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Failed to download report');
+    }
+  };
 
   const filteredReports = reports.filter(report => {
     const matchesSearch = !searchTerm || 
@@ -673,11 +784,11 @@ export default function ReportsPage() {
                     </div>
                     
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={() => handlePreviewReport(report)}>
                         <Eye className="h-4 w-4 mr-2" />
                         Preview
                       </Button>
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={() => handleDownloadReport(report)}>
                         <Download className="h-4 w-4 mr-2" />
                         Download
                       </Button>

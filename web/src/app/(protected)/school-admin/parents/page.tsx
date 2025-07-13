@@ -50,22 +50,16 @@ export default function ParentsPage() {
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState('');
 
-  // Password reset mutation
+  // Password reset mutation - using simple endpoint
   const passwordResetMutation = useMutation({
     mutationFn: async ({ parent, new_password }: { parent: Parent; new_password: string }) => {
-      const response = await fetch('/api/admin/reset-password', {
+      const response = await fetch('/api/admin/simple-password-reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           user_id: parent.id, 
           new_password, 
-          school_id: user?.school_id,
-          // Include user creation fields in case user doesn't exist
-          email: parent.email,
-          first_name: parent.first_name,
-          last_name: parent.last_name,
-          phone: parent.phone,
-          role: 'parent'
+          school_id: user?.school_id
         }),
       });
 
