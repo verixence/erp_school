@@ -11,14 +11,14 @@
     --card-foreground: 224 71.4% 4.1%;
     --popover: 0 0% 100%;
     --popover-foreground: 224 71.4% 4.1%;
-    --primary: 220.9 39.3% 11%;
-    --primary-foreground: 210 20% 98%;
-    --secondary: 220 14.3% 95.9%;
-    --secondary-foreground: 220.9 39.3% 11%;
+    --primary: var(--c-primary, 220.9 39.3% 11%);
+    --primary-foreground: var(--c-primary-fg, 210 20% 98%);
+    --secondary: var(--c-secondary, 220 14.3% 95.9%);
+    --secondary-foreground: var(--c-secondary-fg, 220.9 39.3% 11%);
     --muted: 220 14.3% 95.9%;
     --muted-foreground: 220 8.9% 46.1%;
-    --accent: 220 14.3% 95.9%;
-    --accent-foreground: 220.9 39.3% 11%;
+    --accent: var(--c-accent, 220 14.3% 95.9%);
+    --accent-foreground: var(--c-accent-fg, 220.9 39.3% 11%);
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 20% 98%;
     --border: 220 13% 91%;
@@ -31,33 +31,6 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
   }
-
-  .dark {
-    --background: 224 71.4% 4.1%;
-    --foreground: 210 20% 98%;
-    --card: 224 71.4% 4.1%;
-    --card-foreground: 210 20% 98%;
-    --popover: 224 71.4% 4.1%;
-    --popover-foreground: 210 20% 98%;
-    --primary: 210 20% 98%;
-    --primary-foreground: 220.9 39.3% 11%;
-    --secondary: 215 27.9% 16.9%;
-    --secondary-foreground: 210 20% 98%;
-    --muted: 215 27.9% 16.9%;
-    --muted-foreground: 217.9 10.6% 64.9%;
-    --accent: 215 27.9% 16.9%;
-    --accent-foreground: 210 20% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 215 27.9% 16.9%;
-    --input: 215 27.9% 16.9%;
-    --ring: 216 12.2% 83.9%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-  }
 }
 
 @layer base {
@@ -68,16 +41,11 @@
     @apply bg-background text-foreground font-['Inter',sans-serif];
     background: radial-gradient(ellipse at center, #f8faff 0%, #eceff9 100%);
   }
-  
-  .dark body {
-    background: #0f172a;
-  }
 }
 
 @layer components {
-  /* Remove all glassmorphism styles */
   .card-flat {
-    @apply bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm dark:shadow-md;
+    @apply bg-white border border-gray-200 rounded-lg shadow-sm;
   }
   
   .header-gradient-border {
@@ -89,20 +57,20 @@
   }
   
   .kpi-card {
-    @apply card-flat p-6 transition-all duration-200 hover:shadow-md dark:hover:shadow-lg;
+    @apply card-flat p-6 transition-all duration-200 hover:shadow-md;
   }
   
   .quick-action-card {
-    @apply card-flat p-4 transition-all duration-200 hover:shadow-md dark:hover:shadow-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600;
+    @apply card-flat p-4 transition-all duration-200 hover:shadow-md border border-gray-200 hover:border-gray-300;
   }
   
   .sidebar-nav-item {
     @apply flex items-center rounded-lg p-3 transition-all duration-200 relative;
-    @apply hover:bg-gray-100 dark:hover:bg-gray-700;
+    @apply hover:bg-gray-100;
   }
   
   .sidebar-nav-item.active {
-    @apply bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 shadow-lg;
+    @apply bg-gray-100 border border-gray-300 shadow-lg;
   }
   
   .sidebar-nav-item:not(.active) {
@@ -115,7 +83,6 @@
     text-wrap: balance;
   }
   
-  /* Ensure button text is always visible */
   .btn-visible {
     color: hsl(var(--foreground)) !important;
     opacity: 1 !important;
@@ -135,7 +102,6 @@
   }
 }
 
-/* Global button visibility fix - ensure all buttons have visible text */
 @layer components {
   .btn,
   button,
@@ -144,7 +110,6 @@
     opacity: 1 !important;
   }
   
-  /* Specific button variants */
   button[data-variant="default"],
   .btn[data-variant="default"],
   button:not([class*="variant"]):not([class*="ghost"]):not([class*="outline"]) {

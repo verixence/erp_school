@@ -3,7 +3,7 @@ import { supabase } from './supabase';
 export interface Brand {
   id: string;
   name: string;
-  logo?: string;
+  logo: string | null;
   primary: string;
   secondary: string;
   accent: string;
@@ -13,10 +13,15 @@ export interface Brand {
 export interface SchoolBrand {
   id: string;
   name: string;
-  logo_url?: string;
+  logo_url: string | null;
   primary_color: string;
   secondary_color: string;
   accent_color: string;
+  theme_colors?: {
+    primary: string;
+    secondary: string;
+    accent: string;
+  };
   address: string;
   created_at: string;
 }
@@ -32,9 +37,18 @@ function isLight(hex: string): boolean {
   return luminance > 0.5;
 }
 
-// Utility function to get appropriate foreground color (white or black) based on background
-function getForegroundColor(hex: string): string {
-  return isLight(hex) ? '#000000' : '#ffffff';
+export function getForegroundColor(backgroundColor: string): string {
+  // Convert hex to RGB
+  const hex = backgroundColor.replace('#', '');
+  const r = parseInt(hex.substr(0, 2), 16);
+  const g = parseInt(hex.substr(2, 2), 16);
+  const b = parseInt(hex.substr(4, 2), 16);
+
+  // Calculate relative luminance
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+  // Return black for light colors and white for dark colors
+  return luminance > 0.5 ? '#000000' : '#ffffff';
 }
 
 // Utility function to lighten a hex color by a percentage
@@ -61,10 +75,53 @@ export function generateThemeVars(brand: Brand): Record<string, string> {
   const secondary = brand.secondary;
   const accent = brand.accent;
 
+  // Convert hex colors to HSL format for better CSS variable compatibility
+  const convertToHSL = (hex: string) => {
+    // Remove the hash if present
+    const color = hex.replace('#', '');
+    
+    // Parse RGB values
+    const r = parseInt(color.substr(0, 2), 16) / 255;
+    const g = parseInt(color.substr(2, 2), 16) / 255;
+    const b = parseInt(color.substr(4, 2), 16) / 255;
+    
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h = 0;
+    let s = 0;
+    const l = (max + min) / 2;
+
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      
+      switch (max) {
+        case r:
+          h = (g - b) / d + (g < b ? 6 : 0);
+          break;
+        case g:
+          h = (b - r) / d + 2;
+          break;
+        case b:
+          h = (r - g) / d + 4;
+          break;
+      }
+      
+      h /= 6;
+    }
+
+    // Convert to degrees and percentages
+    const hDeg = Math.round(h * 360);
+    const sPct = Math.round(s * 100);
+    const lPct = Math.round(l * 100);
+
+    return `${hDeg} ${sPct}% ${lPct}%`;
+  };
+
   return {
-    '--c-primary': primary,
-    '--c-secondary': secondary,
-    '--c-accent': accent,
+    '--c-primary': convertToHSL(primary),
+    '--c-secondary': convertToHSL(secondary),
+    '--c-accent': convertToHSL(accent),
     '--c-primary-fg': getForegroundColor(primary),
     '--c-secondary-fg': getForegroundColor(secondary),
     '--c-accent-fg': getForegroundColor(accent),
@@ -138,10 +195,15 @@ export async function getSchoolBrand(schoolId: string): Promise<SchoolBrand | nu
     return {
       id: school.id,
       name: school.name,
-      logo_url: school.logo_url,
+      logo_url: school.logo_url || null,
       primary_color: primaryColor,
       secondary_color: secondaryColor,
       accent_color: accentColor,
+      theme_colors: {
+        primary: primaryColor,
+        secondary: secondaryColor,
+        accent: accentColor
+      },
       address: formattedAddress,
       created_at: new Date().toISOString(),
     };
@@ -152,9 +214,15 @@ export async function getSchoolBrand(schoolId: string): Promise<SchoolBrand | nu
     return {
       id: schoolId,
       name: 'CampusHoster School',
+      logo_url: null,
       primary_color: '#6366f1',
       secondary_color: '#8b5cf6',
       accent_color: '#ec4899',
+      theme_colors: {
+        primary: '#6366f1',
+        secondary: '#8b5cf6',
+        accent: '#ec4899'
+      },
       address: 'Default School Address',
       created_at: new Date().toISOString(),
     };

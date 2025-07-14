@@ -26,7 +26,6 @@ import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ThemeToggle } from '@/components/theme-toggle';
 import { motion } from 'framer-motion';
 
 interface School {
@@ -192,7 +191,6 @@ export default function SuperAdminDashboard() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <ThemeToggle />
               <span className="text-sm text-muted-foreground">Welcome, {user?.email}</span>
               <Button
                 variant="ghost"

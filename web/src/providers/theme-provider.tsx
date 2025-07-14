@@ -1,25 +1,42 @@
 "use client";
 
-import { createContext, useContext } from "react";
-import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "next-themes";
+import { createContext, useContext, useEffect } from "react";
+import { ThemeProvider as NextThemesProvider } from "next-themes";
+import { useSchoolBrand } from "@/hooks/use-brand";
 
-type Theme = "dark" | "light" | "system";
+type ThemeProviderProps = {
+  children: React.ReactNode;
+};
 
 type ThemeProviderState = {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
+  theme: string;
+  setTheme: (theme: string) => void;
 };
 
 const initialState: ThemeProviderState = {
-  theme: "system",
+  theme: "light",
   setTheme: () => null,
 };
 
 const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 
-export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
+export function ThemeProvider({ children }: ThemeProviderProps) {
+  const { data: brand } = useSchoolBrand();
+
+  useEffect(() => {
+    if (brand?.theme_colors) {
+      const root = document.documentElement;
+      const { primary, secondary, accent } = brand.theme_colors;
+      
+      // Convert hex to HSL and set CSS variables
+      root.style.setProperty('--primary', primary);
+      root.style.setProperty('--secondary', secondary);
+      root.style.setProperty('--accent', accent);
+    }
+  }, [brand]);
+
   return (
-    <NextThemesProvider {...props}>
+    <NextThemesProvider attribute="class" forcedTheme="light" enableSystem={false}>
       {children}
     </NextThemesProvider>
   );

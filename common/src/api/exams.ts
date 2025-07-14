@@ -1,7 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
 
-export type ExamType = 'monthly' | 'quarterly' | 'half_yearly' | 'annual' | 'unit_test' | 'other';
+export type ExamType = 
+  | 'monthly' 
+  | 'quarterly' 
+  | 'half_yearly' 
+  | 'annual' 
+  | 'unit_test'
+  | 'cbse_fa1'    // CBSE Formative Assessment 1
+  | 'cbse_fa2'    // CBSE Formative Assessment 2
+  | 'cbse_sa1'    // CBSE Summative Assessment 1 (Mid Term)
+  | 'cbse_fa3'    // CBSE Formative Assessment 3
+  | 'cbse_fa4'    // CBSE Formative Assessment 4
+  | 'cbse_sa2'    // CBSE Summative Assessment 2 (Final)
+  | 'other';
 
 export interface Section {
   id: string;
@@ -23,6 +35,9 @@ export interface ExamGroup {
   created_by?: string;
   created_at: string;
   updated_at: string;
+  // CBSE-specific fields
+  cbse_term?: 'Term1' | 'Term2';
+  cbse_exam_type?: 'FA1' | 'FA2' | 'SA1' | 'FA3' | 'FA4' | 'SA2';
 }
 
 export interface ExamPaper {
@@ -74,6 +89,10 @@ export interface CreateExamGroupData {
   start_date: string;
   end_date: string;
   is_published?: boolean;
+  // CBSE-specific fields
+  cbse_term?: 'Term1' | 'Term2';
+  cbse_exam_type?: 'FA1' | 'FA2' | 'SA1' | 'FA3' | 'FA4' | 'SA2';
+  sync_to_calendar?: boolean; // Whether to sync exam dates to academic calendar
 }
 
 export interface CreateExamPaperData {
@@ -134,21 +153,67 @@ export const useCreateExamGroup = () => {
       
       if (!userData?.school_id) throw new Error('No school associated');
 
+      // Prepare exam group data
+      const examGroupData = {
+        ...data,
+        school_id: userData.school_id,
+        created_by: user.user.id,
+      };
+
+      // Remove sync_to_calendar from the database insert
+      const { sync_to_calendar, ...dbData } = examGroupData;
+
       const { data: result, error } = await supabase
         .from('exam_groups')
-        .insert({
-          ...data,
-          school_id: userData.school_id,
-          created_by: user.user.id,
-        })
+        .insert(dbData)
         .select()
         .single();
       
       if (error) throw error;
+
+      // Sync to academic calendar if requested
+      if (sync_to_calendar && result) {
+        try {
+          const calendarEventData = {
+            school_id: userData.school_id,
+            title: `${result.name} - Exam Period`,
+            description: result.description || `${result.name} examination period`,
+            event_date: result.start_date,
+            start_time: null,
+            end_time: null,
+            event_type: 'exam',
+            is_published: result.is_published,
+            is_recurring: false,
+            recurrence_pattern: null,
+            recurrence_end_date: null,
+            color: '#DC2626', // Red color for exams
+            location: null,
+            created_by: user.user.id
+          };
+
+          // Create calendar event via API
+          const response = await fetch('/api/admin/calendar/events', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(calendarEventData),
+          });
+
+          if (!response.ok) {
+            console.warn('Failed to sync exam to calendar:', await response.text());
+          }
+        } catch (error) {
+          console.warn('Failed to sync exam to calendar:', error);
+          // Don't throw error as exam group creation succeeded
+        }
+      }
+
       return result as ExamGroup;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['exam-groups', data.school_id] });
+      queryClient.invalidateQueries({ queryKey: ['calendar-events'] }); // Refresh calendar if synced
     },
   });
 };
@@ -943,5 +1008,334 @@ export const useSchoolSections = (schoolId?: string) => {
     enabled: !!schoolId,
   });
 };
+
+// ============================================
+// CBSE REPORT CARD INTERFACES & CALCULATIONS
+// ============================================
+
+export interface CBSESubjectData {
+  name: string;
+  fa1_marks?: number;
+  fa1_max?: number;
+  fa1_gp?: number;
+  fa2_marks?: number;
+  fa2_max?: number;
+  fa2_gp?: number;
+  sa1_marks?: number;
+  sa1_max?: number;
+  sa1_gp?: number;
+  fa3_marks?: number;
+  fa3_max?: number;
+  fa3_gp?: number;
+  fa4_marks?: number;
+  fa4_max?: number;
+  fa4_gp?: number;
+  sa2_marks?: number;
+  sa2_max?: number;
+  sa2_gp?: number;
+  mid_term_gp?: number; // Average of FA1, FA2
+  final_gpa?: number;   // Overall term GPA
+  grade?: string;       // A1, A2, B1, etc.
+}
+
+export interface CBSETerm1Data {
+  student: {
+    id: string;
+    name: string;
+    admission_no?: string;
+    section?: string;
+    grade?: string;
+  };
+  subjects: CBSESubjectData[];
+  coScholastic: any;
+  attendance: {
+    working_days: number;
+    present_days: number;
+    percentage: number;
+  };
+  overall_gpa: number;
+  overall_grade: string;
+  term: 'Term1';
+}
+
+export interface CBSETerm2Data {
+  student: {
+    id: string;
+    name: string;
+    admission_no?: string;
+    section?: string;
+    grade?: string;
+  };
+  subjects: CBSESubjectData[];
+  coScholastic: any;
+  attendance: {
+    working_days: number;
+    present_days: number;
+    percentage: number;
+  };
+  overall_gpa: number;
+  overall_grade: string;
+  term: 'Term2';
+}
+
+export interface CBSECumulativeData {
+  student: {
+    id: string;
+    name: string;
+    admission_no?: string;
+    section?: string;
+    grade?: string;
+  };
+  term1_overall_gpa: number;
+  term2_overall_gpa: number;
+  final_gpa: number;
+  final_grade: string;
+  promotion_status: 'PROMOTED' | 'DETAINED' | 'COMPARTMENT';
+  subjects: CBSESubjectData[];
+  coScholastic: any;
+  attendance: {
+    working_days: number;
+    present_days: number;
+    percentage: number;
+  };
+  teacher_remarks?: string;
+}
+
+// ============================================
+// CBSE GRADING SCALE & CALCULATION FUNCTIONS
+// ============================================
+
+/**
+ * Rounds a number to the nearest whole number using standard mathematical rounding
+ */
+export function roundToNearest(value: number): number {
+  return Math.round(value);
+}
+
+/**
+ * Converts percentage to CBSE Grade Point (0-10 scale)
+ */
+export function convertToGradePoint(marks: number, maxMarks: number): number {
+  if (maxMarks === 0) return 0;
+  const percentage = (marks / maxMarks) * 100;
+  
+  if (percentage >= 91) return 10; // A1
+  if (percentage >= 81) return 9;  // A2  
+  if (percentage >= 71) return 8;  // B1
+  if (percentage >= 61) return 7;  // B2
+  if (percentage >= 51) return 6;  // C1
+  if (percentage >= 41) return 5;  // C2
+  if (percentage >= 33) return 4;  // D
+  return 0; // E (Failed)
+}
+
+/**
+ * Converts Grade Point to CBSE Grade Letter
+ */
+export function convertGradePointToLetter(gp: number): string {
+  if (gp >= 10) return 'A1';
+  if (gp >= 9) return 'A2';
+  if (gp >= 8) return 'B1';
+  if (gp >= 7) return 'B2';
+  if (gp >= 6) return 'C1';
+  if (gp >= 5) return 'C2';
+  if (gp >= 4) return 'D';
+  return 'E';
+}
+
+/**
+ * Calculate Term1 GPA for each subject (FA1 + FA2 + SA1)
+ */
+export function calculateTerm1GPA(subjectMarks: any): CBSESubjectData[] {
+  const subjects: CBSESubjectData[] = [];
+  
+  // Convert object to array of subjects
+  for (const [subjectName, marksData] of Object.entries(subjectMarks as Record<string, any>)) {
+    const subject: CBSESubjectData = {
+      name: subjectName
+    };
+    
+    // Extract FA1, FA2, SA1 data
+    if (marksData.FA1) {
+      subject.fa1_marks = marksData.FA1.marks_obtained || 0;
+      subject.fa1_max = marksData.FA1.max_marks || 100;
+      subject.fa1_gp = convertToGradePoint(subject.fa1_marks || 0, subject.fa1_max || 100);
+    }
+    
+    if (marksData.FA2) {
+      subject.fa2_marks = marksData.FA2.marks_obtained || 0;
+      subject.fa2_max = marksData.FA2.max_marks || 100;
+      subject.fa2_gp = convertToGradePoint(subject.fa2_marks || 0, subject.fa2_max || 100);
+    }
+    
+    if (marksData.SA1) {
+      subject.sa1_marks = marksData.SA1.marks_obtained || 0;
+      subject.sa1_max = marksData.SA1.max_marks || 100;
+      subject.sa1_gp = convertToGradePoint(subject.sa1_marks || 0, subject.sa1_max || 100);
+    }
+    
+    // Calculate Mid Term GP (average of FA1 and FA2) with rounding
+    if (subject.fa1_gp !== undefined && subject.fa2_gp !== undefined) {
+      subject.mid_term_gp = roundToNearest((subject.fa1_gp + subject.fa2_gp) / 2);
+    } else if (subject.fa1_gp !== undefined) {
+      subject.mid_term_gp = subject.fa1_gp;
+    } else if (subject.fa2_gp !== undefined) {
+      subject.mid_term_gp = subject.fa2_gp;
+    }
+    
+    // Calculate Final GPA (average of Mid Term GP and SA1 GP) with rounding
+    if (subject.mid_term_gp !== undefined && subject.sa1_gp !== undefined) {
+      subject.final_gpa = roundToNearest((subject.mid_term_gp + subject.sa1_gp) / 2);
+    } else if (subject.mid_term_gp !== undefined) {
+      subject.final_gpa = subject.mid_term_gp;
+    } else if (subject.sa1_gp !== undefined) {
+      subject.final_gpa = subject.sa1_gp;
+    }
+    
+    // Convert final GPA to grade letter
+    if (subject.final_gpa !== undefined) {
+      subject.grade = convertGradePointToLetter(subject.final_gpa);
+    }
+    
+    subjects.push(subject);
+  }
+  
+  return subjects;
+}
+
+/**
+ * Calculate Term2 GPA for each subject (FA3 + FA4 + SA2)
+ */
+export function calculateTerm2GPA(subjectMarks: any): CBSESubjectData[] {
+  const subjects: CBSESubjectData[] = [];
+  
+  // Convert object to array of subjects
+  for (const [subjectName, marksData] of Object.entries(subjectMarks as Record<string, any>)) {
+    const subject: CBSESubjectData = {
+      name: subjectName
+    };
+    
+    // Extract FA3, FA4, SA2 data
+    if (marksData.FA3) {
+      subject.fa3_marks = marksData.FA3.marks_obtained || 0;
+      subject.fa3_max = marksData.FA3.max_marks || 100;
+      subject.fa3_gp = convertToGradePoint(subject.fa3_marks || 0, subject.fa3_max || 100);
+    }
+    
+    if (marksData.FA4) {
+      subject.fa4_marks = marksData.FA4.marks_obtained || 0;
+      subject.fa4_max = marksData.FA4.max_marks || 100;
+      subject.fa4_gp = convertToGradePoint(subject.fa4_marks || 0, subject.fa4_max || 100);
+    }
+    
+    if (marksData.SA2) {
+      subject.sa2_marks = marksData.SA2.marks_obtained || 0;
+      subject.sa2_max = marksData.SA2.max_marks || 100;
+      subject.sa2_gp = convertToGradePoint(subject.sa2_marks || 0, subject.sa2_max || 100);
+    }
+    
+    // Calculate Mid Term GP (average of FA3 and FA4) with rounding
+    if (subject.fa3_gp !== undefined && subject.fa4_gp !== undefined) {
+      subject.mid_term_gp = roundToNearest((subject.fa3_gp + subject.fa4_gp) / 2);
+    } else if (subject.fa3_gp !== undefined) {
+      subject.mid_term_gp = subject.fa3_gp;
+    } else if (subject.fa4_gp !== undefined) {
+      subject.mid_term_gp = subject.fa4_gp;
+    }
+    
+    // Calculate Final GPA (average of Mid Term GP and SA2 GP) with rounding
+    if (subject.mid_term_gp !== undefined && subject.sa2_gp !== undefined) {
+      subject.final_gpa = roundToNearest((subject.mid_term_gp + subject.sa2_gp) / 2);
+    } else if (subject.mid_term_gp !== undefined) {
+      subject.final_gpa = subject.mid_term_gp;
+    } else if (subject.sa2_gp !== undefined) {
+      subject.final_gpa = subject.sa2_gp;
+    }
+    
+    // Convert final GPA to grade letter
+    if (subject.final_gpa !== undefined) {
+      subject.grade = convertGradePointToLetter(subject.final_gpa);
+    }
+    
+    subjects.push(subject);
+  }
+  
+  return subjects;
+}
+
+/**
+ * Calculate Overall GPA from subject GPAs
+ */
+export function calculateOverallGPA(subjects: CBSESubjectData[]): { gpa: number; grade: string } {
+  const validGPAs = subjects
+    .map(s => s.final_gpa)
+    .filter((gpa): gpa is number => gpa !== undefined);
+  
+  if (validGPAs.length === 0) {
+    return { gpa: 0, grade: 'E' };
+  }
+  
+  const averageGPA = validGPAs.reduce((sum, gpa) => sum + gpa, 0) / validGPAs.length;
+  const roundedGPA = Math.round(averageGPA * 100) / 100; // Round to 2 decimal places
+  
+  return {
+    gpa: roundedGPA,
+    grade: convertGradePointToLetter(Math.round(averageGPA))
+  };
+}
+
+/**
+ * Calculate Cumulative GPA from Term1 and Term2 data
+ */
+export function calculateCumulativeGPA(term1Data: CBSETerm1Data, term2Data: CBSETerm2Data): CBSECumulativeData['subjects'] {
+  const cumulativeSubjects: CBSESubjectData[] = [];
+  
+  // Combine subjects from both terms
+  const allSubjects = new Set([
+    ...term1Data.subjects.map(s => s.name),
+    ...term2Data.subjects.map(s => s.name)
+  ]);
+  
+  for (const subjectName of allSubjects) {
+    const term1Subject = term1Data.subjects.find(s => s.name === subjectName);
+    const term2Subject = term2Data.subjects.find(s => s.name === subjectName);
+    
+    const cumulativeSubject: CBSESubjectData = {
+      name: subjectName,
+      // Copy all term data
+      ...term1Subject,
+      ...term2Subject
+    };
+    
+    // Calculate final cumulative GPA
+    const term1GPA = term1Subject?.final_gpa || 0;
+    const term2GPA = term2Subject?.final_gpa || 0;
+    
+    if (term1GPA > 0 && term2GPA > 0) {
+      cumulativeSubject.final_gpa = roundToNearest((term1GPA + term2GPA) / 2);
+    } else if (term1GPA > 0) {
+      cumulativeSubject.final_gpa = term1GPA;
+    } else if (term2GPA > 0) {
+      cumulativeSubject.final_gpa = term2GPA;
+    }
+    
+    if (cumulativeSubject.final_gpa !== undefined) {
+      cumulativeSubject.grade = convertGradePointToLetter(cumulativeSubject.final_gpa);
+    }
+    
+    cumulativeSubjects.push(cumulativeSubject);
+  }
+  
+  return cumulativeSubjects;
+}
+
+/**
+ * Determine promotion status based on overall GPA
+ */
+export function determinePromotionStatus(overallGPA: number): 'PROMOTED' | 'DETAINED' | 'COMPARTMENT' {
+  if (overallGPA >= 4) return 'PROMOTED';
+  if (overallGPA >= 3) return 'COMPARTMENT';
+  return 'DETAINED';
+}
 
  

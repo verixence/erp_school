@@ -24,7 +24,6 @@ import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ThemeToggle } from '@/components/theme-toggle';
 import { NotificationBell } from '@/components/ui/notification-bell';
 import {
   DropdownMenu,
@@ -162,9 +161,6 @@ export function CampusHeader({ brand, onMenuToggle }: CampusHeaderProps) {
 
             {/* Notification bell */}
             <NotificationBell />
-
-            {/* Theme toggle */}
-            <ThemeToggle />
 
             {/* User avatar dropdown */}
             <DropdownMenu>

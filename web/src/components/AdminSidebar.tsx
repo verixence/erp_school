@@ -27,7 +27,9 @@ import {
   Palette,
   Camera,
   CalendarDays,
-  Mail
+  Mail,
+  Star,
+  Target
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -42,6 +44,8 @@ const navigation = [
   { name: 'Exams', href: '/school-admin/exams', icon: BookOpen, description: 'Examination System' },
   { name: 'Marks', href: '/school-admin/marks', icon: Award, description: 'Marks & Assessment' },
   { name: 'Report Cards', href: '/school-admin/reports', icon: FileText, description: 'Generate Report Cards' },
+  { name: 'CBSE Reports', href: '/school-admin/cbse-reports', icon: Star, description: 'CBSE Term Reports (Term1/Term2/Cumulative)' },
+  { name: 'Co-Scholastic Assessment', href: '/school-admin/cbse-reports/co-scholastic', icon: Target, description: 'Attitude, Values & Personal Qualities' },
   
   { name: 'Community', href: '/school-admin/community', icon: MessageSquare, description: 'School Community' },
   { name: 'Announcements', href: '/school-admin/announcements', icon: Megaphone, description: 'School Announcements' },

@@ -17,7 +17,8 @@ import {
   Download,
   PrinterIcon,
   MapPin,
-  UserCheck
+  UserCheck,
+  CalendarIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -55,15 +56,66 @@ import {
   type ExamPaper 
 } from '@erp/common';
 import { toast } from 'sonner';
+import { format, parse } from 'date-fns';
 
-const examTypeOptions: { value: ExamType; label: string }[] = [
-  { value: 'monthly', label: 'Monthly Test' },
-  { value: 'quarterly', label: 'Quarterly Exam' },
-  { value: 'half_yearly', label: 'Half Yearly Exam' },
-  { value: 'annual', label: 'Annual Exam' },
-  { value: 'unit_test', label: 'Unit Test' },
-  { value: 'other', label: 'Other' },
+const examTypeOptions: { value: ExamType; label: string; category?: string }[] = [
+  // Traditional Exam Types
+  { value: 'monthly', label: 'Monthly Test', category: 'Traditional' },
+  { value: 'quarterly', label: 'Quarterly Exam', category: 'Traditional' },
+  { value: 'half_yearly', label: 'Half Yearly Exam', category: 'Traditional' },
+  { value: 'annual', label: 'Annual Exam', category: 'Traditional' },
+  { value: 'unit_test', label: 'Unit Test', category: 'Traditional' },
+  { value: 'other', label: 'Other', category: 'Traditional' },
+  
+  // CBSE Exam Types
+  { value: 'cbse_fa1', label: 'FA1 - Formative Assessment 1', category: 'CBSE' },
+  { value: 'cbse_fa2', label: 'FA2 - Formative Assessment 2', category: 'CBSE' },
+  { value: 'cbse_sa1', label: 'SA1 - Summative Assessment 1 (Mid Term)', category: 'CBSE' },
+  { value: 'cbse_fa3', label: 'FA3 - Formative Assessment 3', category: 'CBSE' },
+  { value: 'cbse_fa4', label: 'FA4 - Formative Assessment 4', category: 'CBSE' },
+  { value: 'cbse_sa2', label: 'SA2 - Summative Assessment 2 (Final)', category: 'CBSE' },
 ];
+
+// Helper function to determine CBSE term and exam type
+const getCBSEDetails = (examType: ExamType) => {
+  const cbseMapping = {
+    'cbse_fa1': { term: 'Term1' as const, examType: 'FA1' as const },
+    'cbse_fa2': { term: 'Term1' as const, examType: 'FA2' as const },
+    'cbse_sa1': { term: 'Term1' as const, examType: 'SA1' as const },
+    'cbse_fa3': { term: 'Term2' as const, examType: 'FA3' as const },
+    'cbse_fa4': { term: 'Term2' as const, examType: 'FA4' as const },
+    'cbse_sa2': { term: 'Term2' as const, examType: 'SA2' as const },
+  };
+  
+  return cbseMapping[examType as keyof typeof cbseMapping] || null;
+};
+
+// Helper function to format date as dd/mm/yyyy for display
+const formatDateForDisplay = (date: string) => {
+  if (!date) return '';
+  try {
+    const parsedDate = new Date(date);
+    return format(parsedDate, 'dd/MM/yyyy');
+  } catch {
+    return date;
+  }
+};
+
+// Helper function to ensure date is in yyyy-mm-dd format for database
+const ensureDateFormat = (dateStr: string) => {
+  if (!dateStr) return '';
+  try {
+    // If it's already in yyyy-mm-dd format, return as is
+    if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      return dateStr;
+    }
+    // Parse other formats and convert to yyyy-mm-dd
+    const parsedDate = new Date(dateStr);
+    return format(parsedDate, 'yyyy-MM-dd');
+  } catch {
+    return dateStr;
+  }
+};
 
 export default function ExamsPage() {
   const { user } = useAuth();
@@ -75,7 +127,7 @@ export default function ExamsPage() {
   const [editingPaper, setEditingPaper] = useState<ExamPaper | null>(null);
   const [editingExamGroup, setEditingExamGroup] = useState<any | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: 'paper' | 'group' } | null>(null);
-  
+
   // API hooks
   const { data: examGroups = [], isLoading, error } = useExamGroups(user?.school_id || undefined);
   const { data: sections = [] } = useSchoolSections(user?.school_id || undefined);
@@ -98,6 +150,9 @@ export default function ExamsPage() {
     start_date: '',
     end_date: '',
     is_published: false,
+    cbse_term: undefined,
+    cbse_exam_type: undefined,
+    sync_to_calendar: false,
   });
 
   const [paperFormData, setPaperFormData] = useState<CreateExamPaperData>({
@@ -178,17 +233,30 @@ export default function ExamsPage() {
     }
 
     try {
+      // Get CBSE details if it's a CBSE exam type
+      const cbseDetails = getCBSEDetails(formData.exam_type);
+      
+      const examGroupData: CreateExamGroupData = {
+        ...formData,
+        cbse_term: cbseDetails?.term,
+        cbse_exam_type: cbseDetails?.examType,
+      };
+
       if (editingExamGroup) {
         // Update existing exam group
         await updateExamGroupMutation.mutateAsync({
           id: editingExamGroup.id,
-          ...formData
+          ...examGroupData
         });
         toast.success('Exam group updated successfully!');
       } else {
         // Create new exam group
-        await createExamGroupMutation.mutateAsync(formData);
+        await createExamGroupMutation.mutateAsync(examGroupData);
         toast.success('Exam group created successfully!');
+        
+        if (formData.sync_to_calendar) {
+          toast.success('📅 Exam dates synced to academic calendar!');
+        }
       }
       
       setShowCreateModal(false);
@@ -200,6 +268,9 @@ export default function ExamsPage() {
         start_date: '',
         end_date: '',
         is_published: false,
+        cbse_term: undefined,
+        cbse_exam_type: undefined,
+        sync_to_calendar: false,
       });
     } catch (error) {
       console.error('Error saving exam group:', error);
@@ -216,6 +287,9 @@ export default function ExamsPage() {
       start_date: examGroup.start_date,
       end_date: examGroup.end_date,
       is_published: examGroup.is_published,
+      cbse_term: examGroup.cbse_term,
+      cbse_exam_type: examGroup.cbse_exam_type,
+      sync_to_calendar: examGroup.sync_to_calendar,
     });
     setShowCreateModal(true);
   };
@@ -294,7 +368,7 @@ export default function ExamsPage() {
       
       if (examDate < startDate || examDate > endDate) {
         toast.error(
-          `Exam date must be between ${formatDate(selectedExamGroupData.start_date)} and ${formatDate(selectedExamGroupData.end_date)}`
+          `Exam date must be between ${formatDateForDisplay(selectedExamGroupData.start_date)} and ${formatDateForDisplay(selectedExamGroupData.end_date)}`
         );
         return;
       }
@@ -676,6 +750,9 @@ export default function ExamsPage() {
                   start_date: '',
                   end_date: '',
                   is_published: false,
+                  cbse_term: undefined,
+                  cbse_exam_type: undefined,
+                  sync_to_calendar: false,
                 });
               }
             }}>
@@ -722,13 +799,45 @@ export default function ExamsPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {examTypeOptions.map(option => (
+                        <div className="p-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Traditional Exams</div>
+                        {examTypeOptions.filter(option => option.category === 'Traditional').map(option => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}
                           </SelectItem>
                         ))}
+                        
+                        <div className="p-2 text-xs font-medium text-blue-600 uppercase tracking-wide border-t mt-2 pt-2">
+                          🎓 CBSE Board Exams
+                        </div>
+                        {examTypeOptions.filter(option => option.category === 'CBSE').map(option => (
+                          <SelectItem key={option.value} value={option.value}>
+                            <div className="flex flex-col">
+                              <span>{option.label}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {getCBSEDetails(option.value)?.term} • Max Marks: {
+                                  option.value.includes('fa') ? '20' : '80'
+                                }
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
+                    
+                    {/* Show CBSE Term info if CBSE exam type is selected */}
+                    {formData.exam_type.startsWith('cbse_') && (
+                      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <span className="text-sm font-medium text-blue-800">
+                            CBSE {getCBSEDetails(formData.exam_type)?.term} - {getCBSEDetails(formData.exam_type)?.examType}
+                          </span>
+                        </div>
+                        <p className="text-xs text-blue-600 mt-1">
+                          This exam will be automatically categorized for CBSE report card generation.
+                        </p>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4">
@@ -738,8 +847,8 @@ export default function ExamsPage() {
                         id="startDate"
                         type="date"
                         value={formData.start_date}
-                        onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                        required
+                        onChange={(e) => setFormData({ ...formData, start_date: ensureDateFormat(e.target.value) })}
+                        className="w-full"
                       />
                     </div>
                     <div>
@@ -748,8 +857,8 @@ export default function ExamsPage() {
                         id="endDate"
                         type="date"
                         value={formData.end_date}
-                        onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                        required
+                        onChange={(e) => setFormData({ ...formData, end_date: ensureDateFormat(e.target.value) })}
+                        className="w-full"
                       />
                     </div>
                   </div>
@@ -763,6 +872,17 @@ export default function ExamsPage() {
                       className="rounded"
                     />
                     <Label htmlFor="isPublished">Publish immediately</Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="syncToCalendar"
+                      checked={formData.sync_to_calendar}
+                      onChange={(e) => setFormData({ ...formData, sync_to_calendar: e.target.checked })}
+                      className="rounded"
+                    />
+                    <Label htmlFor="syncToCalendar">Sync to Academic Calendar</Label>
                   </div>
                   
                   <div className="flex justify-end space-x-2 pt-4">
@@ -779,6 +899,9 @@ export default function ExamsPage() {
                           start_date: '',
                           end_date: '',
                           is_published: false,
+                          cbse_term: undefined,
+                          cbse_exam_type: undefined,
+                          sync_to_calendar: false,
                         });
                       }}
                       disabled={createExamGroupMutation.isPending || updateExamGroupMutation.isPending}
@@ -1081,15 +1204,9 @@ export default function ExamsPage() {
                   id="examDate"
                   type="date"
                   value={paperFormData.exam_date}
-                  onChange={(e) => setPaperFormData({ ...paperFormData, exam_date: e.target.value })}
-                  min={selectedExamGroupData?.start_date}
-                  max={selectedExamGroupData?.end_date}
+                  onChange={(e) => setPaperFormData({ ...paperFormData, exam_date: ensureDateFormat(e.target.value) })}
+                  className="w-full"
                 />
-                {selectedExamGroupData && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Valid range: {formatDate(selectedExamGroupData.start_date)} - {formatDate(selectedExamGroupData.end_date)}
-                  </p>
-                )}
               </div>
               <div>
                 <Label htmlFor="examTime">Exam Time</Label>
@@ -1098,6 +1215,7 @@ export default function ExamsPage() {
                   type="time"
                   value={paperFormData.exam_time}
                   onChange={(e) => setPaperFormData({ ...paperFormData, exam_time: e.target.value })}
+                  className="w-full"
                 />
               </div>
             </div>
