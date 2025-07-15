@@ -167,14 +167,14 @@ export default function LoginPage() {
             <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
               <h3 className="font-medium text-blue-800 mb-3">🚀 Demo Credentials</h3>
               <div className="space-y-3">
-                <div className="bg-white px-3 py-2 rounded border border-blue-300">
+                                  <div className="bg-white px-3 py-2 rounded border border-blue-300">
                   <p className="text-xs text-blue-600 font-medium mb-1">School Admin:</p>
                   <div className="flex items-center justify-between">
-                    <code className="text-sm font-mono text-blue-800">admin.monte@yopmail.com</code>
+                    <code className="text-sm font-mono text-blue-800">admin@campus.cx</code>
                     <button
                       type="button"
                       onClick={() => {
-                        setEmail('admin.monte@yopmail.com');
+                        setEmail('admin@campus.cx');
                         setPassword('Welcome!23');
                       }}
                       className="text-xs text-blue-600 hover:text-blue-800 font-medium"
@@ -184,14 +184,14 @@ export default function LoginPage() {
                   </div>
                   <code className="text-sm font-mono text-blue-800">Password: Welcome!23</code>
                 </div>
-                <div className="bg-white px-3 py-2 rounded border border-blue-300">
+                                  <div className="bg-white px-3 py-2 rounded border border-blue-300">
                   <p className="text-xs text-blue-600 font-medium mb-1">Teacher:</p>
                   <div className="flex items-center justify-between">
-                    <code className="text-sm font-mono text-blue-800">Yoga@yopmail.com</code>
+                    <code className="text-sm font-mono text-blue-800">sai.kapoor22@yopmail.com</code>
                     <button
                       type="button"
                       onClick={() => {
-                        setEmail('Yoga@yopmail.com');
+                        setEmail('sai.kapoor22@yopmail.com');
                         setPassword('Welcome!23');
                       }}
                       className="text-xs text-blue-600 hover:text-blue-800 font-medium"
@@ -201,14 +201,14 @@ export default function LoginPage() {
                   </div>
                   <code className="text-sm font-mono text-blue-800">Password: Welcome!23</code>
                 </div>
-                <div className="bg-white px-3 py-2 rounded border border-blue-300">
+                                  <div className="bg-white px-3 py-2 rounded border border-blue-300">
                   <p className="text-xs text-blue-600 font-medium mb-1">Parent:</p>
                   <div className="flex items-center justify-between">
-                    <code className="text-sm font-mono text-blue-800">gadar.R@yopmail.com</code>
+                    <code className="text-sm font-mono text-blue-800">aarav.gupta0@yopmail.com</code>
                     <button
                       type="button"
                       onClick={() => {
-                        setEmail('gadar.R@yopmail.com');
+                        setEmail('aarav.gupta0@yopmail.com');
                         setPassword('Welcome!23');
                       }}
                       className="text-xs text-blue-600 hover:text-blue-800 font-medium"
