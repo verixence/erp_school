@@ -48,9 +48,9 @@ interface AttendancePivotData {
   grade: string;
   section: string;
   attendance_data: Record<string, {
-    status: string;
-    recorded_by: string;
-    notes: string;
+    status: 'present' | 'absent' | 'late' | 'excused' | 'no_record';
+    notes: string | null;
+    recorded_by: string | null;
   }>;
 }
 
@@ -67,12 +67,9 @@ interface AttendanceStats {
 export default function SchoolAdminAttendanceHub() {
   const { user } = useAuth();
   
-  const [startDate, setStartDate] = useState<string>(
-    new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  );
-  const [endDate, setEndDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
+  // Set default dates to match the data range (July 8-15, 2025)
+  const [startDate, setStartDate] = useState<string>('2025-07-08');
+  const [endDate, setEndDate] = useState<string>('2025-07-15');
   const [gradeFilter, setGradeFilter] = useState<string>('all');
   const [sectionFilter, setSectionFilter] = useState<string>('all');
 
@@ -103,18 +100,22 @@ export default function SchoolAdminAttendanceHub() {
 
   // Fetch attendance pivot data
   const { data: attendanceData, isLoading } = useQuery({
-    queryKey: ['attendance-pivot', user?.school_id, startDate, endDate],
+    queryKey: ['attendance-pivot', user?.school_id, startDate, endDate, attendanceSettings?.attendance_mode === 'per_period'],
     queryFn: async (): Promise<AttendancePivotData[]> => {
       if (!user?.school_id) throw new Error('No school ID');
 
+      const isPeriodMode = attendanceSettings?.attendance_mode === 'per_period';
+
       const { data, error } = await supabase
-        .rpc('attendance_pivot', {
+        .rpc(isPeriodMode ? 'attendance_pivot_period' : 'attendance_pivot', {
           start_date: startDate,
           end_date: endDate,
-          school_id_param: user.school_id
+          school_id_param: user.school_id,
+          is_period_mode: isPeriodMode
         });
 
       if (error) throw error;
+      
       return data || [];
     },
     enabled: !!user?.school_id,
@@ -122,15 +123,20 @@ export default function SchoolAdminAttendanceHub() {
 
   // Fetch attendance statistics
   const { data: stats } = useQuery({
-    queryKey: ['attendance-stats', user?.school_id, startDate, endDate],
+    queryKey: ['attendance-stats', user?.school_id, startDate, endDate, gradeFilter, sectionFilter, attendanceSettings?.attendance_mode === 'per_period'],
     queryFn: async (): Promise<AttendanceStats> => {
       if (!user?.school_id) throw new Error('No school ID');
 
+      const isPeriodMode = attendanceSettings?.attendance_mode === 'per_period';
+
       const { data, error } = await supabase
-        .rpc('get_attendance_stats', {
+        .rpc(isPeriodMode ? 'get_enhanced_attendance_stats_period' : 'get_enhanced_attendance_stats', {
           start_date: startDate,
           end_date: endDate,
-          school_id_param: user.school_id
+          school_id_param: user.school_id,
+          grade_filter: gradeFilter === 'all' ? null : gradeFilter,
+          section_filter: sectionFilter === 'all' ? null : sectionFilter,
+          is_period_mode: isPeriodMode
         });
 
       if (error) throw error;
@@ -160,6 +166,23 @@ export default function SchoolAdminAttendanceHub() {
 
   const isPeriodMode = attendanceSettings?.attendance_mode === 'per_period';
 
+  // Helper function to generate array of dates between start and end date
+  const getDatesInRange = (startDate: string, endDate: string) => {
+    const dates: string[] = [];
+    const currentDate = new Date(startDate);
+    const lastDate = new Date(endDate);
+    
+    while (currentDate <= lastDate) {
+      dates.push(currentDate.toISOString().split('T')[0]);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return dates;
+  };
+
+  // Get array of dates for the selected range
+  const dateRange = getDatesInRange(startDate, endDate);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -173,54 +196,47 @@ export default function SchoolAdminAttendanceHub() {
             Manage school attendance system and view comprehensive reports
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          <Badge variant={isPeriodMode ? 'default' : 'secondary'} className="text-sm">
-            {isPeriodMode ? 'Period-wise Mode' : 'Daily Mode'}
-          </Badge>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm">
+            <Download className="h-4 w-4 mr-2" />
+            Export Data
+          </Button>
+          <Link href="/school-admin/attendance/settings">
+            <Button variant="outline" size="sm">
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
+            </Button>
+          </Link>
         </div>
       </div>
 
-      {/* Quick Action Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card className="border-2 border-primary/20 hover:border-primary/40 transition-colors">
-            <CardHeader>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer">
+            <CardContent className="p-6">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Settings className="h-6 w-6 text-primary" />
-                  <CardTitle>Attendance Settings</CardTitle>
+                <div>
+                  <h3 className="font-semibold text-lg mb-1">Attendance Settings</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Configure attendance modes, notifications, and school policies
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">
+                      {isPeriodMode ? 'Period-wise' : 'Daily'}
+                    </Badge>
+                    <Badge variant="outline">
+                      {attendanceSettings?.notify_parents ? 'Notifications On' : 'Notifications Off'}
+                    </Badge>
+                  </div>
                 </div>
-                <Badge variant="secondary">Configure</Badge>
-              </div>
-              <CardDescription>
-                Configure attendance modes, notifications, and school policies
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  <span>Attendance mode configuration</span>
+                <div className="text-primary">
+                  <Settings className="h-8 w-8" />
                 </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  <span>Parent notification settings</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  <span>Automation preferences</span>
-                </div>
-                
-                <Link href="/school-admin/settings/attendance">
-                  <Button className="w-full" size="lg">
-                    Configure Settings
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </Link>
               </div>
             </CardContent>
           </Card>
@@ -231,40 +247,28 @@ export default function SchoolAdminAttendanceHub() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <Card className="border-2 border-blue-200 hover:border-blue-400 transition-colors">
-            <CardHeader>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer">
+            <CardContent className="p-6">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="h-6 w-6 text-blue-600" />
-                  <CardTitle>Analytics Dashboard</CardTitle>
+                <div>
+                  <h3 className="font-semibold text-lg mb-1">Analytics Dashboard</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    View comprehensive attendance analytics and trends
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">
+                      <TrendingUp className="h-3 w-3 mr-1" />
+                      Trends
+                    </Badge>
+                    <Badge variant="outline">
+                      <BarChart3 className="h-3 w-3 mr-1" />
+                      Reports
+                    </Badge>
+                  </div>
                 </div>
-                <Badge variant="secondary">View</Badge>
-              </div>
-              <CardDescription>
-                View comprehensive attendance analytics and trends
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <TrendingUp className="h-4 w-4 text-blue-500" />
-                  <span>School-wide metrics</span>
+                <div className="text-primary">
+                  <BarChart3 className="h-8 w-8" />
                 </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <BarChart3 className="h-4 w-4 text-blue-500" />
-                  <span>Grade-wise breakdowns</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="h-4 w-4 text-blue-500" />
-                  <span>Historical trends</span>
-                </div>
-                
-                <Link href="/school-admin">
-                  <Button variant="outline" className="w-full" size="lg">
-                    View Dashboard
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </Link>
               </div>
             </CardContent>
           </Card>
@@ -275,45 +279,35 @@ export default function SchoolAdminAttendanceHub() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
-          <Card className="border-2 border-amber-200 hover:border-amber-400 transition-colors">
-            <CardHeader>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer">
+            <CardContent className="p-6">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Download className="h-6 w-6 text-amber-600" />
-                  <CardTitle>Export Reports</CardTitle>
+                <div>
+                  <h3 className="font-semibold text-lg mb-1">Export Reports</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Generate and download detailed attendance reports
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">
+                      <Download className="h-3 w-3 mr-1" />
+                      CSV
+                    </Badge>
+                    <Badge variant="outline">
+                      <Download className="h-3 w-3 mr-1" />
+                      PDF
+                    </Badge>
+                  </div>
                 </div>
-                <Badge variant="secondary">Export</Badge>
-              </div>
-              <CardDescription>
-                Generate and download detailed attendance reports
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="h-4 w-4 text-amber-500" />
-                  <span>Date range selection</span>
+                <div className="text-primary">
+                  <Download className="h-8 w-8" />
                 </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Filter className="h-4 w-4 text-amber-500" />
-                  <span>Grade/section filtering</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Download className="h-4 w-4 text-amber-500" />
-                  <span>Multiple format support</span>
-                </div>
-                
-                <Button variant="outline" className="w-full" size="lg" disabled>
-                  Generate Report
-                  <Download className="w-4 h-4 ml-2" />
-                </Button>
               </div>
             </CardContent>
           </Card>
         </motion.div>
       </div>
 
-      {/* Enhanced Metrics Display */}
+      {/* Attendance Metrics */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -322,7 +316,7 @@ export default function SchoolAdminAttendanceHub() {
         <AttendanceMetrics />
       </motion.div>
 
-      {/* Detailed Reports Section */}
+      {/* Detailed Attendance Records */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -330,26 +324,16 @@ export default function SchoolAdminAttendanceHub() {
       >
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  Detailed Attendance Records
-                </CardTitle>
-                <CardDescription>
-                  View and analyze individual student attendance patterns
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
-                </Button>
-              </div>
-            </div>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Detailed Attendance Records
+            </CardTitle>
+            <CardDescription>
+              View and analyze individual student attendance patterns
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Filters */}
+            {/* Date Range and Filters */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
               <div className="space-y-2">
                 <Label>Start Date</Label>
@@ -444,7 +428,7 @@ export default function SchoolAdminAttendanceHub() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredData.slice(0, 10).map((student) => (
+                    {filteredData.map((student) => (
                       <tr key={student.student_id} className="hover:bg-gray-50">
                         <td className="border border-gray-200 px-4 py-2">
                           <div>
@@ -455,19 +439,34 @@ export default function SchoolAdminAttendanceHub() {
                         <td className="border border-gray-200 px-4 py-2">{student.grade}</td>
                         <td className="border border-gray-200 px-4 py-2">{student.section}</td>
                         <td className="border border-gray-200 px-4 py-2">
-                          <div className="flex items-center justify-center gap-1 flex-wrap">
-                            {Object.entries(student.attendance_data).slice(0, 7).map(([date, record]) => (
-                              <div
-                                key={date}
-                                className={`w-3 h-3 rounded-full ${
-                                  record.status === 'present' ? 'bg-green-500' :
-                                  record.status === 'absent' ? 'bg-red-500' :
-                                  record.status === 'late' ? 'bg-yellow-500' :
-                                  'bg-blue-500'
-                                }`}
-                                title={`${date}: ${record.status}`}
-                              />
-                            ))}
+                          <div className="flex items-center justify-center gap-1">
+                            {dateRange.map((date) => {
+                              const record = student.attendance_data && student.attendance_data[date];
+                              const status = (record?.status || 'no_record') as 'present' | 'absent' | 'late' | 'excused' | 'no_record';
+                              
+                              const statusConfig = {
+                                present: { color: 'bg-green-500', text: 'Present' },
+                                absent: { color: 'bg-red-500', text: 'Absent' },
+                                late: { color: 'bg-yellow-500', text: 'Late' },
+                                excused: { color: 'bg-blue-500', text: 'Excused' },
+                                no_record: { color: 'bg-gray-200', text: 'No record' }
+                              } as const;
+
+                              const { color, text } = statusConfig[status];
+                              const day = new Date(date).getDate();
+
+                              return (
+                                <div
+                                  key={date}
+                                  className={`w-6 h-6 rounded-full flex items-center justify-center ${color} cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-gray-300 transition-all mr-1`}
+                                  title={`${new Date(date).toLocaleDateString()}: ${text}`}
+                                >
+                                  <span className={`text-xs ${status === 'no_record' ? 'text-gray-600' : 'text-white'} font-bold`}>
+                                    {day}
+                                  </span>
+                                </div>
+                              );
+                            })}
                           </div>
                         </td>
                       </tr>

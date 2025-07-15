@@ -30,13 +30,19 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const examTypeLabels = {
-  monthly: 'Monthly Test',
-  quarterly: 'Quarterly Exam',
-  half_yearly: 'Half Yearly Exam',
-  annual: 'Annual Exam',
+  monthly: 'Monthly',
+  quarterly: 'Quarterly',
+  half_yearly: 'Half Yearly',
+  annual: 'Annual',
   unit_test: 'Unit Test',
-  other: 'Other'
-};
+  other: 'Other',
+  cbse_fa1: 'FA1',
+  cbse_fa2: 'FA2',
+  cbse_fa3: 'FA3',
+  cbse_fa4: 'FA4',
+  cbse_sa1: 'SA1',
+  cbse_sa2: 'SA2'
+} as const;
 
 const statusColors = {
   draft: 'bg-yellow-100 text-yellow-800',
