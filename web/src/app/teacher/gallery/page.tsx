@@ -6,10 +6,10 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Calendar, Camera, Image, Eye, Search, Download, Plus, Edit, Trash2, Upload } from 'lucide-react'
-import { toast } from 'react-hot-toast'
+import { Calendar, Camera, Image, Eye, Search, Download, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useAuth } from '@/hooks/use-auth'
+import { supabase } from '@/lib/supabase-client'
+import { motion, AnimatePresence } from 'framer-motion'
 
 interface Album {
   id: string
@@ -17,9 +17,9 @@ interface Album {
   description: string | null
   event_date: string | null
   event_name: string | null
-  image_count: number
-  status: 'draft' | 'published'
+  images_count: number
   created_at: string
+  cover_image: string | null
 }
 
 interface GalleryImage {
@@ -31,146 +31,112 @@ interface GalleryImage {
 }
 
 export default function TeacherGallery() {
+  const { user } = useAuth()
   const [albums, setAlbums] = useState<Album[]>([])
+  const [allImages, setAllImages] = useState<GalleryImage[]>([])
   const [images, setImages] = useState<GalleryImage[]>([])
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null)
   const [loading, setLoading] = useState(true)
   const [showImages, setShowImages] = useState(false)
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [editingAlbum, setEditingAlbum] = useState<Album | null>(null)
+  const [showPhotoWall, setShowPhotoWall] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
-  const [formData, setFormData] = useState<{
-    title: string
-    description: string
-    event_name: string
-    event_date: string
-    status: 'draft' | 'published'
-  }>({
-    title: '',
-    description: '',
-    event_name: '',
-    event_date: '',
-    status: 'draft'
-  })
 
   useEffect(() => {
-    fetchAlbums()
-  }, [])
+    if (user) {
+      fetchAlbums()
+      fetchAllImages()
+    }
+  }, [user])
 
   const fetchAlbums = async () => {
     try {
-      const response = await fetch('/api/admin/gallery/albums')
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) return
+
+      const response = await fetch('/api/gallery/albums', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+
       if (response.ok) {
         const data = await response.json()
-        setAlbums(data.albums || [])
+        setAlbums(data.data || [])
+      } else {
+        console.error('Failed to fetch albums:', await response.text())
       }
     } catch (error) {
       console.error('Failed to fetch albums:', error)
-      toast.error('Failed to load albums')
     } finally {
       setLoading(false)
     }
   }
 
+  const fetchAllImages = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) return
+
+      // First get all albums
+      const albumsResponse = await fetch('/api/gallery/albums', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+
+      if (albumsResponse.ok) {
+        const albumsData = await albumsResponse.json()
+        const albumsList = albumsData.data || []
+        
+        // Then fetch images for each album
+        const imagePromises = albumsList.map(async (album: Album) => {
+          const imagesResponse = await fetch(`/api/gallery/images?album_id=${album.id}`, {
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`
+            }
+          })
+          
+          if (imagesResponse.ok) {
+            const imagesData = await imagesResponse.json()
+            return (imagesData.data || []).map((img: GalleryImage) => ({
+              ...img,
+              album_title: album.title,
+              album_id: album.id
+            }))
+          }
+          return []
+        })
+
+        const allImageResults = await Promise.all(imagePromises)
+        const flattenedImages = allImageResults.flat()
+        setAllImages(flattenedImages)
+      }
+    } catch (error) {
+      console.error('Failed to fetch all images:', error)
+    }
+  }
+
   const fetchImages = async (albumId: string) => {
     try {
-      const response = await fetch(`/api/admin/gallery/images?album_id=${albumId}`)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) return
+
+      const response = await fetch(`/api/gallery/images?album_id=${albumId}`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+
       if (response.ok) {
         const data = await response.json()
-        setImages(data.images || [])
+        setImages(data.data || [])
+      } else {
+        console.error('Failed to fetch images:', await response.text())
       }
     } catch (error) {
       console.error('Failed to fetch images:', error)
-      toast.error('Failed to load images')
     }
-  }
-
-  const createAlbum = async () => {
-    try {
-      const response = await fetch('/api/admin/gallery/albums', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      })
-      
-      if (response.ok) {
-        toast.success('Album created successfully')
-        setShowCreateModal(false)
-        setFormData({ title: '', description: '', event_name: '', event_date: '', status: 'draft' })
-        fetchAlbums()
-      } else {
-        toast.error('Failed to create album')
-      }
-    } catch (error) {
-      console.error('Failed to create album:', error)
-      toast.error('Failed to create album')
-    }
-  }
-
-  const updateAlbum = async () => {
-    if (!editingAlbum) return
-    
-    try {
-      const response = await fetch(`/api/admin/gallery/albums/${editingAlbum.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      })
-      
-      if (response.ok) {
-        toast.success('Album updated successfully')
-        setShowEditModal(false)
-        setEditingAlbum(null)
-        setFormData({ title: '', description: '', event_name: '', event_date: '', status: 'draft' })
-        fetchAlbums()
-      } else {
-        toast.error('Failed to update album')
-      }
-    } catch (error) {
-      console.error('Failed to update album:', error)
-      toast.error('Failed to update album')
-    }
-  }
-
-  const deleteAlbum = async (albumId: string) => {
-    if (!confirm('Are you sure you want to delete this album? This action cannot be undone.')) {
-      return
-    }
-    
-    try {
-      const response = await fetch(`/api/admin/gallery/albums/${albumId}`, {
-        method: 'DELETE'
-      })
-      
-      if (response.ok) {
-        toast.success('Album deleted successfully')
-        fetchAlbums()
-      } else {
-        toast.error('Failed to delete album')
-      }
-    } catch (error) {
-      console.error('Failed to delete album:', error)
-      toast.error('Failed to delete album')
-    }
-  }
-
-  const openCreateModal = () => {
-    setFormData({ title: '', description: '', event_name: '', event_date: '', status: 'draft' })
-    setShowCreateModal(true)
-  }
-
-  const openEditModal = (album: Album) => {
-    setEditingAlbum(album)
-    setFormData({
-      title: album.title,
-      description: album.description || '',
-      event_name: album.event_name || '',
-      event_date: album.event_date || '',
-      status: album.status
-    })
-    setShowEditModal(true)
   }
 
   const openAlbum = (album: Album) => {
@@ -179,8 +145,16 @@ export default function TeacherGallery() {
     setShowImages(true)
   }
 
-  const openImageViewer = (index: number) => {
-    setSelectedImageIndex(index)
+  const openPhotoWall = () => {
+    setShowPhotoWall(true)
+  }
+
+  const openImageViewer = (index: number, fromPhotoWall = false) => {
+    if (fromPhotoWall) {
+      setSelectedImageIndex(index)
+    } else {
+      setSelectedImageIndex(index)
+    }
   }
 
   const closeImageViewer = () => {
@@ -190,19 +164,30 @@ export default function TeacherGallery() {
   const navigateImage = (direction: 'prev' | 'next') => {
     if (selectedImageIndex === null) return
     
+    const imageList = showPhotoWall ? allImages : images
+    
     if (direction === 'prev') {
-      setSelectedImageIndex(selectedImageIndex > 0 ? selectedImageIndex - 1 : images.length - 1)
+      setSelectedImageIndex(selectedImageIndex > 0 ? selectedImageIndex - 1 : imageList.length - 1)
     } else {
-      setSelectedImageIndex(selectedImageIndex < images.length - 1 ? selectedImageIndex + 1 : 0)
+      setSelectedImageIndex(selectedImageIndex < imageList.length - 1 ? selectedImageIndex + 1 : 0)
     }
   }
 
-  const getStatusBadge = (status: string) => {
-    return status === 'published' ? (
-      <Badge variant="default" className="bg-green-100 text-green-800">Published</Badge>
-    ) : (
-      <Badge variant="secondary">Draft</Badge>
-    )
+  const downloadImage = async (imageUrl: string, fileName: string) => {
+    try {
+      const response = await fetch(imageUrl)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName || 'image.jpg'
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error('Failed to download image:', error)
+    }
   }
 
   const filteredAlbums = albums.filter(album =>
@@ -211,20 +196,36 @@ export default function TeacherGallery() {
     album.description?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  const filteredImages = allImages.filter(image =>
+    image.caption?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (image as any).album_title?.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
   if (loading) {
-    return <div className="p-6">Loading...</div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold">Gallery Management</h1>
-          <p className="text-gray-600">Create and manage photo albums for school events</p>
+          <h1 className="text-3xl font-bold text-gray-900">Gallery</h1>
+          <p className="text-gray-600 mt-2">
+            Browse and explore school memories and events
+          </p>
         </div>
-        <Button onClick={openCreateModal} className="flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          Create Album
+        
+        <Button 
+          onClick={openPhotoWall}
+          className="flex items-center gap-2"
+        >
+          <Image className="w-4 h-4" />
+          Photo Wall ({allImages.length} photos)
         </Button>
       </div>
 
@@ -242,269 +243,176 @@ export default function TeacherGallery() {
       {/* Albums Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredAlbums.map((album) => (
-          <Card key={album.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <CardTitle className="text-lg">{album.title}</CardTitle>
-                {getStatusBadge(album.status)}
+          <Card key={album.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => openAlbum(album)}>
+            <div className="h-48 bg-gray-100 relative overflow-hidden">
+              {album.cover_image ? (
+                <img
+                  src={album.cover_image}
+                  alt={album.title}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                  <Camera className="w-12 h-12 text-gray-400" />
+                </div>
+              )}
+              <div className="absolute inset-0 bg-black/20"></div>
+              <div className="absolute bottom-4 left-4 right-4">
+                <Badge variant="secondary" className="bg-white/90 text-gray-800">
+                  {album.images_count} photos
+                </Badge>
               </div>
+              <div className="absolute top-4 right-4">
+                <Badge className="bg-green-600 text-white">
+                  Published
+                </Badge>
+              </div>
+            </div>
+            
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg font-semibold text-gray-900">
+                {album.title}
+              </CardTitle>
               {album.event_name && (
-                <p className="text-sm text-gray-600">{album.event_name}</p>
+                <p className="text-sm text-gray-600 font-medium">{album.event_name}</p>
               )}
             </CardHeader>
-            <CardContent className="space-y-4">
+            
+            <CardContent className="pt-0 space-y-4">
               {album.description && (
                 <p className="text-sm text-gray-700 line-clamp-2">{album.description}</p>
               )}
               
-              <div className="flex items-center gap-4 text-sm text-gray-600">
+              <div className="flex items-center gap-4 text-sm text-gray-500">
                 {album.event_date && (
                   <div className="flex items-center gap-1">
                     <Calendar className="w-4 h-4" />
                     {new Date(album.event_date).toLocaleDateString()}
                   </div>
                 )}
-                <div className="flex items-center gap-1">
-                  <Image className="w-4 h-4" />
-                  {album.image_count} photos
-                </div>
               </div>
 
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => openAlbum(album)} className="flex-1">
-                  <Eye className="w-4 h-4 mr-2" />
-                  View
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => openEditModal(album)}>
-                  <Edit className="w-4 h-4" />
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => deleteAlbum(album.id)} className="text-red-600 hover:text-red-700">
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
+              <Button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openAlbum(album);
+                }}
+                className="w-full"
+              >
+                <Eye className="w-4 h-4 mr-2" />
+                View Photos
+              </Button>
             </CardContent>
           </Card>
         ))}
       </div>
 
+      {/* No Albums Message */}
       {filteredAlbums.length === 0 && !loading && (
-        <Card className="text-center py-12">
-          <CardContent>
-            <Camera className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchTerm ? 'No albums found' : 'No albums created yet'}
+        <Card className="max-w-md mx-auto">
+          <CardContent className="pt-8 text-center">
+            <Camera className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">
+              {searchTerm ? 'No albums found' : 'No albums available'}
             </h3>
-            <p className="text-gray-600 mb-4">
+            <p className="text-gray-600">
               {searchTerm 
                 ? 'Try adjusting your search terms.'
-                : 'Create your first photo album to get started.'
+                : 'Published photo albums will appear here when available.'
               }
             </p>
-            {!searchTerm && (
-              <Button onClick={openCreateModal}>
-                <Plus className="w-4 h-4 mr-2" />
-                Create First Album
-              </Button>
-            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Create Album Modal */}
-      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create New Album</DialogTitle>
+      {/* Photo Wall Modal */}
+      <Dialog open={showPhotoWall} onOpenChange={setShowPhotoWall}>
+        <DialogContent className="max-w-7xl max-h-[95vh] overflow-hidden p-0">
+          <DialogHeader className="p-6 pb-4">
+            <DialogTitle className="text-2xl font-bold text-center">
+              School Photo Wall ({allImages.length} photos)
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Album Title *</label>
-              <Input
-                placeholder="Enter album title"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              />
+          
+          <div className="overflow-y-auto max-h-[80vh] p-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {filteredImages.map((image, index) => (
+                <motion.div
+                  key={image.id}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="aspect-square cursor-pointer group relative overflow-hidden rounded-lg"
+                  onClick={() => openImageViewer(index, true)}
+                >
+                  <img
+                    src={image.image_url}
+                    alt={image.caption || 'Gallery image'}
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                    <Eye className="w-8 h-8 text-white" />
+                  </div>
+                  {image.caption && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                      <p className="text-white text-xs truncate">{image.caption}</p>
+                    </div>
+                  )}
+                </motion.div>
+              ))}
             </div>
             
-            <div>
-              <label className="block text-sm font-medium mb-2">Event Name</label>
-              <Input
-                placeholder="Event or occasion name"
-                value={formData.event_name}
-                onChange={(e) => setFormData({ ...formData, event_name: e.target.value })}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2">Event Date</label>
-              <Input
-                type="date"
-                value={formData.event_date}
-                onChange={(e) => setFormData({ ...formData, event_date: e.target.value })}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2">Description</label>
-              <Textarea
-                placeholder="Album description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={3}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2">Status</label>
-              <Select value={formData.status} onValueChange={(value: 'draft' | 'published') => setFormData({ ...formData, status: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="published">Published</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="flex gap-2 pt-4">
-              <Button 
-                variant="outline" 
-                onClick={() => setShowCreateModal(false)}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button 
-                onClick={createAlbum}
-                disabled={!formData.title.trim()}
-                className="flex-1"
-              >
-                Create Album
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Album Modal */}
-      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Album</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Album Title *</label>
-              <Input
-                placeholder="Enter album title"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2">Event Name</label>
-              <Input
-                placeholder="Event or occasion name"
-                value={formData.event_name}
-                onChange={(e) => setFormData({ ...formData, event_name: e.target.value })}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2">Event Date</label>
-              <Input
-                type="date"
-                value={formData.event_date}
-                onChange={(e) => setFormData({ ...formData, event_date: e.target.value })}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2">Description</label>
-              <Textarea
-                placeholder="Album description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={3}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2">Status</label>
-              <Select value={formData.status} onValueChange={(value: 'draft' | 'published') => setFormData({ ...formData, status: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="published">Published</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="flex gap-2 pt-4">
-              <Button 
-                variant="outline" 
-                onClick={() => setShowEditModal(false)}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button 
-                onClick={updateAlbum}
-                disabled={!formData.title.trim()}
-                className="flex-1"
-              >
-                Update Album
-              </Button>
-            </div>
+            {filteredImages.length === 0 && (
+              <div className="text-center py-16">
+                <Image className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                <p className="text-gray-600">No photos found.</p>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
 
       {/* Album Images Dialog */}
       <Dialog open={showImages} onOpenChange={setShowImages}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <span>{selectedAlbum?.title} ({images.length} photos)</span>
-              <Button size="sm" variant="outline">
-                <Upload className="w-4 h-4 mr-2" />
-                Add Photos
-              </Button>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden p-0">
+          <DialogHeader className="p-6 pb-4">
+            <DialogTitle className="text-2xl font-bold text-center">
+              {selectedAlbum?.title} ({images.length} photos)
             </DialogTitle>
           </DialogHeader>
-          <div className="overflow-y-auto max-h-[70vh]">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
+          
+          <div className="overflow-y-auto max-h-[70vh] p-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {images.map((image, index) => (
-                <div 
-                  key={image.id} 
-                  className="space-y-2 cursor-pointer hover:opacity-80 transition-opacity"
-                  onClick={() => openImageViewer(index)}
+                <motion.div
+                  key={image.id}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="aspect-square cursor-pointer group relative overflow-hidden rounded-lg"
+                  onClick={() => openImageViewer(index, false)}
                 >
                   <img
                     src={image.image_url}
                     alt={image.caption || 'Gallery image'}
-                    className="w-full h-32 object-cover rounded-lg"
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                   />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                    <Eye className="w-8 h-8 text-white" />
+                  </div>
                   {image.caption && (
-                    <p className="text-xs text-gray-600 line-clamp-2">{image.caption}</p>
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                      <p className="text-white text-xs truncate">{image.caption}</p>
+                    </div>
                   )}
-                </div>
+                </motion.div>
               ))}
             </div>
             
             {images.length === 0 && (
-              <div className="text-center py-12">
-                <Image className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No photos yet</h3>
-                <p className="text-gray-600 mb-4">Upload photos to populate this album.</p>
-                <Button>
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload First Photo
-                </Button>
+              <div className="text-center py-16">
+                <Image className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                <p className="text-gray-600">No photos in this album yet.</p>
               </div>
             )}
           </div>
@@ -512,40 +420,92 @@ export default function TeacherGallery() {
       </Dialog>
 
       {/* Image Viewer Modal */}
-      {selectedImageIndex !== null && images[selectedImageIndex] && (
-        <Dialog open={true} onOpenChange={closeImageViewer}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
-            <DialogHeader>
-              <DialogTitle className="flex items-center justify-between">
-                <span>Photo {selectedImageIndex + 1} of {images.length}</span>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => navigateImage('prev')}>
-                    Previous
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => navigateImage('next')}>
-                    Next
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    <Download className="w-4 h-4" />
-                  </Button>
+      <AnimatePresence>
+        {selectedImageIndex !== null && (
+          <Dialog open={true} onOpenChange={closeImageViewer}>
+            <DialogContent className="max-w-7xl max-h-[95vh] overflow-hidden p-0 bg-black">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="relative h-full"
+              >
+                {/* Navigation Buttons */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="absolute left-4 top-1/2 transform -translate-y-1/2 z-10 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20"
+                  onClick={() => navigateImage('prev')}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20"
+                  onClick={() => navigateImage('next')}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+
+                {/* Close Button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="absolute top-4 right-4 z-10 bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20"
+                  onClick={closeImageViewer}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+
+                {/* Image */}
+                <div className="flex items-center justify-center h-[80vh] bg-black">
+                  {selectedImageIndex !== null && (
+                    <img
+                      src={showPhotoWall ? filteredImages[selectedImageIndex]?.image_url : images[selectedImageIndex]?.image_url}
+                      alt={showPhotoWall ? filteredImages[selectedImageIndex]?.caption || 'Gallery image' : images[selectedImageIndex]?.caption || 'Gallery image'}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  )}
                 </div>
-              </DialogTitle>
-            </DialogHeader>
-            <div className="flex items-center justify-center max-h-[70vh]">
-              <img
-                src={images[selectedImageIndex].image_url}
-                alt={images[selectedImageIndex].caption || 'Gallery image'}
-                className="max-w-full max-h-full object-contain"
-              />
-            </div>
-            {images[selectedImageIndex].caption && (
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-700">{images[selectedImageIndex].caption}</p>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
-      )}
+
+                {/* Image Info */}
+                <div className="p-6 bg-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      {selectedImageIndex !== null && (
+                        <>
+                          <p className="font-semibold text-gray-900">
+                            Image {selectedImageIndex + 1} of {showPhotoWall ? filteredImages.length : images.length}
+                          </p>
+                          {((showPhotoWall ? filteredImages[selectedImageIndex]?.caption : images[selectedImageIndex]?.caption)) && (
+                            <p className="text-sm text-gray-600 mt-1">
+                              {showPhotoWall ? filteredImages[selectedImageIndex]?.caption : images[selectedImageIndex]?.caption}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    {selectedImageIndex !== null && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => downloadImage(
+                          showPhotoWall ? filteredImages[selectedImageIndex]?.image_url : images[selectedImageIndex]?.image_url,
+                          showPhotoWall ? filteredImages[selectedImageIndex]?.file_name || 'image.jpg' : images[selectedImageIndex]?.file_name || 'image.jpg'
+                        )}
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </AnimatePresence>
     </div>
   )
 } 

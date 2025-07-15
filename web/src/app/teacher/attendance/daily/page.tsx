@@ -186,13 +186,13 @@ export default function TeacherDailyAttendancePage() {
         status: record.status,
         recorded_by: user.id,
         notes: record.notes || null,
-        // Leave period fields null for daily attendance
+        // Ensure period fields are null for daily attendance
         period_id: null,
         period_number: null,
         subject: null
       }));
 
-      // Use upsert to handle existing records
+      // Use upsert to handle existing records for daily attendance
       const { error } = await supabase
         .from('attendance_records')
         .upsert(records, {

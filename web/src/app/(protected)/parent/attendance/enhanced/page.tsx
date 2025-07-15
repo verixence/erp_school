@@ -180,8 +180,8 @@ export default function EnhancedParentAttendancePage() {
       const { data, error } = await supabase
         .rpc('get_student_attendance_percentage', {
           student_id_param: selectedChild,
-          start_date: start,
-          end_date: end
+          date_from: start,
+          date_to: end
         });
 
       if (error) throw error;

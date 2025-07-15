@@ -460,7 +460,7 @@ export default function GalleryManagement() {
               {album.event_name && (
                 <p className="text-sm text-gray-600">{album.event_name}</p>
               )}
-              <p className="text-xs text-gray-500">Created by {album.created_by_name}</p>
+
             </CardHeader>
             <CardContent className="space-y-4">
               {album.description && (

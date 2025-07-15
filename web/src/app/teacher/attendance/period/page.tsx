@@ -89,20 +89,61 @@ export default function TeacherPeriodAttendancePage() {
     enabled: !!user?.school_id,
   });
 
-  // Get current weekday (1 = Monday, 7 = Sunday)
+  // Get current weekday (1 = Monday, 7 = Sunday) - Fixed for correct database mapping
   const getCurrentWeekday = () => {
-    const date = new Date(selectedDate);
-    const day = date.getDay();
-    return day === 0 ? 7 : day; // Convert Sunday from 0 to 7
+    // HTML date input always provides dates in YYYY-MM-DD format
+    const date = new Date(selectedDate + 'T00:00:00'); // Add time to avoid timezone issues
+    
+    // Validate that the date was parsed correctly
+    if (isNaN(date.getTime())) {
+      console.error('Invalid date format:', selectedDate);
+      return 1; // Default to Monday
+    }
+    
+    const day = date.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, etc.
+    
+    // Database uses: 1=Monday, 2=Tuesday, ..., 7=Sunday
+    // JavaScript uses: 0=Sunday, 1=Monday, ..., 6=Saturday
+    // Convert JavaScript weekday to database weekday
+    const weekday = day === 0 ? 7 : day;
+    
+    return weekday;
+  };
+
+  // Validate if teacher can mark attendance for selected date
+  const canMarkAttendanceForDate = () => {
+    const selectedDateObj = new Date(selectedDate);
+    const today = new Date();
+    
+    // Can't mark attendance for future dates
+    if (selectedDateObj > today) {
+      return { valid: false, reason: 'Cannot mark attendance for future dates' };
+    }
+    
+    // Can't mark attendance for dates too far in the past (configurable)
+    const maxPastDays = 7; // Allow marking attendance up to 7 days ago
+    const pastLimit = new Date();
+    pastLimit.setDate(pastLimit.getDate() - maxPastDays);
+    
+    if (selectedDateObj < pastLimit) {
+      return { valid: false, reason: `Cannot mark attendance for dates older than ${maxPastDays} days` };
+    }
+    
+    return { valid: true, reason: null };
   };
 
   // Fetch teacher's periods for the selected date
-  const { data: teacherPeriods } = useQuery({
+  const { data: teacherPeriods, error: periodsError, isLoading: periodsLoading } = useQuery({
     queryKey: ['teacher-periods', user?.id, selectedDate],
     queryFn: async (): Promise<Period[]> => {
       if (!user?.id) return [];
 
       const weekday = getCurrentWeekday();
+      
+      // Additional validation: Check if we have a valid weekday
+      if (weekday < 1 || weekday > 7) {
+        throw new Error('Invalid date selected');
+      }
       
       const { data, error } = await supabase
         .from('periods')
@@ -122,12 +163,15 @@ export default function TeacherPeriodAttendancePage() {
         .order('period_no');
 
       if (error) throw error;
-
-             return (data || []).map((period: any) => ({
-         ...period,
-         grade: period.sections.grade,
-         section: period.sections.section
-       }));
+      
+      // Map the data to extract grade and section from the nested sections object
+      const mappedData = (data || []).map((period: any) => ({
+        ...period,
+        grade: period.sections?.grade || 'Unknown',
+        section: period.sections?.section || 'Unknown'
+      }));
+      
+      return mappedData;
     },
     enabled: !!user?.id && !!selectedDate,
   });
@@ -141,12 +185,12 @@ export default function TeacherPeriodAttendancePage() {
       const period = teacherPeriods?.find(p => p.id === selectedPeriod);
       if (!period) return [];
 
+      // Use section_id to join with students table properly
       const { data, error } = await supabase
         .from('students')
         .select('id, full_name, admission_no, grade, section')
         .eq('school_id', user?.school_id)
-        .eq('grade', period.grade)
-        .eq('section', period.section)
+        .eq('section_id', period.section_id)
         .order('full_name');
 
       if (error) throw error;
@@ -183,7 +227,7 @@ export default function TeacherPeriodAttendancePage() {
 
   // Initialize attendance data when existing records are loaded
   useEffect(() => {
-    if (existingAttendance && students) {
+    if (students && students.length > 0) {
       const attendanceMap: Record<string, AttendanceRecord> = {};
       
       // Initialize all students as present by default
@@ -195,28 +239,49 @@ export default function TeacherPeriodAttendancePage() {
         };
       });
 
-      // Override with existing records
-      existingAttendance.forEach(record => {
-        attendanceMap[record.student_id] = {
-          student_id: record.student_id,
-          status: record.status as any,
-          notes: record.notes || ''
-        };
-      });
+      // Override with existing records if they exist
+      if (existingAttendance && existingAttendance.length > 0) {
+        existingAttendance.forEach(record => {
+          attendanceMap[record.student_id] = {
+            student_id: record.student_id,
+            status: record.status as any,
+            notes: record.notes || ''
+          };
+        });
+      }
 
       setAttendanceData(attendanceMap);
     }
   }, [existingAttendance, students]);
 
+  // Reset selected period when date changes
+  useEffect(() => {
+    setSelectedPeriod('');
+  }, [selectedDate]);
+
   // Save attendance mutation
   const saveAttendanceMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedPeriod || !selectedDate || !user?.school_id) {
-        throw new Error('Missing required data');
+      // Validate before saving
+      const validation = canMarkAttendance();
+      if (!validation.valid) {
+        throw new Error(validation.reason || 'Cannot mark attendance at this time');
+      }
+
+      if (!user?.school_id || !user?.id) {
+        throw new Error('User session expired. Please log in again.');
       }
 
       const period = teacherPeriods?.find(p => p.id === selectedPeriod);
-      if (!period) throw new Error('Period not found');
+      if (!period) {
+        throw new Error('Selected period is not valid for this date');
+      }
+
+      // Double-check weekday validation
+      const weekday = getCurrentWeekday();
+      if (period.weekday !== weekday) {
+        throw new Error('Period does not match selected date');
+      }
 
       const records = Object.values(attendanceData).map(record => ({
         school_id: user.school_id,
@@ -230,38 +295,99 @@ export default function TeacherPeriodAttendancePage() {
         subject: period.subject
       }));
 
-      // Handle upsert manually for partial unique index
-      // First, delete existing records for this period to avoid conflicts
-      const { error: deleteError } = await supabase
-        .from('attendance_records')
-        .delete()
-        .eq('date', selectedDate)
-        .eq('period_number', period.period_no)
-        .eq('subject', period.subject)
-        .in('student_id', records.map(r => r.student_id));
+      // Handle period attendance with manual insert/update since we can't use upsert with partial constraints
+      for (const record of records) {
+        // First try to find existing record
+        const { data: existingRecords, error: selectError } = await supabase
+          .from('attendance_records')
+          .select('id')
+          .eq('student_id', record.student_id)
+          .eq('date', record.date)
+          .eq('period_number', record.period_number)
+          .eq('subject', record.subject);
 
-      if (deleteError) throw deleteError;
+        if (selectError) {
+          throw selectError;
+        }
 
-      // Then insert new records
-      const { error: insertError } = await supabase
-        .from('attendance_records')
-        .insert(records);
+        const existingRecord = existingRecords && existingRecords.length > 0 ? existingRecords[0] : null;
 
-      if (insertError) throw insertError;
+        if (existingRecord) {
+          // Update existing record
+          const { error: updateError } = await supabase
+            .from('attendance_records')
+            .update({
+              status: record.status,
+              recorded_by: record.recorded_by,
+              notes: record.notes,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingRecord.id);
+
+          if (updateError) throw updateError;
+        } else {
+          // Insert new record
+          const { error: insertError } = await supabase
+            .from('attendance_records')
+            .insert({
+              ...record,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+
+          if (insertError) throw insertError;
+        }
+      }
     },
     onSuccess: () => {
       toast.success('Period attendance saved successfully');
       queryClient.invalidateQueries({ queryKey: ['period-attendance'] });
+      // Reset selection after successful save
+      setSelectedPeriod('');
     },
     onError: (error) => {
-      toast.error('Failed to save attendance: ' + error.message);
+      console.error('Save attendance error:', error);
+      toast.error(error.message || 'Failed to save attendance');
     },
   });
 
   // Validation functions
   const canMarkAttendance = () => {
-    const today = new Date().toISOString().split('T')[0];
-    return selectedDate <= today;
+    const dateValidation = canMarkAttendanceForDate();
+    if (!dateValidation.valid) {
+      return { valid: false, reason: dateValidation.reason };
+    }
+    
+    // Check if teacher has any periods on this date
+    if (!teacherPeriods || teacherPeriods.length === 0) {
+      return { valid: false, reason: 'You have no periods assigned for this date' };
+    }
+    
+    // Check if a period is selected
+    if (!selectedPeriod) {
+      return { valid: false, reason: 'Please select a period' };
+    }
+    
+    // Validate that the selected period belongs to the teacher on this date
+    const period = teacherPeriods.find(p => p.id === selectedPeriod);
+    if (!period) {
+      return { valid: false, reason: 'Selected period is not assigned to you on this date' };
+    }
+    
+    return { valid: true, reason: null };
+  };
+
+  const getValidationMessage = () => {
+    const validation = canMarkAttendance();
+    if (!validation.valid) {
+      return validation.reason;
+    }
+    
+    if (periodsError) {
+      return 'Error loading your periods. Please try again.';
+    }
+    
+    return null;
   };
 
   const isCurrentPeriod = (period: Period) => {
@@ -367,9 +493,17 @@ export default function TeacherPeriodAttendancePage() {
 
             <div className="space-y-2">
               <Label>Period</Label>
-              <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+              <Select 
+                value={selectedPeriod} 
+                onValueChange={setSelectedPeriod}
+                disabled={periodsLoading || !teacherPeriods || teacherPeriods.length === 0}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a period" />
+                  <SelectValue placeholder={
+                    periodsLoading ? "Loading periods..." : 
+                    !teacherPeriods || teacherPeriods.length === 0 ? "No periods available" :
+                    "Select a period"
+                  } />
                 </SelectTrigger>
                 <SelectContent>
                   {teacherPeriods?.map((period) => (
@@ -392,14 +526,20 @@ export default function TeacherPeriodAttendancePage() {
                   ))}
                 </SelectContent>
               </Select>
+              
+              {periodsError && (
+                <div className="text-sm text-red-600 mt-1">
+                  Error loading periods: {periodsError.message}
+                </div>
+              )}
             </div>
           </div>
 
-          {!canMarkAttendance() && (
+          {!canMarkAttendance().valid && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
               <div className="flex items-center gap-2 text-amber-800">
                 <AlertTriangle className="h-4 w-4" />
-                <span className="text-sm">Cannot mark attendance for future dates</span>
+                <span className="text-sm">{getValidationMessage()}</span>
               </div>
             </div>
           )}
@@ -451,7 +591,7 @@ export default function TeacherPeriodAttendancePage() {
                           size="sm"
                           className={status === statusOption ? getStatusColor(statusOption) : ''}
                           onClick={() => updateAttendance(student.id, statusOption as any)}
-                          disabled={!canMarkAttendance()}
+                          disabled={!canMarkAttendance().valid}
                         >
                           {getStatusIcon(statusOption)}
                           <span className="ml-1 capitalize">{statusOption}</span>
@@ -463,7 +603,7 @@ export default function TeacherPeriodAttendancePage() {
               })}
             </div>
 
-            {canMarkAttendance() && (
+            {canMarkAttendance().valid && (
               <div className="mt-6 flex justify-end">
                 <Button
                   onClick={() => saveAttendanceMutation.mutate()}
@@ -479,14 +619,55 @@ export default function TeacherPeriodAttendancePage() {
       )}
 
       {/* No periods message */}
-      {teacherPeriods && teacherPeriods.length === 0 && (
+      {!periodsLoading && teacherPeriods && teacherPeriods.length === 0 && (
         <Card>
           <CardContent className="p-6 text-center">
             <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">No Periods Assigned</h3>
-            <p className="text-muted-foreground">
-              You don't have any periods assigned for {new Date(selectedDate).toLocaleDateString()}.
+            <p className="text-muted-foreground mb-2">
+              You don't have any periods assigned for {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}.
             </p>
+            <p className="text-sm text-muted-foreground">
+              Please select a different date or contact your administrator if you believe this is an error.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Loading state */}
+      {periodsLoading && (
+        <Card>
+          <CardContent className="p-6 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading your periods...</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Error state */}
+      {periodsError && (
+        <Card>
+          <CardContent className="p-6 text-center">
+            <AlertTriangle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Error Loading Periods</h3>
+            <p className="text-muted-foreground mb-4">
+              Unable to load your periods for this date. Please try again.
+            </p>
+            <p className="text-sm text-red-600 mb-4">
+              {periodsError.message}
+            </p>
+            <Button 
+              onClick={() => window.location.reload()} 
+              variant="outline"
+              size="sm"
+            >
+              Refresh Page
+            </Button>
           </CardContent>
         </Card>
       )}

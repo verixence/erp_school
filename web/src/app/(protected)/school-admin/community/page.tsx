@@ -1,69 +1,121 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Users, MessageSquare, Heart, Search, Filter } from 'lucide-react';
+import { useState } from 'react';
+import { useAuth } from '@/hooks/use-auth';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { PostCard } from '@/components/ui/post-card';
-import { CreatePostModal } from '@/components/ui/create-post-modal';
-import { useAuth } from '@/hooks/use-auth';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { usePosts, useCreatePost, uploadMedia } from '@erp/common';
 import { 
-  usePosts, 
-  subscribeToPostUpdates,
-  Post 
-} from '@erp/common';
+  MessageSquare, 
+  Heart, 
+  Search, 
+  Plus, 
+  Users, 
+  Edit,
+  Trash2,
+  ImageIcon,
+  X,
+  Send,
+  BarChart3
+} from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { toast } from 'sonner';
+import PostCard from '@/components/PostCard';
 
-export default function CommunityPage() {
+export default function SchoolAdminCommunityPage() {
   const { user } = useAuth();
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [audience, setAudience] = useState<'all' | 'teachers' | 'parents'>('all');
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCreatePost, setShowCreatePost] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedAudience, setSelectedAudience] = useState<'all' | 'teachers' | 'parents' | 'students' | null>(null);
-  const [posts, setPosts] = useState<Post[]>([]);
-  
-  const { data: postsData, isLoading, error } = usePosts(user?.school_id || '');
+  const [selectedAudience, setSelectedAudience] = useState<'all' | 'teachers' | 'parents'>('all');
 
-  // Update local posts when data changes
-  useEffect(() => {
-    if (postsData) {
-      setPosts(postsData);
-    }
-  }, [postsData]);
+  const { data: posts = [], refetch } = usePosts(user?.school_id || '');
+  const createPostMutation = useCreatePost();
 
-  // Set up real-time subscriptions
-  useEffect(() => {
-    const subscription = subscribeToPostUpdates((payload) => {
-      console.log('Real-time update:', payload);
-      
-      if (payload.eventType === 'INSERT' && payload.table === 'posts') {
-        console.log('New post added');
-      }
-      
-      if (payload.eventType === 'INSERT' && payload.table === 'post_reactions') {
-        console.log('New reaction added');
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  // Filter posts based on search and audience
+  // Filter posts based on search query and audience
   const filteredPosts = posts.filter(post => {
     const matchesSearch = !searchQuery || 
       post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       post.body?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       `${post.author?.first_name} ${post.author?.last_name}`.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesAudience = !selectedAudience || 
-      selectedAudience === 'all' || 
-      post.audience === selectedAudience || 
-      post.audience === 'all';
+    const matchesAudience = selectedAudience === 'all' || post.audience === selectedAudience;
     
     return matchesSearch && matchesAudience;
   });
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    setSelectedFiles(prev => [...prev, ...files]);
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim() || !body.trim()) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      let mediaUrls: string[] = [];
+      
+      if (selectedFiles.length > 0) {
+        const uploadedMedia = await uploadMedia(selectedFiles, user?.school_id || '');
+        mediaUrls = uploadedMedia.map(m => m.url);
+      }
+
+      await createPostMutation.mutateAsync({
+        schoolId: user?.school_id || '',
+        title: title.trim(),
+        body: body.trim(),
+        audience,
+        media: mediaUrls.map(url => ({ url, type: 'image' as const, name: 'image' }))
+      });
+
+      toast.success('Post created successfully!');
+      setTitle('');
+      setBody('');
+      setSelectedFiles([]);
+      setAudience('all');
+      setShowCreatePost(false);
+      refetch();
+    } catch (error) {
+      console.error('Error creating post:', error);
+      toast.error('Failed to create post');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getAudienceBadge = (aud: string) => {
+    const colors = {
+      all: 'bg-blue-100 text-blue-800',
+      teachers: 'bg-green-100 text-green-800',
+      parents: 'bg-purple-100 text-purple-800',
+    };
+    
+    return (
+      <Badge className={colors[aud as keyof typeof colors] || colors.all}>
+        {aud.charAt(0).toUpperCase() + aud.slice(1)}
+      </Badge>
+    );
+  };
 
   // Calculate community stats
   const stats = {
@@ -73,230 +125,249 @@ export default function CommunityPage() {
     activeMembers: new Set(posts.map(post => post.author_id)).size,
   };
 
-  const audienceFilters = [
-    { label: 'All', value: null },
-    { label: 'Teachers', value: 'teachers' as const },
-    { label: 'Parents', value: 'parents' as const },
-    { label: 'Students', value: 'students' as const },
-  ];
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Community</h1>
+          <p className="text-gray-600 mt-2">
+            Manage and engage with your school community
+          </p>
+        </div>
+        
+        <Dialog open={showCreatePost} onOpenChange={setShowCreatePost}>
+          <DialogTrigger asChild>
+            <Button className="flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              Create Post
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Create New Post</DialogTitle>
+            </DialogHeader>
+            
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="title">Title</Label>
+                <Input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Enter post title..."
+                  required
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="body">Content</Label>
+                <Textarea
+                  id="body"
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  placeholder="Write your post content..."
+                  rows={4}
+                  required
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="audience">Audience</Label>
+                <Select value={audience} onValueChange={(value: any) => setAudience(value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select audience" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Everyone</SelectItem>
+                    <SelectItem value="teachers">Teachers Only</SelectItem>
+                    <SelectItem value="parents">Parents Only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-  if (error) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Community</h2>
-          <p className="text-gray-600">Failed to load community posts. Please try again.</p>
+              {/* Media Upload */}
+              <div>
+                <Label htmlFor="media">Add Images</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="media"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => document.getElementById('media')?.click()}
+                    className="flex items-center gap-2"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                    Add Images
+                  </Button>
+                </div>
+                
+                {selectedFiles.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedFiles.map((file, index) => (
+                      <div key={index} className="relative">
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt={`Preview ${index + 1}`}
+                          className="w-20 h-20 object-cover rounded border"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => removeFile(index)}
+                          className="absolute -top-2 -right-2 w-5 h-5 rounded-full p-0"
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex justify-end gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowCreatePost(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Creating...' : 'Create Post'}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Community Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <MessageSquare className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Total Posts</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.totalPosts}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-red-100 rounded-lg">
+                <Heart className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Total Reactions</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.totalReactions}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-green-100 rounded-lg">
+                <MessageSquare className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Total Comments</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.totalComments}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-purple-100 rounded-lg">
+                <Users className="w-6 h-6 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Active Members</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.activeMembers}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Input
+            placeholder="Search posts..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        
+        <div className="flex gap-2">
+          {(['all', 'teachers', 'parents'] as const).map((audience) => (
+            <Button
+              key={audience}
+              variant={selectedAudience === audience ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedAudience(audience)}
+              className="capitalize"
+            >
+              {audience}
+            </Button>
+          ))}
         </div>
       </div>
-    );
-  }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-blue-900 dark:to-indigo-900">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              Community Hub
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Stay connected with your school community
-            </p>
-          </div>
-          <Button 
-            onClick={() => setIsCreateModalOpen(true)}
-            className="mt-4 lg:mt-0 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create Post
-          </Button>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white/20 backdrop-blur-md rounded-lg p-6 border border-white/20"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Posts</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalPosts}</p>
-              </div>
-              <MessageSquare className="h-8 w-8 text-blue-500" />
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white/20 backdrop-blur-md rounded-lg p-6 border border-white/20"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Reactions</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalReactions}</p>
-              </div>
-              <Heart className="h-8 w-8 text-red-500" />
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-white/20 backdrop-blur-md rounded-lg p-6 border border-white/20"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Comments</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalComments}</p>
-              </div>
-              <MessageSquare className="h-8 w-8 text-green-500" />
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-white/20 backdrop-blur-md rounded-lg p-6 border border-white/20"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Active Members</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.activeMembers}</p>
-              </div>
-              <Users className="h-8 w-8 text-purple-500" />
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Search and Filters */}
-        <div className="bg-white/20 backdrop-blur-md rounded-lg p-6 border border-white/20 mb-8">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0 lg:space-x-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search posts, authors, or content..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-white/50 border-white/30"
-              />
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Filter className="h-4 w-4 text-gray-500" />
-              <div className="flex flex-wrap gap-2">
-                {audienceFilters.map((filter) => (
-                  <Button
-                    key={filter.label}
-                    onClick={() => setSelectedAudience(filter.value)}
-                    variant={selectedAudience === filter.value ? "default" : "outline"}
-                    size="sm"
-                    className={
-                      selectedAudience === filter.value
-                        ? "bg-blue-500 text-white"
-                        : "bg-white/50 hover:bg-white/70"
-                    }
-                  >
-                    {filter.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </div>
-          
-          {(searchQuery || selectedAudience) && (
-            <div className="flex items-center space-x-2 mt-4">
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                Showing {filteredPosts.length} of {posts.length} posts
-              </span>
-              {selectedAudience && (
-                <Badge variant="secondary">
-                  {audienceFilters.find(f => f.value === selectedAudience)?.label}
-                </Badge>
-              )}
-              {searchQuery && (
-                <Badge variant="secondary">
-                  "{searchQuery}"
-                </Badge>
-              )}
-              <Button
-                onClick={() => {
-                  setSearchQuery('');
-                  setSelectedAudience(null);
-                }}
-                variant="ghost"
-                size="sm"
-                className="text-gray-500 hover:text-gray-700"
-              >
-                Clear filters
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* Posts Grid - Masonry Layout */}
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <div
-                key={i}
-                className="animate-pulse bg-white/20 backdrop-blur-md rounded-lg h-64 border border-white/20"
-              />
-            ))}
-          </div>
-        ) : filteredPosts.length > 0 ? (
-          <div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
-            <AnimatePresence>
-              {filteredPosts.map((post, index) => (
-                <motion.div
-                  key={post.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="break-inside-avoid mb-6"
-                >
-                  <PostCard post={post} />
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
+      {/* Posts Feed */}
+      <div className="space-y-6">
+        {filteredPosts.length === 0 ? (
+          <Card>
+            <CardContent className="pt-8 text-center">
+              <MessageSquare className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                {searchQuery ? 'No posts found' : 'No posts available'}
+              </h3>
+              <p className="text-gray-600">
+                {searchQuery 
+                  ? 'Try adjusting your search terms or filters.'
+                  : 'Start the conversation by creating your first post!'
+                }
+              </p>
+            </CardContent>
+          </Card>
         ) : (
-          <div className="text-center py-12">
-            <MessageSquare className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-              {searchQuery || selectedAudience ? 'No posts found' : 'No posts yet'}
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              {searchQuery || selectedAudience 
-                ? 'Try adjusting your search or filters' 
-                : 'Be the first to share something with the community!'
-              }
-            </p>
-            {!(searchQuery || selectedAudience) && (
-              <Button 
-                onClick={() => setIsCreateModalOpen(true)}
-                className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Create First Post
-              </Button>
-            )}
-          </div>
+          filteredPosts.map((post) => (
+            <PostCard
+              key={post.id}
+              post={post}
+              user={user}
+              onPostUpdated={refetch}
+              onPostDeleted={refetch}
+              showComments={true}
+              allowInteractions={true}
+              allowEditing={true}
+            />
+          ))
         )}
       </div>
-
-      {/* Create Post Modal */}
-      <CreatePostModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-      />
     </div>
   );
 } 
