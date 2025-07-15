@@ -13,6 +13,7 @@
     --popover-foreground: 224 71.4% 4.1%;
     --primary: var(--c-primary, 220.9 39.3% 11%);
     --primary-foreground: var(--c-primary-fg, 210 20% 98%);
+    --primary-light: var(--c-primary-light, 220.9 39.3% 21%);
     --secondary: var(--c-secondary, 220 14.3% 95.9%);
     --secondary-foreground: var(--c-secondary-fg, 220.9 39.3% 11%);
     --muted: 220 14.3% 95.9%;
@@ -23,13 +24,8 @@
     --destructive-foreground: 210 20% 98%;
     --border: 220 13% 91%;
     --input: 220 13% 91%;
-    --ring: 224 71.4% 4.1%;
+    --ring: var(--c-primary, 224 71.4% 4.1%);
     --radius: 0.5rem;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
   }
 }
 
@@ -44,68 +40,56 @@
 }
 
 @layer components {
-  .card-flat {
-    @apply bg-white border border-gray-200 rounded-lg shadow-sm;
+  /* Sidebar styles */
+  .sidebar {
+    @apply fixed top-0 left-0 z-50 h-full w-64 bg-white border-r border-border p-4 flex flex-col gap-2;
+    transition: transform 0.3s ease-in-out;
   }
-  
-  .header-gradient-border {
-    background: linear-gradient(to top, rgb(from var(--c-primary) r g b / 0.1) 0%, transparent 100%);
+
+  /* Ensure sidebar is visible on large screens */
+  @media (min-width: 1024px) {
+    .sidebar {
+      @apply relative transform-none;
+    }
   }
-  
-  .hero-gradient {
-    background: linear-gradient(135deg, var(--c-primary), var(--c-secondary));
-  }
-  
-  .kpi-card {
-    @apply card-flat p-6 transition-all duration-200 hover:shadow-md;
-  }
-  
-  .quick-action-card {
-    @apply card-flat p-4 transition-all duration-200 hover:shadow-md border border-gray-200 hover:border-gray-300;
-  }
-  
-  .sidebar-nav-item {
+
+  .sidebar-link {
     @apply flex items-center rounded-lg p-3 transition-all duration-200 relative;
-    @apply hover:bg-gray-100;
   }
-  
-  .sidebar-nav-item.active {
-    @apply bg-gray-100 border border-gray-300 shadow-lg;
+
+  .sidebar-link.active {
+    @apply bg-primary/10 text-primary font-medium;
   }
-  
-  .sidebar-nav-item:not(.active) {
+
+  .sidebar-link:not(.active) {
+    @apply text-muted-foreground hover:bg-primary/5 hover:text-primary;
+  }
+
+  .sidebar-link-icon {
+    @apply h-5 w-5 mr-3 transition-colors duration-200;
+  }
+
+  .sidebar-link-icon.active {
+    @apply text-primary;
+  }
+
+  .sidebar-link:hover .sidebar-link-icon:not(.active) {
+    @apply text-primary;
+  }
+
+  .sidebar-link-icon:not(.active) {
     @apply text-muted-foreground;
   }
-}
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  .sidebar-active-indicator {
+    @apply absolute left-0 w-1 h-8 bg-primary rounded-r-full;
   }
-  
-  .btn-visible {
-    color: hsl(var(--foreground)) !important;
-    opacity: 1 !important;
-  }
-  
-  .btn-primary-visible {
-    background-color: hsl(var(--primary)) !important;
-    color: hsl(var(--primary-foreground)) !important;
-    opacity: 1 !important;
-  }
-  
-  .btn-outline-visible {
-    background-color: hsl(var(--background)) !important;
-    color: hsl(var(--foreground)) !important;
-    border-color: hsl(var(--border)) !important;
-    opacity: 1 !important;
-  }
-}
 
-@layer components {
+  /* Button styles */
   .btn,
   button,
   [role="button"] {
+    @apply transition-colors duration-200;
     color: inherit !important;
     opacity: 1 !important;
   }
@@ -115,6 +99,7 @@
   button:not([class*="variant"]):not([class*="ghost"]):not([class*="outline"]) {
     background-color: hsl(var(--primary)) !important;
     color: hsl(var(--primary-foreground)) !important;
+    @apply hover:brightness-110 transition-all;
   }
   
   button[data-variant="outline"],
@@ -124,6 +109,7 @@
     background-color: hsl(var(--background)) !important;
     color: hsl(var(--foreground)) !important;
     border-color: hsl(var(--border)) !important;
+    @apply hover:bg-primary/5 transition-colors;
   }
   
   button[data-variant="ghost"],
@@ -132,6 +118,7 @@
   .btn.ghost {
     background-color: transparent !important;
     color: hsl(var(--foreground)) !important;
+    @apply hover:bg-primary/5 transition-colors;
   }
   
   button[data-variant="destructive"],
@@ -140,6 +127,15 @@
   .btn.destructive {
     background-color: hsl(var(--destructive)) !important;
     color: hsl(var(--destructive-foreground)) !important;
+    @apply hover:brightness-110 transition-all;
+  }
+
+  .kpi-card {
+    @apply hover:shadow-md transition-all duration-200 hover:border-primary/20;
+  }
+
+  .quick-action-card {
+    @apply hover:shadow-md transition-all duration-200 hover:border-primary/20 hover:bg-primary/5;
   }
 }
 
@@ -168,13 +164,13 @@
 
 /* Gradient backgrounds */
 .gradient-blue-purple {
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
 }
 
 .gradient-green-blue {
-  background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(var(--primary)) 100%);
 }
 
 .gradient-orange-red {
-  background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+  background: linear-gradient(135deg, hsl(var(--secondary)) 0%, hsl(var(--destructive)) 100%);
 }

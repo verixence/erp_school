@@ -161,7 +161,7 @@ export default function AttendanceMetrics() {
                 <p className="text-sm font-medium text-gray-600">Overall Attendance</p>
                 <div className="flex items-center gap-2">
                   <p className="text-2xl font-bold text-gray-900">
-                    {metrics?.attendance_rate.toFixed(1)}%
+                    {(metrics?.attendance_rate || 0).toFixed(1)}%
                   </p>
                   {trendDirection && (
                     <div className={`flex items-center ${trendDirection === 'up' ? 'text-green-600' : 'text-red-600'}`}>
@@ -278,7 +278,7 @@ export default function AttendanceMetrics() {
                       </div>
                     </div>
                     <Badge variant={day.rate >= 90 ? 'default' : day.rate >= 75 ? 'secondary' : 'destructive'}>
-                      {day.rate.toFixed(1)}%
+                      {(day.rate || 0).toFixed(1)}%
                     </Badge>
                   </div>
                 </div>
@@ -307,7 +307,7 @@ export default function AttendanceMetrics() {
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="font-semibold">Grade {grade.grade}</h4>
                     <Badge variant={grade.rate >= 90 ? 'default' : grade.rate >= 75 ? 'secondary' : 'destructive'}>
-                      {grade.rate.toFixed(1)}%
+                      {(grade.rate || 0).toFixed(1)}%
                     </Badge>
                   </div>
                   <div className="space-y-2">

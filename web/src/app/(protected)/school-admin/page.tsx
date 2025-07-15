@@ -198,7 +198,10 @@ export default function SchoolAdminDashboard() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-3xl p-6 md:p-10 text-white hero-gradient-tri min-h-[120px] md:min-h-[200px] relative overflow-hidden"
+        className="rounded-3xl p-6 md:p-10 text-white relative overflow-hidden"
+        style={{
+          background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-light)) 100%)',
+        }}
       >
         <div className="relative z-10">
           <h2 className="text-3xl md:text-4xl font-bold">
@@ -215,9 +218,9 @@ export default function SchoolAdminDashboard() {
           </p>
           
           <div className="mt-6 flex items-center space-x-4">
-                          <Badge variant="secondary" className="bg-white/20 text-white border-white/30 hover:bg-white/30">
-                CampusHoster
-              </Badge>
+            <Badge variant="secondary" className="bg-white/20 text-white border-white/30 hover:bg-white/30 transition-colors">
+              CampusHoster
+            </Badge>
             <div className="flex items-center text-sm opacity-80">
               <TrendingUp className="h-4 w-4 mr-1" />
               {stats && stats.totalStudents === 0 && stats.totalTeachers === 0 && stats.totalSections === 0

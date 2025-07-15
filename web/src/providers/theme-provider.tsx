@@ -69,13 +69,28 @@ export function ThemeProvider({
         return `${hDeg} ${sPct}% ${lPct}%`;
       };
 
+      // Helper function to adjust lightness
+      const adjustLightness = (hsl: string, adjustment: number) => {
+        const [h, s, l] = hsl.split(' ').map(val => parseInt(val));
+        const newL = Math.max(0, Math.min(100, l + adjustment));
+        return `${h} ${s}% ${newL}%`;
+      };
+
+      // Convert colors to HSL
+      const primaryHSL = convertToHSL(primary);
+      const secondaryHSL = convertToHSL(secondary);
+      const accentHSL = convertToHSL(accent);
+      
       // Set CSS variables for brand colors
-      root.style.setProperty('--primary', convertToHSL(primary));
-      root.style.setProperty('--primary-foreground', convertToHSL(getForegroundColor(primary)));
-      root.style.setProperty('--secondary', convertToHSL(secondary));
-      root.style.setProperty('--secondary-foreground', convertToHSL(getForegroundColor(secondary)));
-      root.style.setProperty('--accent', convertToHSL(accent));
-      root.style.setProperty('--accent-foreground', convertToHSL(getForegroundColor(accent)));
+      root.style.setProperty('--primary', primaryHSL);
+      root.style.setProperty('--primary-foreground', '0 0% 100%');
+      root.style.setProperty('--primary-light', adjustLightness(primaryHSL, 10));
+      root.style.setProperty('--primary-dark', adjustLightness(primaryHSL, -10));
+      
+      root.style.setProperty('--secondary', secondaryHSL);
+      root.style.setProperty('--secondary-foreground', '0 0% 100%');
+      root.style.setProperty('--accent', accentHSL);
+      root.style.setProperty('--accent-foreground', '0 0% 100%');
 
       // Set additional CSS variables for consistent UI
       root.style.setProperty('--background', '0 0% 100%');
@@ -90,8 +105,12 @@ export function ThemeProvider({
       root.style.setProperty('--destructive-foreground', '210 40% 98%');
       root.style.setProperty('--border', '214.3 31.8% 91.4%');
       root.style.setProperty('--input', '214.3 31.8% 91.4%');
-      root.style.setProperty('--ring', convertToHSL(primary));
+      root.style.setProperty('--ring', primaryHSL);
       root.style.setProperty('--radius', '0.5rem');
+
+      // Set gradient variables
+      root.style.setProperty('--gradient-from', `hsl(${primaryHSL})`);
+      root.style.setProperty('--gradient-to', `hsl(${adjustLightness(primaryHSL, 10)})`);
     }
   }, [brand]);
 
@@ -106,23 +125,6 @@ export function ThemeProvider({
       </NextThemesProvider>
     </ThemeProviderContext.Provider>
   );
-}
-
-// Helper function to determine foreground color based on background color
-function getForegroundColor(backgroundColor: string): string {
-  // Remove the hash if present
-  const hex = backgroundColor.replace('#', '');
-  
-  // Convert hex to RGB
-  const r = parseInt(hex.substr(0, 2), 16);
-  const g = parseInt(hex.substr(2, 2), 16);
-  const b = parseInt(hex.substr(4, 2), 16);
-  
-  // Calculate relative luminance
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  
-  // Return white for dark backgrounds, black for light backgrounds
-  return luminance > 0.5 ? '#1f2937' : '#ffffff';
 }
 
 export const useTheme = () => {

@@ -18,6 +18,7 @@ export interface CBSEStudent {
   admission_no?: string;
   section?: string;
   grade?: string;
+  roll_no?: string;
 }
 
 // School information

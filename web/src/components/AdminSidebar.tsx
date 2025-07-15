@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -29,39 +29,15 @@ import {
   CalendarDays,
   Mail,
   Star,
-  Target
+  Target,
+  CheckCircle,
+  X,
+  Image,
+  Heart,
+  Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-
-const navigation = [
-  { name: 'Dashboard', href: '/school-admin', icon: LayoutDashboard, description: 'Overview & Analytics' },
-  { name: 'Classes', href: '/school-admin/sections', icon: Building2, description: 'Manage Classes & Sections' },
-  { name: 'Students', href: '/school-admin/students', icon: GraduationCap, description: 'Student Management' },
-  { name: 'Teachers', href: '/school-admin/teachers', icon: UserCheck, description: 'Teacher Management' },
-  { name: 'Parents', href: '/school-admin/parents', icon: Users, description: 'Parent Management' },
-  { name: 'Attendance', href: '/school-admin/attendance', icon: ClipboardCheck, description: 'Attendance Tracking' },
-  { name: 'Timetable', href: '/school-admin/timetable', icon: Calendar, description: 'Schedule Management' },
-  { name: 'Exams', href: '/school-admin/exams', icon: BookOpen, description: 'Examination System' },
-  { name: 'Marks', href: '/school-admin/marks', icon: Award, description: 'Marks & Assessment' },
-  { name: 'Report Cards', href: '/school-admin/reports', icon: FileText, description: 'Generate Report Cards' },
-  { name: 'CBSE Reports', href: '/school-admin/cbse-reports', icon: Star, description: 'CBSE Term Reports (Term1/Term2/Cumulative)' },
-  { name: 'Co-Scholastic Assessment', href: '/school-admin/cbse-reports/co-scholastic', icon: Target, description: 'Attitude, Values & Personal Qualities' },
-  
-  { name: 'Community', href: '/school-admin/community', icon: MessageSquare, description: 'School Community' },
-  { name: 'Announcements', href: '/school-admin/announcements', icon: Megaphone, description: 'School Announcements' },
-  
-  { name: 'Gallery', href: '/school-admin/gallery', icon: Camera, description: 'Photo Albums & Images' },
-  { name: 'Feedback', href: '/school-admin/feedback', icon: Mail, description: 'Feedback Management' },
-  { name: 'Calendar', href: '/school-admin/calendar', icon: CalendarDays, description: 'Academic Calendar' },
-];
-
-const superAdminNavigation = [
-  { name: 'Overview', href: '/super-admin', icon: Shield, description: 'System Overview' },
-  { name: 'Schools', href: '/super-admin/schools', icon: School, description: 'Manage Schools' },
-  { name: 'Report Templates', href: '/super-admin/report-templates', icon: FileText, description: 'Board-wise Report Templates' },
-  { name: 'Template Catalogue', href: '/super-admin/template-catalogue', icon: Palette, description: 'Manage Public Templates' },
-  { name: 'Audit Logs', href: '/super-admin/audit-logs', icon: FileText, description: 'System Audit Logs' },
-];
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 interface AdminSidebarProps {
   brand: Brand;
@@ -69,177 +45,245 @@ interface AdminSidebarProps {
   onClose?: () => void;
 }
 
+interface SidebarLinkProps {
+  href: string;
+  icon: any;
+  children: React.ReactNode;
+  isActive: boolean;
+}
+
+const SidebarLink = ({ href, icon: Icon, children, isActive }: SidebarLinkProps) => {
+  return (
+    <Link
+      href={href}
+      className={cn("sidebar-link", isActive && "active")}
+    >
+      <Icon className={cn("sidebar-link-icon", isActive && "active")} />
+      {children}
+      {isActive && (
+        <motion.div
+          layoutId="sidebar-active-indicator"
+          className="sidebar-active-indicator"
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        />
+      )}
+    </Link>
+  );
+};
+
 export function AdminSidebar({ brand, isOpen, onClose }: AdminSidebarProps) {
   const pathname = usePathname();
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const { user } = useAuth();
+  const [isMobile, setIsMobile] = useState(false);
 
-  const toggleCollapse = () => {
-    setIsCollapsed(!isCollapsed);
-  };
-
-  const renderNavItem = (item: any, isActive: boolean) => {
-          const Icon = item.icon;
-
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              onClick={onClose}
-              className={cn(
-                "sidebar-nav-item group",
-                isActive && "active"
-              )}
-              title={isCollapsed ? `${item.name} - ${item.description}` : undefined}
-            >
-              <Icon className={cn(
-                "h-5 w-5 transition-colors flex-shrink-0",
-                isActive ? "text-brand-primary" : "text-muted-foreground group-hover:text-brand-primary"
-              )} />
-              
-              {!isCollapsed && (
-                <motion.div
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  className="ml-3 flex-1 min-w-0"
-                >
-                  <div className="text-sm font-medium">{item.name}</div>
-                  {!isActive && (
-                    <div className="text-xs text-muted-foreground group-hover:text-brand-primary/70 truncate">
-                      {item.description}
-                    </div>
-                  )}
-                </motion.div>
-              )}
-
-              {isActive && (
-                <motion.div
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: 1 }}
-                  className="absolute left-0 top-0 bottom-0 w-1 bg-brand-primary rounded-r"
-                />
-              )}
-            </Link>
-          );
-  };
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+    };
+  }, []);
 
   const sidebarContent = (
-    <div className={cn(
-      "h-full flex flex-col card-flat border-r border-gray-200 dark:border-gray-700 transition-all duration-300",
-      isCollapsed ? "w-16" : "w-64"
-    )}>
-      {/* Sidebar Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-        {!isCollapsed && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex items-center space-x-2"
-          >
-            <div className="w-8 h-8 rounded-lg bg-brand-primary/10 flex items-center justify-center">
-              <Building2 className="h-4 w-4 text-brand-primary" />
-            </div>
-            <span className="text-sm font-medium text-foreground">Navigation</span>
-          </motion.div>
-        )}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={toggleCollapse}
-          className="hidden lg:flex h-8 w-8 p-0"
+    <>
+      {/* Close button for mobile */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-foreground lg:hidden"
+      >
+        <X className="h-5 w-5" />
+      </button>
+
+      {/* Navigation */}
+      <nav className="flex-1 space-y-1 pt-12 lg:pt-0">
+        <SidebarLink
+          href="/school-admin"
+          icon={LayoutDashboard}
+          isActive={pathname === "/school-admin"}
         >
-          {isCollapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
-        </Button>
-      </div>
+          Dashboard
+        </SidebarLink>
 
-      {/* Navigation Items */}
-      <nav className="flex-1 p-4 space-y-2">
-        {/* School Admin Navigation */}
-        {navigation.map((item) => {
-          const isActive = pathname === item.href || 
-            (item.href !== '/school-admin' && pathname.startsWith(item.href));
-          return renderNavItem(item, isActive);
-        })}
+        <SidebarLink
+          href="/school-admin/sections"
+          icon={Building2}
+          isActive={pathname.startsWith("/school-admin/sections")}
+        >
+          Classes
+        </SidebarLink>
 
-        {/* Super Admin Section */}
-        {user?.role === 'super_admin' && (
-          <>
-            <div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
-              {!isCollapsed && (
-                <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  Super Admin
-                </div>
-              )}
-              {superAdminNavigation.map((item) => {
-                const isActive = pathname === item.href || 
-                  (item.href !== '/super-admin' && pathname.startsWith(item.href));
-                return renderNavItem(item, isActive);
-              })}
-            </div>
-          </>
-        )}
+        <SidebarLink
+          href="/school-admin/students"
+          icon={GraduationCap}
+          isActive={pathname.startsWith("/school-admin/students")}
+        >
+          Students
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/teachers"
+          icon={UserCheck}
+          isActive={pathname.startsWith("/school-admin/teachers")}
+        >
+          Teachers
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/parents"
+          icon={Users}
+          isActive={pathname.startsWith("/school-admin/parents")}
+        >
+          Parents
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/attendance"
+          icon={CheckCircle}
+          isActive={pathname.startsWith("/school-admin/attendance")}
+        >
+          Attendance
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/timetable"
+          icon={CalendarDays}
+          isActive={pathname.startsWith("/school-admin/timetable")}
+        >
+          Timetable
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/exams"
+          icon={BookOpen}
+          isActive={pathname.startsWith("/school-admin/exams")}
+        >
+          Exams
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/marks"
+          icon={Award}
+          isActive={pathname.startsWith("/school-admin/marks")}
+        >
+          Marks
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/reports"
+          icon={FileText}
+          isActive={pathname.startsWith("/school-admin/reports")}
+        >
+          Reports
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/cbse-reports"
+          icon={Star}
+          isActive={pathname.startsWith("/school-admin/cbse-reports")}
+        >
+          CBSE Reports
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/announcements"
+          icon={Megaphone}
+          isActive={pathname.startsWith("/school-admin/announcements")}
+        >
+          Announcements
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/gallery"
+          icon={Image}
+          isActive={pathname.startsWith("/school-admin/gallery")}
+        >
+          Gallery
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/community"
+          icon={Heart}
+          isActive={pathname.startsWith("/school-admin/community")}
+        >
+          Community
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/feedback"
+          icon={MessageSquare}
+          isActive={pathname.startsWith("/school-admin/feedback")}
+        >
+          Feedback
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/settings"
+          icon={Settings}
+          isActive={pathname.startsWith("/school-admin/settings")}
+        >
+          Settings
+        </SidebarLink>
       </nav>
 
-      {/* Sidebar Footer */}
-      <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-        {!isCollapsed && (
+      {/* User section */}
+      <div className="mt-auto pt-4 border-t border-border">
+        <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/5">
+          <Avatar>
+            <AvatarFallback className="bg-primary/10 text-primary">
+              {user?.first_name?.[0]}
+              {user?.last_name?.[0]}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">
+              {user?.first_name} {user?.last_name}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              School Admin
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile backdrop */}
+      <AnimatePresence>
+        {isOpen && isMobile && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="text-xs text-muted-foreground space-y-1"
-          >
-            <div className="font-medium text-brand-primary truncate">{brand.name}</div>
-            <div className="truncate" title={brand.address}>{brand.address}</div>
-          </motion.div>
+            onClick={onClose}
+            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          />
         )}
-      </div>
-    </div>
-  );
+      </AnimatePresence>
 
-  // Mobile overlay
-  if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-    return (
-      <>
-        <AnimatePresence>
-          {isOpen && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-              onClick={onClose}
-            />
-          )}
-        </AnimatePresence>
-        
-        <AnimatePresence>
-          {isOpen && (
-            <motion.div
-              initial={{ x: -300 }}
-              animate={{ x: 0 }}
-              exit={{ x: -300 }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed left-0 top-16 bottom-0 z-50 lg:hidden"
-            >
-              {sidebarContent}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </>
-    );
-  }
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex sidebar">{sidebarContent}</aside>
 
-  // Desktop sidebar
-  return (
-    <div className="hidden lg:block">
-      {sidebarContent}
-    </div>
+      {/* Mobile sidebar */}
+      <AnimatePresence>
+        {(isOpen || !isMobile) && (
+          <motion.aside
+            initial={isMobile ? { x: -300 } : { x: 0 }}
+            animate={{ x: 0 }}
+            exit={isMobile ? { x: -300 } : { x: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="lg:hidden sidebar"
+          >
+            {sidebarContent}
+          </motion.aside>
+        )}
+      </AnimatePresence>
+    </>
   );
 } 

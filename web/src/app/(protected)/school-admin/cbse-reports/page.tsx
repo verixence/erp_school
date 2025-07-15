@@ -120,11 +120,11 @@ export default function CBSEReportsPage() {
   const getRelevantExamGroups = (examGroups: ExamGroup[], term: string): string[] => {
     if (term === 'Term1') {
       return examGroups
-        .filter(eg => ['FA1', 'FA2', 'SA1'].includes(eg.exam_type))
+        .filter(eg => ['cbse_fa1', 'cbse_fa2', 'cbse_sa1'].includes(eg.exam_type))
         .map(eg => eg.id);
     } else if (term === 'Term2') {
       return examGroups
-        .filter(eg => ['FA3', 'FA4', 'SA2'].includes(eg.exam_type))
+        .filter(eg => ['cbse_fa3', 'cbse_fa4', 'cbse_sa2'].includes(eg.exam_type))
         .map(eg => eg.id);
     }
     return [];
@@ -262,8 +262,12 @@ export default function CBSEReportsPage() {
         marks_obtained,
         is_absent,
         exam_papers!inner(
+          id,
           max_marks,
+          subject,
+          exam_group_id,
           exam_groups!inner(
+            id,
             name,
             exam_type
           )
@@ -278,10 +282,10 @@ export default function CBSEReportsPage() {
     const subjectMarks: Record<string, any> = {};
 
     (marks || []).forEach((mark: any) => {
-      const subject = mark.subject;
-      const examType = mark.exam_papers.exam_groups.exam_type;
-      const marksObtained = mark.is_absent ? 0 : mark.marks_obtained;
-      const maxMarks = mark.exam_papers.max_marks;
+      const subject = mark.subject || mark.exam_papers.subject;
+      const examType = mark.exam_papers.exam_groups.exam_type.replace('cbse_', '').toUpperCase();
+      const marksObtained = mark.is_absent ? 0 : Number(mark.marks_obtained);
+      const maxMarks = Number(mark.exam_papers.max_marks);
       const gradePoint = marksObtained ? (marksObtained / maxMarks) * 10 : 0;
 
       if (!subjectMarks[subject]) {
@@ -297,6 +301,7 @@ export default function CBSEReportsPage() {
         };
       }
 
+      // Map exam types to grade points
       switch (examType) {
         case 'FA1':
           subjectMarks[subject].fa1_gp = gradePoint;
@@ -307,22 +312,35 @@ export default function CBSEReportsPage() {
         case 'SA1':
           subjectMarks[subject].sa1_gp = gradePoint;
           break;
-        case 'MID_TERM':
-          subjectMarks[subject].mid_term_gp = gradePoint;
+        case 'FA3':
+          subjectMarks[subject].fa3_gp = gradePoint;
+          break;
+        case 'FA4':
+          subjectMarks[subject].fa4_gp = gradePoint;
+          break;
+        case 'SA2':
+          subjectMarks[subject].sa2_gp = gradePoint;
           break;
       }
 
+      // Calculate mid-term GPA for Term 1
+      if (term === 'Term1' && subjectMarks[subject].fa1_gp !== undefined && subjectMarks[subject].fa2_gp !== undefined) {
+        subjectMarks[subject].mid_term_gp = (subjectMarks[subject].fa1_gp + subjectMarks[subject].fa2_gp) / 2;
+      }
+
       // Calculate final GPA and grade
-      const gps = [
+      const validGPs = [
         subjectMarks[subject].fa1_gp,
         subjectMarks[subject].fa2_gp,
         subjectMarks[subject].sa1_gp,
-        subjectMarks[subject].mid_term_gp
+        subjectMarks[subject].fa3_gp,
+        subjectMarks[subject].fa4_gp,
+        subjectMarks[subject].sa2_gp
       ].filter(gp => gp !== undefined);
 
-      if (gps.length > 0) {
-        const finalGPA = gps.reduce((sum, gp) => sum + gp!, 0) / gps.length;
-        subjectMarks[subject].final_gpa = finalGPA;
+      if (validGPs.length > 0) {
+        const finalGPA = validGPs.reduce((sum, gp) => sum + gp!, 0) / validGPs.length;
+        subjectMarks[subject].final_gpa = Number(finalGPA.toFixed(1));
         subjectMarks[subject].final_grade = determineGrade(finalGPA);
       }
     });
@@ -375,7 +393,30 @@ export default function CBSEReportsPage() {
     
     const { data, error } = await supabase
       .from('co_scholastic_assessments')
-      .select('*')
+      .select(`
+        id,
+        student_id,
+        term,
+        academic_year,
+        oral_expression,
+        handwriting,
+        general_knowledge,
+        activity_sports,
+        towards_teachers,
+        towards_students,
+        towards_school,
+        punctuality,
+        initiative,
+        confidence,
+        neatness,
+        teacher_remarks,
+        status,
+        assessed_by (
+          id,
+          first_name,
+          last_name
+        )
+      `)
       .eq('student_id', studentId)
       .eq('term', term)
       .eq('academic_year', academicYear)
@@ -387,7 +428,24 @@ export default function CBSEReportsPage() {
       return null;
     }
 
-    return data?.[0] || null;
+    if (!data?.[0]) return null;
+
+    // Transform the data to match the CoScholasticAssessment interface
+    const assessment = data[0];
+    return {
+      oral_expression: assessment.oral_expression || '-',
+      handwriting: assessment.handwriting || '-',
+      general_knowledge: assessment.general_knowledge || '-',
+      activity_sports: assessment.activity_sports || '-',
+      towards_teachers: assessment.towards_teachers || '-',
+      towards_students: assessment.towards_students || '-',
+      towards_school: assessment.towards_school || '-',
+      punctuality: assessment.punctuality || '-',
+      initiative: assessment.initiative || '-',
+      confidence: assessment.confidence || '-',
+      neatness: assessment.neatness || '-',
+      teacher_remarks: assessment.teacher_remarks || undefined
+    };
   };
 
   // Only show for CBSE schools
@@ -423,7 +481,7 @@ export default function CBSEReportsPage() {
         .from('exam_groups')
         .select('*')
         .eq('school_id', user?.school_id!)
-        .in('exam_type', ['cbse_fa1', 'cbse_fa2', 'cbse_sa1', 'cbse_fa3', 'cbse_fa4', 'cbse_sa2']) // Only CBSE exam types
+        .in('exam_type', ['FA1', 'FA2', 'SA1', 'FA3', 'FA4', 'SA2']) // Only CBSE exam types
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -431,8 +489,8 @@ export default function CBSEReportsPage() {
       // Transform data to include CBSE details derived from exam_type
       return data.map(group => ({
         ...group,
-        cbse_term: group.exam_type.includes('fa1') || group.exam_type.includes('fa2') || group.exam_type.includes('sa1') ? 'Term1' : 'Term2',
-        cbse_exam_type: group.exam_type.replace('cbse_', '').toUpperCase(),
+        cbse_term: group.exam_type.includes('FA1') || group.exam_type.includes('FA2') || group.exam_type.includes('SA1') ? 'Term1' : 'Term2',
+        cbse_exam_type: group.exam_type.replace('FA', '').replace('SA', '').toUpperCase(),
       })) as ExamGroup[];
     },
     enabled: !!user?.school_id && school?.board_type === 'CBSE',
@@ -607,138 +665,271 @@ export default function CBSEReportsPage() {
         <head>
           <title>CBSE Report Card - ${student.full_name}</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .student-info { margin-bottom: 20px; }
+            @page { size: A4; margin: 20mm; }
+            body { 
+              font-family: Arial, sans-serif; 
+              padding: 0; 
+              margin: 0;
+              color: #333;
+            }
+            .container {
+              max-width: 210mm;
+              margin: 0 auto;
+              padding: 20px;
+            }
+            .header {
+              display: flex;
+              align-items: center;
+              margin-bottom: 30px;
+              border-bottom: 3px solid #2563eb;
+              padding-bottom: 20px;
+            }
+            .logo {
+              width: 80px;
+              height: 80px;
+              margin-right: 20px;
+            }
+            .school-info {
+              flex: 1;
+              text-align: center;
+            }
+            .school-info h1 {
+              margin: 0;
+              color: #1e40af;
+              font-size: 24px;
+            }
+            .school-info h2 {
+              margin: 10px 0;
+              color: #1e40af;
+              font-size: 20px;
+            }
+            .student-info {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 20px;
+              margin-bottom: 30px;
+            }
+            .info-item {
+              display: flex;
+              gap: 10px;
+            }
+            .info-label {
+              font-weight: bold;
+              min-width: 120px;
+            }
             .subjects-table, .co-scholastic-table { 
               width: 100%; 
               border-collapse: collapse; 
-              margin-bottom: 20px; 
+              margin-bottom: 30px;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             }
             .subjects-table th, .subjects-table td,
             .co-scholastic-table th, .co-scholastic-table td { 
-              border: 1px solid #ddd; 
-              padding: 8px; 
+              border: 1px solid #e5e7eb; 
+              padding: 12px; 
               text-align: center; 
             }
             .subjects-table th, .co-scholastic-table th { 
-              background-color: #f2f2f2; 
+              background-color: #f3f4f6;
+              color: #1e40af;
+              font-weight: 600;
+            }
+            .subjects-table tr:nth-child(even) {
+              background-color: #f9fafb;
             }
             .overall { 
-              background-color: #f9f9f9; 
-              padding: 15px; 
-              border-radius: 5px; 
-              margin-bottom: 20px;
+              background-color: #f3f4f6;
+              padding: 20px;
+              border-radius: 8px;
+              margin-bottom: 30px;
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 20px;
+            }
+            .overall-item {
+              text-align: center;
+            }
+            .overall-item strong {
+              color: #1e40af;
+            }
+            .co-scholastic {
+              margin-bottom: 30px;
+            }
+            .co-scholastic h3 {
+              color: #1e40af;
+              margin-bottom: 15px;
             }
             .teacher-remarks {
-              margin-top: 20px;
-              padding: 10px;
-              border: 1px solid #ddd;
-              border-radius: 5px;
+              background-color: #f9fafb;
+              padding: 20px;
+              border-radius: 8px;
+              margin-bottom: 30px;
+            }
+            .teacher-remarks h4 {
+              color: #1e40af;
+              margin-top: 0;
+            }
+            .signatures {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 40px;
+              margin-top: 50px;
+            }
+            .signature {
+              text-align: center;
+            }
+            .signature-line {
+              width: 80%;
+              margin: 50px auto 10px;
+              border-top: 1px solid #000;
             }
             @media print {
-              body { margin: 0; padding: 10px; }
+              body { margin: 0; padding: 0; }
+              .container { padding: 10px; }
               .no-print { display: none; }
               .page-break { page-break-after: always; }
             }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h1>${school?.name || 'School Name'}</h1>
-            <h2>CBSE ${report.term} Report Card</h2>
-            <p>Academic Year: ${report.academic_year}</p>
-          </div>
-          
-          <div class="student-info">
-            <p><strong>Student Name:</strong> ${student.full_name}</p>
-            <p><strong>Admission No:</strong> ${student.admission_no || 'N/A'}</p>
-            <p><strong>Class:</strong> ${student.grade || 'N/A'} - ${student.section || 'N/A'}</p>
-          </div>
-          
-          <table class="subjects-table">
-            <thead>
-              <tr>
-                <th>Subject</th>
-                <th>FA1</th>
-                <th>FA2</th>
-                <th>SA1</th>
-                <th>Mid Term GP</th>
-                <th>Final GP</th>
-                <th>Grade</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${reportData?.subjects?.map((subject: any) => `
-                <tr>
-                  <td>${subject.name}</td>
-                  <td>${subject.fa1_gp || '-'}</td>
-                  <td>${subject.fa2_gp || '-'}</td>
-                  <td>${subject.sa1_gp || '-'}</td>
-                  <td>${subject.mid_term_gp || '-'}</td>
-                  <td>${subject.final_gpa || '-'}</td>
-                  <td>${subject.grade || '-'}</td>
-                </tr>
-              `).join('') || '<tr><td colspan="7">No subject data available</td></tr>'}
-            </tbody>
-          </table>
-          
-          <div class="overall">
-            <p><strong>Overall GPA:</strong> ${gpa}</p>
-            <p><strong>Overall Grade:</strong> ${grade}</p>
-            <p><strong>Attendance:</strong> ${reportData?.attendance?.percentage || 'N/A'}%</p>
-          </div>
-
-          ${coScholastic ? `
-            <div class="co-scholastic">
-              <h3>Co-Scholastic Activities</h3>
-              <table class="co-scholastic-table">
-                <tr>
-                  <th colspan="2">Activities</th>
-                  <th colspan="2">Attitude and Values</th>
-                  <th colspan="2">Personal Qualities</th>
-                </tr>
-                <tr>
-                  <td>Oral Expression</td>
-                  <td>${coScholastic.oral_expression || '-'}</td>
-                  <td>Towards Teachers</td>
-                  <td>${coScholastic.towards_teachers || '-'}</td>
-                  <td>Punctuality</td>
-                  <td>${coScholastic.punctuality || '-'}</td>
-                </tr>
-                <tr>
-                  <td>Handwriting</td>
-                  <td>${coScholastic.handwriting || '-'}</td>
-                  <td>Towards Students</td>
-                  <td>${coScholastic.towards_students || '-'}</td>
-                  <td>Initiative</td>
-                  <td>${coScholastic.initiative || '-'}</td>
-                </tr>
-                <tr>
-                  <td>General Knowledge</td>
-                  <td>${coScholastic.general_knowledge || '-'}</td>
-                  <td>Towards School</td>
-                  <td>${coScholastic.towards_school || '-'}</td>
-                  <td>Confidence</td>
-                  <td>${coScholastic.confidence || '-'}</td>
-                </tr>
-                <tr>
-                  <td>Activity/Sports</td>
-                  <td>${coScholastic.activity_sports || '-'}</td>
-                  <td></td>
-                  <td></td>
-                  <td>Neatness</td>
-                  <td>${coScholastic.neatness || '-'}</td>
-                </tr>
-              </table>
-              ${coScholastic.teacher_remarks ? `
-                <div class="teacher-remarks">
-                  <h4>Teacher's Remarks</h4>
-                  <p>${coScholastic.teacher_remarks}</p>
-                </div>
-              ` : ''}
+          <div class="container">
+            <div class="header">
+              <img src="${school?.logo_url || ''}" alt="School Logo" class="logo">
+              <div class="school-info">
+                <h1>${school?.name || 'School Name'}</h1>
+                <h2>CBSE ${report.term} Report Card</h2>
+                <p>Academic Year: ${report.academic_year}</p>
+              </div>
             </div>
-          ` : ''}
+            
+            <div class="student-info">
+              <div class="info-item">
+                <span class="info-label">Student Name:</span>
+                <span>${student.full_name}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Admission No:</span>
+                <span>${student.admission_no || 'N/A'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Class:</span>
+                <span>${student.grade || 'N/A'} - ${student.section || 'N/A'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Roll No:</span>
+                <span>${student.roll_no || 'N/A'}</span>
+              </div>
+            </div>
+            
+            <table class="subjects-table">
+              <thead>
+                <tr>
+                  <th>Subject</th>
+                  <th>FA1</th>
+                  <th>FA2</th>
+                  <th>SA1</th>
+                  <th>Mid Term GP</th>
+                  <th>Final GP</th>
+                  <th>Grade</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${reportData?.subjects?.map((subject: any) => `
+                  <tr>
+                    <td>${subject.name}</td>
+                    <td>${subject.fa1_gp?.toFixed(1) || '-'}</td>
+                    <td>${subject.fa2_gp?.toFixed(1) || '-'}</td>
+                    <td>${subject.sa1_gp?.toFixed(1) || '-'}</td>
+                    <td>${subject.mid_term_gp?.toFixed(1) || '-'}</td>
+                    <td>${subject.final_gpa?.toFixed(1) || '-'}</td>
+                    <td>${subject.final_grade || '-'}</td>
+                  </tr>
+                `).join('') || '<tr><td colspan="7">No subject data available</td></tr>'}
+              </tbody>
+            </table>
+            
+            <div class="overall">
+              <div class="overall-item">
+                <strong>Overall GPA</strong>
+                <p>${gpa.toFixed(1)}</p>
+              </div>
+              <div class="overall-item">
+                <strong>Overall Grade</strong>
+                <p>${grade}</p>
+              </div>
+              <div class="overall-item">
+                <strong>Attendance</strong>
+                <p>${reportData?.attendance?.percentage || 'N/A'}%</p>
+              </div>
+            </div>
+
+            ${coScholastic ? `
+              <div class="co-scholastic">
+                <h3>Co-Scholastic Activities</h3>
+                <table class="co-scholastic-table">
+                  <tr>
+                    <th colspan="2">Activities</th>
+                    <th colspan="2">Attitude and Values</th>
+                    <th colspan="2">Personal Qualities</th>
+                  </tr>
+                  <tr>
+                    <td>Oral Expression</td>
+                    <td>${coScholastic.oral_expression || '-'}</td>
+                    <td>Towards Teachers</td>
+                    <td>${coScholastic.towards_teachers || '-'}</td>
+                    <td>Punctuality</td>
+                    <td>${coScholastic.punctuality || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td>Handwriting</td>
+                    <td>${coScholastic.handwriting || '-'}</td>
+                    <td>Towards Students</td>
+                    <td>${coScholastic.towards_students || '-'}</td>
+                    <td>Initiative</td>
+                    <td>${coScholastic.initiative || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td>General Knowledge</td>
+                    <td>${coScholastic.general_knowledge || '-'}</td>
+                    <td>Towards School</td>
+                    <td>${coScholastic.towards_school || '-'}</td>
+                    <td>Confidence</td>
+                    <td>${coScholastic.confidence || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td>Activity/Sports</td>
+                    <td>${coScholastic.activity_sports || '-'}</td>
+                    <td></td>
+                    <td></td>
+                    <td>Neatness</td>
+                    <td>${coScholastic.neatness || '-'}</td>
+                  </tr>
+                </table>
+              </div>
+            ` : ''}
+
+            ${coScholastic?.teacher_remarks ? `
+              <div class="teacher-remarks">
+                <h4>Teacher's Remarks</h4>
+                <p>${coScholastic.teacher_remarks}</p>
+              </div>
+            ` : ''}
+
+            <div class="signatures">
+              <div class="signature">
+                <div class="signature-line"></div>
+                <p>Class Teacher</p>
+              </div>
+              <div class="signature">
+                <div class="signature-line"></div>
+                <p>Principal</p>
+              </div>
+              <div class="signature">
+                <div class="signature-line"></div>
+                <p>Parent</p>
+              </div>
+            </div>
+          </div>
           
           <div class="no-print">
             <button onclick="window.print()">Print Report</button>
@@ -899,13 +1090,13 @@ export default function CBSEReportsPage() {
               const term2Data = await fetchCoScholasticAssessment(student.id, 'Term2', school?.academic_year || '2024-25');
               if (term2Data) { // Use Term2 data for cumulative report
                 coScholastic = {
-                  oral_expression: term2Data.oral_grade,
-                  handwriting: term2Data.handwriting_grade,
-                  general_knowledge: term2Data.general_knowledge_grade,
-                  activity_sports: term2Data.activity_grade,
-                  towards_teachers: term2Data.attitude_teachers,
-                  towards_students: term2Data.attitude_students,
-                  towards_school: term2Data.attitude_school,
+                  oral_expression: term2Data.oral_expression,
+                  handwriting: term2Data.handwriting,
+                  general_knowledge: term2Data.general_knowledge,
+                  activity_sports: term2Data.activity_sports,
+                  towards_teachers: term2Data.towards_teachers,
+                  towards_students: term2Data.towards_students,
+                  towards_school: term2Data.towards_school,
                   punctuality: term2Data.punctuality,
                   initiative: term2Data.initiative,
                   confidence: term2Data.confidence,
@@ -942,13 +1133,13 @@ export default function CBSEReportsPage() {
               const coScholasticData = await fetchCoScholasticAssessment(student.id, term, school?.academic_year || '2024-25');
               if (coScholasticData) {
                 coScholastic = {
-                  oral_expression: coScholasticData.oral_grade,
-                  handwriting: coScholasticData.handwriting_grade,
-                  general_knowledge: coScholasticData.general_knowledge_grade,
-                  activity_sports: coScholasticData.activity_grade,
-                  towards_teachers: coScholasticData.attitude_teachers,
-                  towards_students: coScholasticData.attitude_students,
-                  towards_school: coScholasticData.attitude_school,
+                  oral_expression: coScholasticData.oral_expression,
+                  handwriting: coScholasticData.handwriting,
+                  general_knowledge: coScholasticData.general_knowledge,
+                  activity_sports: coScholasticData.activity_sports,
+                  towards_teachers: coScholasticData.towards_teachers,
+                  towards_students: coScholasticData.towards_students,
+                  towards_school: coScholasticData.towards_school,
                   punctuality: coScholasticData.punctuality,
                   initiative: coScholasticData.initiative,
                   confidence: coScholasticData.confidence,

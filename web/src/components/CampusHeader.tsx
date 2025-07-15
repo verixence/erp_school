@@ -96,18 +96,18 @@ export function CampusHeader({ brand, onMenuToggle }: CampusHeaderProps) {
                 {brand.logo ? (
                   <img 
                     src={brand.logo} 
-                    alt={brand.name} 
+                    alt={brand.name || 'School Logo'} 
                     className="w-6 h-6 rounded object-cover"
                   />
                 ) : (
                   <span className="text-primary font-semibold text-sm">
-                    {brand.name.charAt(0)}
+                    {(brand.name || 'S').charAt(0)}
                   </span>
                 )}
               </div>
               <div>
                 <h1 className="font-semibold text-sm text-foreground">
-                  {brand.name}
+                  {brand.name || 'School Dashboard'}
                 </h1>
                 <p className="text-xs text-muted-foreground hidden lg:block">
                   School Management
