@@ -3,9 +3,9 @@
   "private": true,
   "workspaces": [
     "db",
-    "common", 
+    "common",
     "web",
-    "mobile/teacher-app"
+    "mobile/app"
   ],
   "engines": {
     "node": ">=18.0.0",
@@ -28,9 +28,13 @@
     "kill:metro": "pkill -f \"(expo|metro)\" || true"
   },
   "devDependencies": {
+    "prettier": "^3.0.0",
     "tsx": "^4.7.1",
-    "typescript": "^5.3.3",
-    "prettier": "^3.0.0"
+    "typescript": "^5.3.3"
   },
-  "packageManager": "pnpm@8.15.1"
-} 
+  "packageManager": "pnpm@8.15.1",
+  "dependencies": {
+    "@expo/fingerprint": "^0.13.4",
+    "getenv": "^2.0.0"
+  }
+}
