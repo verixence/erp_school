@@ -257,6 +257,13 @@ export const TeacherDashboardScreen: React.FC = () => {
       color: "#06b6d4",
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Exams' })
     },
+    {
+      title: "Co-Scholastic",
+      description: "CBSE assessments & values",
+      icon: Target,
+      color: "#7c3aed",
+      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'CoScholastic' })
+    },
   ];
 
   return (

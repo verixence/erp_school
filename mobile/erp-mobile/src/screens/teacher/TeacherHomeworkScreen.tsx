@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
-  SafeAreaView, 
   ScrollView, 
+  SafeAreaView, 
   TouchableOpacity, 
-  TextInput, 
-  Alert,
   RefreshControl,
-  Modal
+  Alert,
+  FlatList,
+  Modal,
+  TextInput,
+  Dimensions
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -17,38 +19,63 @@ import { supabase } from '../../services/supabase';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { 
-  ClipboardList, 
-  Plus, 
+  BookOpen,
   Calendar, 
-  FileText, 
-  Users,
-  ChevronDown,
-  X,
-  Edit,
-  Trash2,
   Clock,
+  Users,
+  Plus,
+  FileText,
+  Edit3,
+  Trash2,
+  Eye,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Target,
+  Activity,
+  GraduationCap,
+  Send,
+  Save,
+  X,
+  Search,
+  Filter
 } from 'lucide-react-native';
 
-interface Homework {
-  id: string;
-  school_id: string;
-  section: string;
-  subject: string;
-  title: string;
-  description?: string;
-  due_date: string;
-  file_url?: string;
-  created_by: string;
-  created_at: string;
-}
+const { width } = Dimensions.get('window');
 
 interface Section {
   id: string;
   grade: number;
   section: string;
-  school_id: string;
+  class_teacher?: string;
+}
+
+interface Homework {
+  id: string;
+  title: string;
+  description: string;
+  subject: string;
+  due_date: string;
+  assigned_date: string;
+  section_id: string;
+  teacher_id: string;
+  attachments?: string[];
+  is_published: boolean;
+  created_at: string;
+  sections?: {
+    grade: number;
+    section: string;
+  };
+  submissions_count?: number;
+  total_students?: number;
+}
+
+interface HomeworkFormData {
+  title: string;
+  description: string;
+  subject: string;
+  due_date: string;
+  section_id: string;
+  file_url?: string;
 }
 
 export const TeacherHomeworkScreen: React.FC = () => {
@@ -56,208 +83,434 @@ export const TeacherHomeworkScreen: React.FC = () => {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showSectionModal, setShowSectionModal] = useState(false);
-  
-  // Form state
-  const [selectedSection, setSelectedSection] = useState('');
-  const [subject, setSubject] = useState('');
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [dueDate, setDueDate] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingHomework, setEditingHomework] = useState<Homework | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'published' | 'draft'>('all');
+  const [selectedSection, setSelectedSection] = useState<string>('all');
 
-  // Fetch teacher's sections
-  const { data: sections = [] } = useQuery({
+  const [formData, setFormData] = useState<HomeworkFormData>({
+    title: '',
+    description: '',
+    subject: '',
+    due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days from now
+    section_id: ''
+  });
+
+  // Fetch teacher's assigned sections
+  const { data: sections = [], isLoading: sectionsLoading } = useQuery({
     queryKey: ['teacher-sections', user?.id],
     queryFn: async (): Promise<Section[]> => {
       if (!user?.id) return [];
 
-      // Try multiple approaches to get teacher sections
-      let data, error;
-
-      // First try: section_teachers table
-      const sectionTeachersResult = await supabase
+      const { data, error } = await supabase
         .from('section_teachers')
         .select(`
           sections!inner(
             id,
             grade,
             section,
-            school_id
+            school_id,
+            class_teacher
           )
         `)
         .eq('teacher_id', user.id)
         .eq('sections.school_id', user.school_id);
 
-      if (sectionTeachersResult.data && sectionTeachersResult.data.length > 0) {
-        return sectionTeachersResult.data.map((item: any) => ({
+      if (error) throw error;
+      
+      return (data || []).map((item: any) => ({
           id: item.sections.id,
           grade: item.sections.grade,
           section: item.sections.section,
-          school_id: item.sections.school_id
-        }));
-      }
-
-      // Second try: periods table (teacher schedule)
-      const periodsResult = await supabase
-        .from('periods')
-        .select(`
-          sections!inner(
-            id,
-            grade,
-            section,
-            school_id
-          )
-        `)
-        .eq('teacher_id', user.id)
-        .eq('sections.school_id', user.school_id);
-
-      if (periodsResult.data && periodsResult.data.length > 0) {
-        // Deduplicate sections
-        const uniqueSections = new Map();
-        periodsResult.data.forEach((item: any) => {
-          const section = item.sections;
-          uniqueSections.set(section.id, {
-            id: section.id,
-            grade: section.grade,
-            section: section.section,
-            school_id: section.school_id
-          });
-        });
-        return Array.from(uniqueSections.values());
-      }
-
-      // Third try: direct sections table for the same school (fallback)
-      const sectionsResult = await supabase
-        .from('sections')
-        .select('id, grade, section, school_id')
-        .eq('school_id', user.school_id)
-        .order('grade', { ascending: true })
-        .order('section', { ascending: true });
-
-      if (sectionsResult.error) throw sectionsResult.error;
-      
-      return sectionsResult.data || [];
+        class_teacher: item.sections.class_teacher
+      }));
     },
     enabled: !!user?.id,
   });
 
   // Fetch homework assignments
-  const { data: homework = [], isLoading, refetch } = useQuery({
-    queryKey: ['teacher-homework', user?.id],
+  const { data: homeworkList = [], isLoading: homeworkLoading, refetch: refetchHomework } = useQuery({
+    queryKey: ['teacher-homework', user?.id, selectedSection, filterStatus],
     queryFn: async (): Promise<Homework[]> => {
       if (!user?.id) return [];
 
-      const { data, error } = await supabase
-        .from('homeworks')
-        .select('*')
-        .eq('created_by', user.id)
-        .order('due_date', { ascending: true });
+      let query = supabase
+        .from('homework')
+        .select(`
+          *,
+          sections!inner(grade, section)
+        `)
+        .eq('teacher_id', user.id)
+        .eq('school_id', user.school_id)
+        .order('created_at', { ascending: false });
+
+      if (selectedSection !== 'all') {
+        query = query.eq('section_id', selectedSection);
+      }
+
+      if (filterStatus !== 'all') {
+        query = query.eq('is_published', filterStatus === 'published');
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
-      return data || [];
+
+      // Get submission counts for each homework
+      const homeworkWithCounts = await Promise.all(
+        (data || []).map(async (homework) => {
+          const { data: submissions, error: submissionError } = await supabase
+            .from('homework_submissions')
+            .select('id', { count: 'exact' })
+            .eq('homework_id', homework.id);
+
+          const { data: students, error: studentError } = await supabase
+            .from('students')
+            .select('id', { count: 'exact' })
+            .eq('section_id', homework.section_id);
+
+          return {
+            ...homework,
+            submissions_count: submissions?.length || 0,
+            total_students: students?.length || 0
+          };
+        })
+      );
+
+      return homeworkWithCounts;
     },
     enabled: !!user?.id,
   });
 
+  // Filter homework by search query
+  const filteredHomework = React.useMemo(() => {
+    if (!searchQuery) return homeworkList;
+    return homeworkList.filter(homework => 
+      homework.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      homework.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      homework.description.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [homeworkList, searchQuery]);
+
   // Create homework mutation
   const createHomeworkMutation = useMutation({
-    mutationFn: async (homeworkData: Omit<Homework, 'id' | 'created_at'>) => {
-      const { data, error } = await supabase
+    mutationFn: async (data: HomeworkFormData & { is_published: boolean }) => {
+             const payload = {
+         title: data.title,
+         description: data.description,
+         subject: data.subject,
+         section: data.section_id,
+         due_date: data.due_date,
+         school_id: user?.school_id,
+         created_by: user?.id,
+         file_url: data.file_url || null
+       };
+
+      const { error } = await supabase
         .from('homeworks')
-        .insert(homeworkData)
-        .select()
-        .single();
+        .insert(payload);
 
       if (error) throw error;
-      return data;
     },
     onSuccess: () => {
+      Alert.alert('Success', 'Homework assignment created successfully!');
       queryClient.invalidateQueries({ queryKey: ['teacher-homework'] });
-      resetForm();
       setShowCreateModal(false);
-      Alert.alert('Success', 'Homework created successfully!');
+      resetForm();
     },
-    onError: (error) => {
-      Alert.alert('Error', 'Failed to create homework. Please try again.');
-      console.error('Create homework error:', error);
-    }
+    onError: (error: any) => {
+      Alert.alert('Error', error.message || 'Failed to create homework assignment');
+    },
   });
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
-  };
+  // Update homework mutation
+  const updateHomeworkMutation = useMutation({
+    mutationFn: async (data: { id: string } & Partial<HomeworkFormData> & { is_published?: boolean }) => {
+      const { id, ...updateData } = data;
+      const { error } = await supabase
+        .from('homeworks')
+        .update(updateData)
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      Alert.alert('Success', 'Homework assignment updated successfully!');
+      queryClient.invalidateQueries({ queryKey: ['teacher-homework'] });
+      setEditingHomework(null);
+      setShowCreateModal(false);
+      resetForm();
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.message || 'Failed to update homework assignment');
+    },
+  });
+
+  // Delete homework mutation
+  const deleteHomeworkMutation = useMutation({
+    mutationFn: async (homeworkId: string) => {
+      const { error } = await supabase
+        .from('homework')
+        .delete()
+        .eq('id', homeworkId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      Alert.alert('Success', 'Homework assignment deleted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['teacher-homework'] });
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.message || 'Failed to delete homework assignment');
+    },
+  });
 
   const resetForm = () => {
-    setSelectedSection('');
-    setSubject('');
-    setTitle('');
-    setDescription('');
-    setDueDate('');
-  };
-
-  const handleSubmit = async () => {
-    if (!selectedSection || !subject.trim() || !title.trim() || !dueDate) {
-      Alert.alert('Error', 'Please fill in all required fields');
-      return;
-    }
-
-    const selectedSectionData = sections.find(s => s.id === selectedSection);
-    if (!selectedSectionData) {
-      Alert.alert('Error', 'Invalid section selected');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await createHomeworkMutation.mutateAsync({
-        school_id: user?.school_id || '',
-        section: `${selectedSectionData.grade} ${selectedSectionData.section}`,
-        subject: subject.trim(),
-        title: title.trim(),
-        description: description.trim() || undefined,
-        due_date: dueDate,
-        created_by: user?.id || ''
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
+    setFormData({
+      title: '',
+      description: '',
+      subject: '',
+      due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      section_id: sections.length > 0 ? sections[0].id : ''
     });
   };
 
-  const isOverdue = (dueDate: string) => {
-    return new Date(dueDate) < new Date();
-  };
-
-  const generateDateOptions = () => {
-    const dates = [];
-    const today = new Date();
-    for (let i = 0; i <= 30; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      dates.push(date.toISOString().split('T')[0]);
+  const handleCreateHomework = (isDraft: boolean = false) => {
+    if (!formData.title || !formData.description || !formData.subject || !formData.section_id) {
+      Alert.alert('Validation Error', 'Please fill in all required fields');
+      return;
     }
-    return dates;
+
+    if (new Date(formData.due_date) <= new Date()) {
+      Alert.alert('Validation Error', 'Due date must be in the future');
+      return;
+    }
+
+    createHomeworkMutation.mutate({
+      ...formData,
+      is_published: !isDraft
+    });
   };
 
-  if (isLoading) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: '#6b7280' }}>Loading homework...</Text>
-        </View>
-      </SafeAreaView>
+  const handleUpdateHomework = (isDraft: boolean = false) => {
+    if (!editingHomework || !formData.title || !formData.description || !formData.subject) {
+      Alert.alert('Validation Error', 'Please fill in all required fields');
+      return;
+    }
+
+    updateHomeworkMutation.mutate({
+      id: editingHomework.id,
+      ...formData,
+      is_published: !isDraft
+    });
+  };
+
+  const handleEditHomework = (homework: Homework) => {
+    setEditingHomework(homework);
+    setFormData({
+      title: homework.title,
+      description: homework.description,
+      subject: homework.subject,
+      due_date: homework.due_date,
+      section_id: homework.section_id
+      });
+    setShowCreateModal(true);
+  };
+
+  const handleDeleteHomework = (homework: Homework) => {
+    Alert.alert(
+      'Delete Homework',
+      `Are you sure you want to delete "${homework.title}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive', 
+          onPress: () => deleteHomeworkMutation.mutate(homework.id)
+        },
+      ]
     );
-  }
+  };
+
+  const handlePublishHomework = (homework: Homework) => {
+    updateHomeworkMutation.mutate({
+      id: homework.id,
+      is_published: true
+    });
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refetchHomework();
+    setRefreshing(false);
+  };
+
+  useEffect(() => {
+    if (sections.length > 0 && !formData.section_id) {
+      setFormData(prev => ({ ...prev, section_id: sections[0].id }));
+    }
+  }, [sections]);
+
+  const renderHomeworkCard = ({ item: homework }: { item: Homework }) => {
+    const isOverdue = new Date(homework.due_date) < new Date();
+    const daysUntilDue = Math.ceil((new Date(homework.due_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+    const submissionRate = homework.total_students ? (homework.submissions_count! / homework.total_students) * 100 : 0;
+
+    return (
+      <Card style={{ marginBottom: 16 }}>
+        <CardContent style={{ padding: 16 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827', marginBottom: 4 }}>
+                {homework.title}
+              </Text>
+              <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 8 }}>
+                {homework.subject} • Grade {homework.sections?.grade} {homework.sections?.section}
+              </Text>
+              <Text style={{ fontSize: 14, color: '#374151', lineHeight: 20 }}>
+                {homework.description.length > 100 
+                  ? homework.description.substring(0, 100) + '...' 
+                  : homework.description
+                }
+              </Text>
+            </View>
+            
+            <View style={{ alignItems: 'flex-end' }}>
+              {homework.is_published ? (
+                <View style={{ 
+                  backgroundColor: '#10b981',
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 12,
+                  marginBottom: 8
+                }}>
+                  <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>
+                    Published
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ 
+                  backgroundColor: '#f59e0b',
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 12,
+                  marginBottom: 8
+                }}>
+                  <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>
+                    Draft
+                  </Text>
+                </View>
+              )}
+              
+              {isOverdue && homework.is_published && (
+                <View style={{ 
+                  backgroundColor: '#ef4444',
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 12
+                }}>
+                  <Text style={{ color: 'white', fontSize: 10, fontWeight: '500' }}>
+                    Overdue
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+          
+          {/* Due Date and Stats */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Calendar size={16} color="#6b7280" />
+              <Text style={{ fontSize: 14, color: '#6b7280', marginLeft: 6 }}>
+                Due: {new Date(homework.due_date).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric'
+                })}
+              </Text>
+              {!isOverdue && daysUntilDue <= 3 && (
+                <Text style={{ fontSize: 12, color: '#ef4444', marginLeft: 8, fontWeight: '500' }}>
+                  ({daysUntilDue} day{daysUntilDue !== 1 ? 's' : ''} left)
+                </Text>
+              )}
+            </View>
+            
+            <Text style={{ fontSize: 14, color: '#6b7280' }}>
+              {homework.submissions_count}/{homework.total_students} submitted ({submissionRate.toFixed(0)}%)
+            </Text>
+          </View>
+          
+          {/* Progress Bar */}
+          <View style={{ backgroundColor: '#f3f4f6', height: 4, borderRadius: 2, marginBottom: 16 }}>
+            <View style={{ 
+              backgroundColor: submissionRate >= 80 ? '#10b981' : submissionRate >= 50 ? '#f59e0b' : '#ef4444',
+              height: 4, 
+              borderRadius: 2,
+              width: `${submissionRate}%`
+            }} />
+          </View>
+          
+          {/* Action Buttons */}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => handleEditHomework(homework)}
+              style={{
+                flex: 1,
+                backgroundColor: '#3b82f6',
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 6,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <Edit3 size={14} color="white" />
+              <Text style={{ color: 'white', fontSize: 12, fontWeight: '500', marginLeft: 4 }}>
+                Edit
+              </Text>
+            </TouchableOpacity>
+            
+            {!homework.is_published && (
+              <TouchableOpacity
+                onPress={() => handlePublishHomework(homework)}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#10b981',
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 6,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <Send size={14} color="white" />
+                <Text style={{ color: 'white', fontSize: 12, fontWeight: '500', marginLeft: 4 }}>
+                  Publish
+                </Text>
+              </TouchableOpacity>
+            )}
+            
+            <TouchableOpacity
+              onPress={() => handleDeleteHomework(homework)}
+              style={{
+                backgroundColor: '#ef4444',
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 6,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <Trash2 size={14} color="white" />
+            </TouchableOpacity>
+        </View>
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
@@ -270,496 +523,385 @@ export const TeacherHomeworkScreen: React.FC = () => {
         paddingTop: 16,
         paddingBottom: 20,
         borderBottomWidth: 1, 
-        borderBottomColor: '#e5e7eb',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3
+        borderBottomColor: '#e5e7eb'
       }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ 
-              width: 40, 
-              height: 40, 
-              borderRadius: 20, 
-              backgroundColor: '#8b5cf6',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: 12
-            }}>
-              <ClipboardList size={20} color="white" />
-            </View>
-            <View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#111827' }}>
-                Homework
+            Homework Management
               </Text>
-              <Text style={{ fontSize: 14, color: '#6b7280' }}>
-                Create and manage assignments
-              </Text>
-            </View>
-          </View>
           <TouchableOpacity
+            onPress={() => setShowCreateModal(true)}
             style={{
-              backgroundColor: '#8b5cf6',
+              backgroundColor: '#3b82f6',
               paddingHorizontal: 16,
               paddingVertical: 8,
               borderRadius: 8,
               flexDirection: 'row',
               alignItems: 'center'
             }}
-            onPress={() => setShowCreateModal(true)}
           >
             <Plus size={16} color="white" />
-            <Text style={{ color: 'white', fontWeight: '500', marginLeft: 4 }}>
+            <Text style={{ color: 'white', fontSize: 14, fontWeight: '500', marginLeft: 4 }}>
               Create
             </Text>
           </TouchableOpacity>
         </View>
-
-        {/* Quick Stats */}
-        <View style={{ flexDirection: 'row', marginTop: 16, marginHorizontal: -6 }}>
-          <View style={{ flex: 1, paddingHorizontal: 6 }}>
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#8b5cf6' }}>
-                {homework.length}
+        <Text style={{ fontSize: 14, color: '#6b7280' }}>
+          Create and manage homework assignments for your students
               </Text>
-              <Text style={{ fontSize: 12, color: '#6b7280' }}>
-                Total
-              </Text>
-            </View>
-          </View>
-          <View style={{ flex: 1, paddingHorizontal: 6 }}>
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#10b981' }}>
-                {homework.filter(h => !isOverdue(h.due_date)).length}
-              </Text>
-              <Text style={{ fontSize: 12, color: '#6b7280' }}>
-                Active
-              </Text>
-            </View>
-          </View>
-          <View style={{ flex: 1, paddingHorizontal: 6 }}>
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#ef4444' }}>
-                {homework.filter(h => isOverdue(h.due_date)).length}
-              </Text>
-              <Text style={{ fontSize: 12, color: '#6b7280' }}>
-                Overdue
-              </Text>
-            </View>
-          </View>
-          <View style={{ flex: 1, paddingHorizontal: 6 }}>
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#f59e0b' }}>
-                {[...new Set(homework.map(h => h.subject))].length}
-              </Text>
-              <Text style={{ fontSize: 12, color: '#6b7280' }}>
-                Subjects
-              </Text>
-            </View>
-          </View>
-        </View>
       </View>
 
       <ScrollView 
         style={{ flex: 1 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
+        contentContainerStyle={{ padding: 24 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        showsVerticalScrollIndicator={false}
       >
-        <View style={{ padding: 24 }}>
-          {homework.length > 0 ? (
-            <View style={{ gap: 16 }}>
-              {homework.map((item) => {
-                const overdue = isOverdue(item.due_date);
-                
-                return (
-                  <Card key={item.id}>
-                    <CardContent style={{ padding: 16 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827', marginBottom: 4 }}>
-                            {item.title}
-                          </Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
+        {/* Search and Filters */}
+        <Card style={{ marginBottom: 24 }}>
+          <CardContent style={{ padding: 20 }}>
+            {/* Search Bar */}
                             <View style={{ 
-                              backgroundColor: '#8b5cf6' + '20', 
-                              paddingHorizontal: 8, 
-                              paddingVertical: 2, 
-                              borderRadius: 4 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              backgroundColor: '#f3f4f6',
+              borderRadius: 8,
+              paddingHorizontal: 12,
+              marginBottom: 16
                             }}>
-                              <Text style={{ fontSize: 12, color: '#8b5cf6', fontWeight: '500' }}>
-                                {item.section}
-                              </Text>
-                            </View>
-                            <View style={{ 
-                              backgroundColor: '#3b82f6' + '20', 
+              <Search size={20} color="#6b7280" />
+              <TextInput
+                placeholder="Search homework assignments..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
                               paddingHorizontal: 8, 
-                              paddingVertical: 2, 
-                              borderRadius: 4 
-                            }}>
-                              <Text style={{ fontSize: 12, color: '#3b82f6', fontWeight: '500' }}>
-                                {item.subject}
-                              </Text>
+                  fontSize: 16,
+                  color: '#111827'
+                }}
+              />
                             </View>
-                          </View>
-                          {item.description && (
-                            <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 8 }}>
-                              {item.description}
-                            </Text>
-                          )}
-                        </View>
-                        <View style={{ marginLeft: 8 }}>
-                          {overdue ? (
-                            <View style={{ 
-                              backgroundColor: '#fef2f2', 
-                              paddingHorizontal: 8, 
-                              paddingVertical: 4, 
+            
+            {/* Filters */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+              {(['all', 'published', 'draft'] as const).map((status) => (
+                <TouchableOpacity
+                  key={status}
+                  onPress={() => setFilterStatus(status)}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
                               borderRadius: 6,
-                              flexDirection: 'row',
-                              alignItems: 'center'
-                            }}>
-                              <AlertCircle size={12} color="#ef4444" />
-                              <Text style={{ fontSize: 12, color: '#ef4444', fontWeight: '500', marginLeft: 4 }}>
-                                Overdue
+                    backgroundColor: filterStatus === status ? '#3b82f6' : '#f3f4f6'
+                  }}
+                >
+                  <Text style={{
+                    fontSize: 12,
+                    fontWeight: '500',
+                    color: filterStatus === status ? 'white' : '#6b7280',
+                    textTransform: 'capitalize'
+                  }}>
+                    {status}
                               </Text>
-                            </View>
-                          ) : (
-                            <View style={{ 
-                              backgroundColor: '#f0fdf4', 
-                              paddingHorizontal: 8, 
-                              paddingVertical: 4, 
-                              borderRadius: 6,
-                              flexDirection: 'row',
-                              alignItems: 'center'
-                            }}>
-                              <CheckCircle size={12} color="#10b981" />
-                              <Text style={{ fontSize: 12, color: '#10b981', fontWeight: '500', marginLeft: 4 }}>
-                                Active
-                              </Text>
-                            </View>
-                          )}
-                        </View>
+                </TouchableOpacity>
+              ))}
                       </View>
                       
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Calendar size={14} color="#6b7280" />
-                          <Text style={{ fontSize: 14, color: '#6b7280', marginLeft: 6 }}>
-                            Due: {formatDate(item.due_date)}
-                          </Text>
-                          {item.file_url && (
-                            <>
-                              <Text style={{ color: '#d1d5db', marginHorizontal: 8 }}>•</Text>
-                              <FileText size={14} color="#6b7280" />
-                              <Text style={{ fontSize: 14, color: '#6b7280', marginLeft: 6 }}>
-                                Attachment
-                              </Text>
-                            </>
-                          )}
-                        </View>
+            {/* Section Filter */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                           <TouchableOpacity
+                  onPress={() => setSelectedSection('all')}
                             style={{
-                              backgroundColor: '#f3f4f6',
-                              paddingHorizontal: 8,
-                              paddingVertical: 4,
-                              borderRadius: 4
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: 6,
+                    backgroundColor: selectedSection === 'all' ? '#3b82f6' : '#f3f4f6',
+                    minWidth: 80,
+                    alignItems: 'center'
                             }}
                           >
-                            <Edit size={14} color="#6b7280" />
+                  <Text style={{
+                    fontSize: 12,
+                    fontWeight: '500',
+                    color: selectedSection === 'all' ? 'white' : '#6b7280'
+                  }}>
+                    All Sections
+                  </Text>
                           </TouchableOpacity>
+                {sections.map((section) => (
                           <TouchableOpacity
+                    key={section.id}
+                    onPress={() => setSelectedSection(section.id)}
                             style={{
-                              backgroundColor: '#fef2f2',
-                              paddingHorizontal: 8,
-                              paddingVertical: 4,
-                              borderRadius: 4
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 6,
+                      backgroundColor: selectedSection === section.id ? '#3b82f6' : '#f3f4f6',
+                      minWidth: 100,
+                      alignItems: 'center'
                             }}
                           >
-                            <Trash2 size={14} color="#ef4444" />
+                    <Text style={{
+                      fontSize: 12,
+                      fontWeight: '500',
+                      color: selectedSection === section.id ? 'white' : '#6b7280'
+                    }}>
+                      Grade {section.grade} {section.section}
+                    </Text>
                           </TouchableOpacity>
+                ))}
                         </View>
-                      </View>
+            </ScrollView>
                     </CardContent>
                   </Card>
-                );
-              })}
-            </View>
+
+        {/* Homework List */}
+        {filteredHomework.length > 0 ? (
+          <FlatList
+            data={filteredHomework}
+            renderItem={renderHomeworkCard}
+            keyExtractor={(item) => item.id}
+            scrollEnabled={false}
+            showsVerticalScrollIndicator={false}
+          />
           ) : (
             <Card>
-              <CardContent style={{ padding: 32, alignItems: 'center' }}>
-                <ClipboardList size={48} color="#6b7280" style={{ marginBottom: 16 }} />
-                <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827', marginBottom: 8 }}>
-                  No Homework Assignments
+            <CardContent style={{ padding: 40, alignItems: 'center' }}>
+              <BookOpen size={48} color="#6b7280" />
+              <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827', marginTop: 16, textAlign: 'center' }}>
+                {searchQuery ? 'No Matching Homework' : 'No Homework Assignments'}
                 </Text>
-                <Text style={{ fontSize: 14, color: '#6b7280', textAlign: 'center', marginBottom: 16 }}>
-                  You haven't created any homework assignments yet. Create your first assignment to get started.
+              <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 8, textAlign: 'center' }}>
+                {searchQuery 
+                  ? 'No homework assignments match your search criteria'
+                  : 'Get started by creating your first homework assignment'
+                }
                 </Text>
+              {!searchQuery && (
                 <TouchableOpacity
+                  onPress={() => setShowCreateModal(true)}
                   style={{
-                    backgroundColor: '#8b5cf6',
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
+                    backgroundColor: '#3b82f6',
+                    paddingHorizontal: 20,
+                    paddingVertical: 12,
                     borderRadius: 8,
+                    marginTop: 16,
                     flexDirection: 'row',
                     alignItems: 'center'
                   }}
-                  onPress={() => setShowCreateModal(true)}
                 >
                   <Plus size={16} color="white" />
-                  <Text style={{ color: 'white', fontWeight: '500', marginLeft: 4 }}>
-                    Create First Homework
+                  <Text style={{ color: 'white', fontSize: 14, fontWeight: '500', marginLeft: 4 }}>
+                    Create Homework
                   </Text>
                 </TouchableOpacity>
+              )}
               </CardContent>
             </Card>
           )}
-        </View>
       </ScrollView>
 
-      {/* Create Homework Modal */}
+      {/* Create/Edit Homework Modal */}
       <Modal
         visible={showCreateModal}
-        transparent={true}
         animationType="slide"
-        onRequestClose={() => setShowCreateModal(false)}
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setShowCreateModal(false);
+          setEditingHomework(null);
+          resetForm();
+        }}
       >
-        <View style={{ 
-          flex: 1, 
-          backgroundColor: 'rgba(0,0,0,0.5)', 
-          justifyContent: 'flex-end' 
-        }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
           <View style={{ 
             backgroundColor: 'white', 
-            borderTopLeftRadius: 20, 
-            borderTopRightRadius: 20,
-            paddingTop: 20,
-            maxHeight: '90%'
-          }}>
-            <View style={{ 
-              paddingHorizontal: 24, 
-              paddingBottom: 16, 
+            paddingHorizontal: 24,
+            paddingVertical: 16,
               borderBottomWidth: 1, 
-              borderBottomColor: '#e5e7eb',
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827' }}>
-                Create Homework
+            borderBottomColor: '#e5e7eb'
+          }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111827' }}>
+                {editingHomework ? 'Edit Homework' : 'Create Homework'}
               </Text>
-              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-                <X size={24} color="#6b7280" />
+              <TouchableOpacity
+                onPress={() => {
+                  setShowCreateModal(false);
+                  setEditingHomework(null);
+                  resetForm();
+                }}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: '#f3f4f6',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <X size={18} color="#6b7280" />
               </TouchableOpacity>
             </View>
+            </View>
             
-            <ScrollView style={{ maxHeight: 500 }}>
-              <View style={{ padding: 24, gap: 16 }}>
-                {/* Section */}
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24 }}>
+            <View style={{ gap: 20 }}>
+              {/* Title */}
                 <View>
-                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#111827', marginBottom: 8 }}>
-                    Section *
+                <Text style={{ fontSize: 16, fontWeight: '500', color: '#111827', marginBottom: 8 }}>
+                  Title *
                   </Text>
-                  <TouchableOpacity
+                <TextInput
+                  value={formData.title}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, title: text }))}
+                  placeholder="Enter homework title"
                     style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
+                    backgroundColor: 'white',
                       borderWidth: 1,
                       borderColor: '#d1d5db',
                       borderRadius: 8,
                       paddingHorizontal: 12,
-                      paddingVertical: 10
-                    }}
-                    onPress={() => setShowSectionModal(true)}
-                  >
-                    <Text style={{ fontSize: 16, color: selectedSection ? '#111827' : '#9ca3af' }}>
-                      {selectedSection ? 
-                        `Grade ${sections.find(s => s.id === selectedSection)?.grade} ${sections.find(s => s.id === selectedSection)?.section}` : 
-                        'Select section'
-                      }
-                    </Text>
-                    <ChevronDown size={16} color="#6b7280" />
-                  </TouchableOpacity>
+                    paddingVertical: 12,
+                    fontSize: 16,
+                    color: '#111827'
+                  }}
+                />
                 </View>
 
                 {/* Subject */}
                 <View>
-                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#111827', marginBottom: 8 }}>
+                <Text style={{ fontSize: 16, fontWeight: '500', color: '#111827', marginBottom: 8 }}>
                     Subject *
                   </Text>
                   <TextInput
+                  value={formData.subject}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, subject: text }))}
+                  placeholder="Enter subject"
                     style={{
+                    backgroundColor: 'white',
                       borderWidth: 1,
                       borderColor: '#d1d5db',
                       borderRadius: 8,
                       paddingHorizontal: 12,
-                      paddingVertical: 10,
+                    paddingVertical: 12,
                       fontSize: 16,
                       color: '#111827'
                     }}
-                    placeholder="Enter subject"
-                    value={subject}
-                    onChangeText={setSubject}
                   />
                 </View>
 
-                {/* Title */}
+              {/* Section */}
+              <View>
+                <Text style={{ fontSize: 16, fontWeight: '500', color: '#111827', marginBottom: 8 }}>
+                  Section *
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {sections.map((section) => (
+                      <TouchableOpacity
+                        key={section.id}
+                        onPress={() => setFormData(prev => ({ ...prev, section_id: section.id }))}
+                        style={{
+                          paddingVertical: 12,
+                          paddingHorizontal: 16,
+                          borderRadius: 8,
+                          backgroundColor: formData.section_id === section.id ? '#3b82f6' : '#f3f4f6',
+                          minWidth: 120,
+                          alignItems: 'center',
+                          borderWidth: 1,
+                          borderColor: formData.section_id === section.id ? '#3b82f6' : '#d1d5db'
+                        }}
+                      >
+                        <Text style={{
+                          fontSize: 14,
+                          fontWeight: '500',
+                          color: formData.section_id === section.id ? 'white' : '#6b7280'
+                        }}>
+                          Grade {section.grade} {section.section}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* Due Date */}
                 <View>
-                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#111827', marginBottom: 8 }}>
-                    Title *
+                <Text style={{ fontSize: 16, fontWeight: '500', color: '#111827', marginBottom: 8 }}>
+                  Due Date *
                   </Text>
                   <TextInput
+                  value={formData.due_date}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, due_date: text }))}
+                  placeholder="YYYY-MM-DD"
                     style={{
+                    backgroundColor: 'white',
                       borderWidth: 1,
                       borderColor: '#d1d5db',
                       borderRadius: 8,
                       paddingHorizontal: 12,
-                      paddingVertical: 10,
+                    paddingVertical: 12,
                       fontSize: 16,
                       color: '#111827'
                     }}
-                    placeholder="Enter homework title"
-                    value={title}
-                    onChangeText={setTitle}
                   />
                 </View>
 
                 {/* Description */}
                 <View>
-                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#111827', marginBottom: 8 }}>
-                    Description
+                <Text style={{ fontSize: 16, fontWeight: '500', color: '#111827', marginBottom: 8 }}>
+                  Description *
                   </Text>
                   <TextInput
+                  value={formData.description}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
+                  placeholder="Enter homework description and instructions"
+                  multiline
+                  numberOfLines={6}
+                  textAlignVertical="top"
                     style={{
+                    backgroundColor: 'white',
                       borderWidth: 1,
                       borderColor: '#d1d5db',
                       borderRadius: 8,
                       paddingHorizontal: 12,
-                      paddingVertical: 10,
+                    paddingVertical: 12,
                       fontSize: 16,
                       color: '#111827',
-                      minHeight: 80,
-                      textAlignVertical: 'top'
-                    }}
-                    placeholder="Enter homework description..."
-                    value={description}
-                    onChangeText={setDescription}
-                    multiline={true}
-                    numberOfLines={3}
-                  />
-                </View>
-
-                {/* Due Date */}
-                <View>
-                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#111827', marginBottom: 8 }}>
-                    Due Date *
-                  </Text>
-                  <TextInput
-                    style={{
-                      borderWidth: 1,
-                      borderColor: '#d1d5db',
-                      borderRadius: 8,
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      fontSize: 16,
-                      color: '#111827'
-                    }}
-                    placeholder="YYYY-MM-DD"
-                    value={dueDate}
-                    onChangeText={setDueDate}
-                  />
-                  <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
-                    Format: YYYY-MM-DD (e.g., 2024-12-25)
-                  </Text>
-                </View>
-              </View>
-            </ScrollView>
-
-            <View style={{ padding: 24, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <Button
-                  title="Cancel"
-                  onPress={() => setShowCreateModal(false)}
-                  variant="outline"
-                  style={{ flex: 1 }}
-                />
-                <Button
-                  title={isSubmitting ? "Creating..." : "Create Homework"}
-                  onPress={handleSubmit}
-                  loading={isSubmitting}
-                  disabled={!selectedSection || !subject.trim() || !title.trim() || !dueDate}
-                  style={{ flex: 1, backgroundColor: '#8b5cf6' }}
+                    minHeight: 120
+                  }}
                 />
               </View>
             </View>
-          </View>
-        </View>
-      </Modal>
+          </ScrollView>
 
-      {/* Section Selector Modal */}
-      <Modal
-        visible={showSectionModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowSectionModal(false)}
-      >
-        <View style={{ 
-          flex: 1, 
-          backgroundColor: 'rgba(0,0,0,0.5)', 
-          justifyContent: 'center',
-          alignItems: 'center'
-        }}>
+          {/* Action Buttons */}
           <View style={{ 
             backgroundColor: 'white', 
-            borderRadius: 12,
-            padding: 24,
-            width: '80%',
-            maxWidth: 300
+            paddingHorizontal: 24,
+            paddingVertical: 16,
+            borderTopWidth: 1,
+            borderTopColor: '#e5e7eb',
+            gap: 12
           }}>
-            <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827', marginBottom: 16 }}>
-              Select Section
-            </Text>
-            <ScrollView style={{ maxHeight: 300 }}>
-              {sections.map((section) => (
-                <TouchableOpacity
-                  key={section.id}
-                  style={{
-                    paddingVertical: 12,
-                    paddingHorizontal: 16,
-                    borderRadius: 8,
-                    marginBottom: 8,
-                    backgroundColor: selectedSection === section.id ? '#8b5cf6' + '20' : 'transparent'
-                  }}
-                  onPress={() => {
-                    setSelectedSection(section.id);
-                    setShowSectionModal(false);
-                  }}
-                >
-                  <Text style={{ 
-                    fontSize: 16, 
-                    color: selectedSection === section.id ? '#8b5cf6' : '#111827',
-                    fontWeight: selectedSection === section.id ? '600' : '400'
-                  }}>
-                    Grade {section.grade} {section.section}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <TouchableOpacity
-              style={{
-                marginTop: 16,
-                paddingVertical: 8,
-                alignItems: 'center'
-              }}
-              onPress={() => setShowSectionModal(false)}
-            >
-              <Text style={{ fontSize: 16, color: '#6b7280' }}>Cancel</Text>
-            </TouchableOpacity>
+            <Button
+              title={editingHomework ? 'Update & Publish' : 'Create & Publish'}
+              onPress={() => editingHomework ? handleUpdateHomework(false) : handleCreateHomework(false)}
+              size="lg"
+              loading={createHomeworkMutation.isPending || updateHomeworkMutation.isPending}
+            />
+            <Button
+              title={editingHomework ? 'Save as Draft' : 'Save as Draft'}
+              onPress={() => editingHomework ? handleUpdateHomework(true) : handleCreateHomework(true)}
+              variant="outline"
+              size="lg"
+              loading={createHomeworkMutation.isPending || updateHomeworkMutation.isPending}
+            />
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );

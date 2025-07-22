@@ -28,8 +28,18 @@ export function ThemeProvider({
       
       // Convert hex colors to HSL format
       const convertToHSL = (hex: string) => {
+        // Check if hex is valid before proceeding
+        if (!hex || typeof hex !== 'string') {
+          return '0 0% 50%'; // Return a default gray color
+        }
+        
         // Remove the hash if present
         const color = hex.replace('#', '');
+        
+        // Validate hex color format
+        if (!/^[0-9A-Fa-f]{6}$/.test(color)) {
+          return '0 0% 50%'; // Return a default gray color for invalid hex
+        }
         
         // Parse RGB values
         const r = parseInt(color.substr(0, 2), 16) / 255;
@@ -76,10 +86,10 @@ export function ThemeProvider({
         return `${h} ${s}% ${newL}%`;
       };
 
-      // Convert colors to HSL
-      const primaryHSL = convertToHSL(primary);
-      const secondaryHSL = convertToHSL(secondary);
-      const accentHSL = convertToHSL(accent);
+      // Convert colors to HSL - only if they exist and are valid
+      const primaryHSL = primary ? convertToHSL(primary) : '231 48% 48%'; // Default indigo
+      const secondaryHSL = secondary ? convertToHSL(secondary) : '210 40% 96%'; // Default gray
+      const accentHSL = accent ? convertToHSL(accent) : '262 83% 58%'; // Default purple
       
       // Set CSS variables for brand colors
       root.style.setProperty('--primary', primaryHSL);

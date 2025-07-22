@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -248,23 +248,21 @@ export default function ParentFormModal({
     onOpenChange(false);
   };
 
-  // Handle dialog open/close
-  const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen) {
-      handleClose();
-    } else {
-      onOpenChange(newOpen);
-    }
-  };
+  // Get parent's children - stable reference
+  const getParentChildren = useCallback(() => {
+    if (!parent || !students.length) return [];
+    return students
+      .filter(student => student.parent_id === parent.id)
+      .map(student => student.id);
+  }, [parent?.id, students.length]);
 
-  // Reset form when parent prop changes
+  // Reset form when parent prop changes - without students dependency
   React.useEffect(() => {
-    if (open && parent) {
-      // Get children assigned to this parent
-      const parentChildren = students
-        .filter(student => student.parent_id === parent.id)
-        .map(student => student.id);
-      
+    if (!open) return; // Only run when modal is open
+    
+    if (parent) {
+      // Editing mode
+      const parentChildren = getParentChildren();
       setSelectedChildren(parentChildren);
       form.reset({
         first_name: parent.first_name || '',
@@ -274,8 +272,8 @@ export default function ParentFormModal({
         relation: parent.relation || undefined,
         children: parentChildren,
       });
-    } else if (open && !parent) {
-      // Reset for new parent
+    } else {
+      // Create mode - reset to defaults
       form.reset({
         first_name: '',
         last_name: '',
@@ -286,10 +284,10 @@ export default function ParentFormModal({
       });
       setSelectedChildren([]);
     }
-  }, [open, parent, students]);
+  }, [open, parent?.id, form, getParentChildren]);
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>

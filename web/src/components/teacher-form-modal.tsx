@@ -49,15 +49,15 @@ interface TeacherFormModalProps {
 }
 
 const SUBJECTS = [
-  'Mathematics',
+  'Telugu',
+  'Hindi', 
   'English',
+  'Mathematics',
   'Science',
-  'Social Studies',
   'Physics',
-  'Chemistry',
   'Biology',
-  'History',
-  'Geography',
+  'Social Studies',
+  'General Knowledge',
   'Computer Science',
   'Physical Education',
   'Art',
@@ -83,6 +83,8 @@ export default function TeacherFormModal({
   const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [customSubject, setCustomSubject] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
 
   // Form setup
   const form = useForm<TeacherFormData>({
@@ -179,6 +181,16 @@ export default function TeacherFormModal({
     form.setValue('subjects', newSubjects);
   };
 
+  const handleCustomSubjectAdd = () => {
+    if (customSubject.trim() && !selectedSubjects.includes(customSubject.trim())) {
+      const newSubjects = [...selectedSubjects, customSubject.trim()];
+      setSelectedSubjects(newSubjects);
+      form.setValue('subjects', newSubjects);
+      setCustomSubject('');
+      setShowCustomInput(false);
+    }
+  };
+
   const handleGeneratePassword = () => {
     const newPassword = generatePassword();
     form.setValue('password', newPassword);
@@ -196,6 +208,8 @@ export default function TeacherFormModal({
     onOpenChange(false);
     form.reset();
     setSelectedSubjects([]);
+    setCustomSubject('');
+    setShowCustomInput(false);
   };
 
   // Auto-generate password when toggle is enabled
@@ -336,7 +350,49 @@ export default function TeacherFormModal({
                         {subject}
                       </div>
                     ))}
+                    <div
+                      className={`p-2 border rounded cursor-pointer text-sm text-center transition-colors border-dashed border-gray-400 hover:border-primary`}
+                      onClick={() => setShowCustomInput(true)}
+                    >
+                      + Others
+                    </div>
                   </div>
+                  
+                  {showCustomInput && (
+                    <div className="flex gap-2 mt-2">
+                      <Input
+                        placeholder="Enter custom subject"
+                        value={customSubject}
+                        onChange={(e) => setCustomSubject(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleCustomSubjectAdd();
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleCustomSubjectAdd}
+                        disabled={!customSubject.trim()}
+                      >
+                        Add
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setShowCustomInput(false);
+                          setCustomSubject('');
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
+                  
                   {selectedSubjects.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
                       {selectedSubjects.map((subject) => (

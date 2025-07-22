@@ -208,7 +208,9 @@ export const createPost = async (schoolId: string, postData: CreatePostData): Pr
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
   return data;
 };
 
@@ -227,7 +229,9 @@ export const createAnnouncement = async (schoolId: string, announcementData: Cre
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
   return data;
 };
 

@@ -9,7 +9,8 @@ import {
   Alert,
   Modal,
   SafeAreaView,
-  StyleSheet
+  StyleSheet,
+  Image
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../contexts/AuthContext';
@@ -28,7 +29,8 @@ import {
   User,
   Globe,
   UserCheck,
-  GraduationCap
+  GraduationCap,
+  Upload
 } from 'lucide-react-native';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -60,6 +62,8 @@ const TeacherCommunityScreen = () => {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [audience, setAudience] = useState<'all' | 'teachers' | 'parents' | 'students'>('all');
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
 
   // Fetch posts
   const { data: posts = [], isLoading, refetch } = useQuery({
@@ -99,13 +103,14 @@ const TeacherCommunityScreen = () => {
 
   // Create post mutation
   const createPostMutation = useMutation({
-    mutationFn: async (postData: { title: string; body: string; audience: string }) => {
+    mutationFn: async (postData: { title: string; body: string; audience: string; media?: string[] }) => {
       const payload = {
         school_id: user?.school_id,
         author_id: user?.id,
         title: postData.title,
         body: postData.body,
         audience: postData.audience,
+        media_urls: postData.media || []
       };
 
       const { data, error } = await supabase
@@ -142,6 +147,51 @@ const TeacherCommunityScreen = () => {
     setTitle('');
     setBody('');
     setAudience('all');
+    setSelectedImages([]);
+    setUploadingImages(false);
+  };
+
+  const handleImageSelection = () => {
+    Alert.alert(
+      'Add Images',
+      'Choose how you want to add images to your post:',
+      [
+        {
+          text: 'Camera',
+          onPress: () => Alert.alert('Info', 'Camera functionality requires expo-image-picker package')
+        },
+        {
+          text: 'Gallery',
+          onPress: () => Alert.alert('Info', 'Gallery selection requires expo-image-picker package')
+        },
+        {
+          text: 'URL',
+          onPress: () => {
+            Alert.prompt(
+              'Add Image URL',
+              'Enter the URL of the image you want to add:',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Add',
+                  onPress: (url) => {
+                    if (url && url.trim()) {
+                      setSelectedImages(prev => [...prev, url.trim()]);
+                    }
+                  }
+                }
+              ],
+              'plain-text'
+            );
+          }
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  const removeImage = (index: number) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleCreatePost = () => {
@@ -150,10 +200,16 @@ const TeacherCommunityScreen = () => {
       return;
     }
 
+    if (!body.trim()) {
+      Alert.alert('Error', 'Please enter content for your post');
+      return;
+    }
+
     createPostMutation.mutate({
       title: title.trim(),
       body: body.trim(),
-      audience
+      audience,
+      media: selectedImages
     });
   };
 
@@ -480,6 +536,86 @@ const TeacherCommunityScreen = () => {
                     minHeight: 120
                   }}
                 />
+              </View>
+
+              {/* Media Upload */}
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>
+                    Add Images
+                  </Text>
+                  <TouchableOpacity
+                    onPress={handleImageSelection}
+                    style={{
+                      backgroundColor: '#7c3aed',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 6
+                    }}
+                  >
+                    <Upload size={14} color="white" />
+                    <Text style={{ color: 'white', fontSize: 12, fontWeight: '600', marginLeft: 4 }}>
+                      Add Image
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                
+                {selectedImages.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {selectedImages.map((imageUrl, index) => (
+                        <View key={index} style={{ position: 'relative' }}>
+                          <Image
+                            source={{ uri: imageUrl }}
+                            style={{ 
+                              width: 80, 
+                              height: 80, 
+                              borderRadius: 8,
+                              backgroundColor: '#f3f4f6'
+                            }}
+                            resizeMode="cover"
+                          />
+                          <TouchableOpacity
+                            onPress={() => removeImage(index)}
+                            style={{
+                              position: 'absolute',
+                              top: -5,
+                              right: -5,
+                              backgroundColor: '#ef4444',
+                              borderRadius: 10,
+                              width: 20,
+                              height: 20,
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            <X size={12} color="white" />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </View>
+                  </ScrollView>
+                )}
+                
+                {selectedImages.length === 0 && (
+                  <View style={{
+                    backgroundColor: '#f9fafb',
+                    borderWidth: 1,
+                    borderColor: '#e5e7eb',
+                    borderRadius: 8,
+                    paddingVertical: 24,
+                    paddingHorizontal: 16,
+                    alignItems: 'center',
+                    borderStyle: 'dashed'
+                  }}>
+                    <Upload size={24} color="#9ca3af" />
+                    <Text style={{ color: '#6b7280', fontSize: 14, marginTop: 8, textAlign: 'center' }}>
+                      Tap "Add Image" to include photos in your post
+                    </Text>
+                  </View>
+                )}
               </View>
 
               {/* Audience Selection */}

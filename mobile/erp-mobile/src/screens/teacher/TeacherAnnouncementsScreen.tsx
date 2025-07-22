@@ -319,28 +319,30 @@ export const TeacherAnnouncementsScreen: React.FC = () => {
                             {formatDate(announcement.created_at)}
                           </Text>
                         </View>
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                          <TouchableOpacity
-                            style={{
-                              backgroundColor: '#f3f4f6',
-                              paddingHorizontal: 8,
-                              paddingVertical: 4,
-                              borderRadius: 4
-                            }}
-                          >
-                            <Edit size={14} color="#6b7280" />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={{
-                              backgroundColor: '#fef2f2',
-                              paddingHorizontal: 8,
-                              paddingVertical: 4,
-                              borderRadius: 4
-                            }}
-                          >
-                            <Trash2 size={14} color="#ef4444" />
-                          </TouchableOpacity>
-                        </View>
+                        {announcement.created_by === user?.id && (
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity
+                              style={{
+                                backgroundColor: '#f3f4f6',
+                                paddingHorizontal: 8,
+                                paddingVertical: 4,
+                                borderRadius: 4
+                              }}
+                            >
+                              <Edit size={14} color="#6b7280" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={{
+                                backgroundColor: '#fef2f2',
+                                paddingHorizontal: 8,
+                                paddingVertical: 4,
+                                borderRadius: 4
+                              }}
+                            >
+                              <Trash2 size={14} color="#ef4444" />
+                            </TouchableOpacity>
+                          </View>
+                        )}
                       </View>
                     </CardContent>
                   </Card>

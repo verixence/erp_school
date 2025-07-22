@@ -19,15 +19,16 @@ import {
 // Teacher Screens
 import { TeacherDashboardScreen } from '../screens/teacher/TeacherDashboardScreen';
 import { TeacherAttendanceScreen } from '../screens/teacher/TeacherAttendanceScreen';
-import { TeacherTimetableScreen } from '../screens/teacher/TeacherTimetableScreen';
+import TeacherTimetableScreen from '../screens/teacher/TeacherTimetableScreen';
 import { TeacherHomeworkScreen } from '../screens/teacher/TeacherHomeworkScreen';
 import { TeacherMarksScreen } from '../screens/teacher/TeacherMarksScreen';
-import { TeacherExamsScreen } from '../screens/teacher/TeacherExamsScreen';
+import TeacherExamsScreen from '../screens/teacher/TeacherExamsScreen';
 import { TeacherAnnouncementsScreen } from '../screens/teacher/TeacherAnnouncementsScreen';
 import TeacherCommunityScreen from '../screens/teacher/TeacherCommunityScreen';
-import TeacherGalleryScreen from '../screens/teacher/TeacherGalleryScreen';
+import { TeacherGalleryScreen } from '../screens/teacher/TeacherGalleryScreen';
 import TeacherCalendarScreen from '../screens/teacher/TeacherCalendarScreen';
 import TeacherFeedbackScreen from '../screens/teacher/TeacherFeedbackScreen';
+import { TeacherCoScholasticScreen } from '../screens/teacher/TeacherCoScholasticScreen';
 import { SettingsScreen } from '../screens/shared/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
@@ -79,6 +80,11 @@ const AcademicsStack = () => (
       name="Calendar" 
       component={TeacherCalendarScreen}
       options={{ title: 'Academic Calendar' }}
+    />
+    <Stack.Screen 
+      name="CoScholastic" 
+      component={TeacherCoScholasticScreen}
+      options={{ title: 'Co-Scholastic Assessments' }}
     />
   </Stack.Navigator>
 );

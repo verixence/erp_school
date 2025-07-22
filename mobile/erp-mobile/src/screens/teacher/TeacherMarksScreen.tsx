@@ -33,26 +33,25 @@ interface ExamPaper {
   id: string;
   exam_group_id: string;
   subject: string;
+  section: string;
   exam_date: string;
   exam_time?: string;
   duration_minutes: number;
   max_marks: number;
   school_id: string;
-  exam_groups: {
+  exam_groups?: {
     id: string;
     name: string;
     exam_type: string;
-    grade: number;
-    section: string;
+    start_date: string;
+    end_date: string;
   };
 }
 
 interface Student {
   id: string;
-  first_name: string;
-  last_name: string;
-  roll_number?: string;
-  section_id: string;
+  full_name: string;
+  admission_no?: string;
 }
 
 interface Mark {
@@ -86,16 +85,15 @@ export const TeacherMarksScreen: React.FC = () => {
         .from('exam_papers')
         .select(`
           *,
-          exam_groups!inner(
+          exam_groups(
             id,
             name,
             exam_type,
-            grade,
-            section
+            start_date,
+            end_date
           )
         `)
         .eq('school_id', user.school_id)
-        .eq('teacher_id', user.id)
         .order('exam_date', { ascending: false });
 
       if (teacherPapersResult.data && teacherPapersResult.data.length > 0) {
@@ -125,12 +123,12 @@ export const TeacherMarksScreen: React.FC = () => {
           .from('exam_papers')
           .select(`
             *,
-            exam_groups!inner(
+            exam_groups(
               id,
               name,
               exam_type,
-              grade,
-              section
+              start_date,
+              end_date
             )
           `)
           .eq('school_id', user.school_id)
@@ -180,13 +178,24 @@ export const TeacherMarksScreen: React.FC = () => {
       const examPaper = examPapers.find(ep => ep.id === selectedExamPaper);
       if (!examPaper) return [];
 
+      // Parse the section string to extract grade and section
+      // Format could be "Grade 1 A" or "1A" etc.
+      const sectionMatch = examPaper.section.match(/(?:Grade\s*)?(\d+)\s*([A-Z])/i);
+      let grade = null;
+      let section = null;
+
+      if (sectionMatch) {
+        grade = sectionMatch[1];
+        section = sectionMatch[2].toUpperCase();
+      }
+
       const { data, error } = await supabase
         .from('students')
-        .select('id, first_name, last_name, roll_number, section_id')
-        .eq('grade', examPaper.exam_groups.grade)
-        .eq('section', examPaper.exam_groups.section)
+        .select('id, full_name, admission_no')
+        .eq('grade', grade || examPaper.section)
+        .eq('section', section || '')
         .eq('school_id', user?.school_id)
-        .order('roll_number', { ascending: true });
+        .order('full_name', { ascending: true });
 
       if (error) throw error;
       return data || [];
@@ -310,35 +319,132 @@ export const TeacherMarksScreen: React.FC = () => {
     }));
   };
 
+  // Grade calculation function
+  const calculateGrade = (marks: number, maxMarks: number) => {
+    const percentage = (marks / maxMarks) * 100;
+    if (percentage >= 90) return 'A+';
+    if (percentage >= 80) return 'A';
+    if (percentage >= 70) return 'B+';
+    if (percentage >= 60) return 'B';
+    if (percentage >= 50) return 'C';
+    if (percentage >= 40) return 'D';
+    return 'F';
+  };
+
+  // Validate all marks
+  const validateAllMarks = () => {
+    if (!selectedExamPaper) return false;
+    
+    const selectedPaper = examPapers.find(ep => ep.id === selectedExamPaper);
+    if (!selectedPaper) return false;
+
+    const errors: string[] = [];
+    let isValid = true;
+
+    students.forEach(student => {
+      const studentMarks = marksData[student.id];
+      if (!studentMarks || studentMarks.absent) return;
+      
+      const marks = parseFloat(studentMarks.marks);
+      if (isNaN(marks)) {
+        errors.push(`Missing marks for ${student.full_name}`);
+        isValid = false;
+      } else if (marks < 0 || marks > selectedPaper.max_marks) {
+        errors.push(`Invalid marks for ${student.full_name} (must be 0-${selectedPaper.max_marks})`);
+        isValid = false;
+      }
+    });
+
+    if (!isValid) {
+      Alert.alert('Validation Error', errors.join('\n'));
+    }
+
+    return isValid;
+  };
+
   const handleSaveMarks = async () => {
     if (!selectedExamPaper) {
       Alert.alert('Error', 'Please select an exam paper first');
       return;
     }
 
-    const selectedPaper = examPapers.find(ep => ep.id === selectedExamPaper);
-    if (!selectedPaper) return;
-
-    // Validate marks
-    const hasInvalidMarks = students.some(student => {
-      const studentMarks = marksData[student.id];
-      if (!studentMarks || studentMarks.absent) return false;
-      
-      const marks = parseFloat(studentMarks.marks);
-      return isNaN(marks) || marks < 0 || marks > selectedPaper.max_marks;
-    });
-
-    if (hasInvalidMarks) {
-      Alert.alert('Error', `Please enter valid marks (0 to ${selectedPaper.max_marks})`);
+    if (!validateAllMarks()) {
       return;
     }
 
     setIsSubmitting(true);
     try {
       await saveMarksMutation.mutateAsync();
+      Alert.alert('Success', 'Marks saved successfully!');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to save marks');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleBulkMarkPresent = () => {
+    Alert.alert(
+      'Mark All Present',
+      'This will mark all students as present. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes',
+          onPress: () => {
+            const updatedMarksData = { ...marksData };
+            students.forEach(student => {
+              updatedMarksData[student.id] = {
+                ...updatedMarksData[student.id],
+                absent: false
+              };
+            });
+            setMarksData(updatedMarksData);
+          }
+        }
+      ]
+    );
+  };
+
+  const handleBulkSetMarks = () => {
+    Alert.prompt(
+      'Set Marks for All',
+      'Enter marks to set for all present students:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Set',
+          onPress: (marks) => {
+            if (!marks || isNaN(parseFloat(marks))) {
+              Alert.alert('Error', 'Please enter valid marks');
+              return;
+            }
+            
+            const selectedPaper = examPapers.find(ep => ep.id === selectedExamPaper);
+            if (!selectedPaper) return;
+            
+            const numMarks = parseFloat(marks);
+            if (numMarks < 0 || numMarks > selectedPaper.max_marks) {
+              Alert.alert('Error', `Marks must be between 0 and ${selectedPaper.max_marks}`);
+              return;
+            }
+
+            const updatedMarksData = { ...marksData };
+            students.forEach(student => {
+              if (!updatedMarksData[student.id]?.absent) {
+                updatedMarksData[student.id] = {
+                  ...updatedMarksData[student.id],
+                  marks: marks,
+                  absent: false
+                };
+              }
+            });
+            setMarksData(updatedMarksData);
+          }
+        }
+      ],
+      'plain-text'
+    );
   };
 
   const formatDate = (dateString: string) => {
@@ -433,7 +539,7 @@ export const TeacherMarksScreen: React.FC = () => {
           >
             <Text style={{ fontSize: 16, color: selectedExamPaper ? '#111827' : '#9ca3af', flex: 1 }}>
               {selectedPaper ? 
-                `${selectedPaper.subject} - ${selectedPaper.exam_groups.name} (Grade ${selectedPaper.exam_groups.grade} ${selectedPaper.exam_groups.section})` : 
+                `${selectedPaper.subject} - ${selectedPaper.exam_groups?.name || 'Unknown'} (${selectedPaper.section})` : 
                 'Select an exam paper'
               }
             </Text>
@@ -507,13 +613,52 @@ export const TeacherMarksScreen: React.FC = () => {
                     </Text>
                   </View>
                   <Text style={{ fontSize: 14, color: '#6b7280', marginBottom: 4 }}>
-                    {selectedPaper.exam_groups?.name || 'Unknown Exam'} • Grade {selectedPaper.exam_groups?.grade || '?'}{selectedPaper.exam_groups?.section || '?'}
+                    {selectedPaper.exam_groups?.name || 'Unknown Exam'} • {selectedPaper.section}
                   </Text>
                   <Text style={{ fontSize: 14, color: '#6b7280' }}>
                     Date: {formatDate(selectedPaper.exam_date)} • Duration: {selectedPaper.duration_minutes} mins
                   </Text>
                 </CardContent>
               </Card>
+
+              {/* Bulk Operations */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 12 }}>
+                  Bulk Operations
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      backgroundColor: '#f3f4f6',
+                      borderRadius: 8,
+                      alignItems: 'center'
+                    }}
+                    onPress={handleBulkMarkPresent}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151' }}>
+                      Mark All Present
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      backgroundColor: '#f3f4f6',
+                      borderRadius: 8,
+                      alignItems: 'center'
+                    }}
+                    onPress={handleBulkSetMarks}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151' }}>
+                      Set Marks for All
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
 
               {/* Students List */}
               <View style={{ gap: 12 }}>
@@ -526,11 +671,11 @@ export const TeacherMarksScreen: React.FC = () => {
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                           <View style={{ flex: 1 }}>
                             <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 4 }}>
-                              {student.first_name} {student.last_name}
+                              {student.full_name}
                             </Text>
-                            {student.roll_number && (
+                            {student.admission_no && (
                               <Text style={{ fontSize: 14, color: '#6b7280' }}>
-                                Roll No: {student.roll_number}
+                                Admission No: {student.admission_no}
                               </Text>
                             )}
                           </View>
@@ -583,6 +728,55 @@ export const TeacherMarksScreen: React.FC = () => {
                                 keyboardType="numeric"
                               />
                             </View>
+                            
+                            {/* Grade Display */}
+                            <View style={{ width: 60, alignItems: 'center' }}>
+                              <Text style={{ fontSize: 14, fontWeight: '500', color: '#111827', marginBottom: 4 }}>
+                                Grade
+                              </Text>
+                              {studentMarks.marks && !isNaN(parseFloat(studentMarks.marks)) ? (
+                                <View style={{
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 6,
+                                  borderRadius: 6,
+                                  backgroundColor: (() => {
+                                    const grade = calculateGrade(parseFloat(studentMarks.marks), selectedPaper.max_marks);
+                                    if (grade === 'A+' || grade === 'A') return '#dcfce7';
+                                    if (grade === 'B+' || grade === 'B') return '#dbeafe';
+                                    if (grade === 'C') return '#fef3c7';
+                                    if (grade === 'D') return '#fed7aa';
+                                    return '#fecaca';
+                                  })()
+                                }}>
+                                  <Text style={{
+                                    fontSize: 14,
+                                    fontWeight: '600',
+                                    textAlign: 'center',
+                                    color: (() => {
+                                      const grade = calculateGrade(parseFloat(studentMarks.marks), selectedPaper.max_marks);
+                                      if (grade === 'A+' || grade === 'A') return '#166534';
+                                      if (grade === 'B+' || grade === 'B') return '#1e40af';
+                                      if (grade === 'C') return '#92400e';
+                                      if (grade === 'D') return '#c2410c';
+                                      return '#dc2626';
+                                    })()
+                                  }}>
+                                    {calculateGrade(parseFloat(studentMarks.marks), selectedPaper.max_marks)}
+                                  </Text>
+                                </View>
+                              ) : (
+                                <View style={{
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 6,
+                                  borderRadius: 6,
+                                  backgroundColor: '#f3f4f6'
+                                }}>
+                                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#9ca3af', textAlign: 'center' }}>
+                                    -
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
                           </View>
                         )}
                         
@@ -612,6 +806,80 @@ export const TeacherMarksScreen: React.FC = () => {
                   );
                 })}
               </View>
+
+              {/* Statistics Summary */}
+              <Card style={{ marginTop: 16, marginBottom: 16 }}>
+                <CardContent style={{ padding: 16 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 12 }}>
+                    Marks Entry Summary
+                  </Text>
+                  
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <View style={{ alignItems: 'center', flex: 1 }}>
+                      <Text style={{ fontSize: 20, fontWeight: '700', color: '#111827' }}>
+                        {students.length}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>Total Students</Text>
+                    </View>
+                    
+                    <View style={{ alignItems: 'center', flex: 1 }}>
+                      <Text style={{ fontSize: 20, fontWeight: '700', color: '#ef4444' }}>
+                        {Object.values(marksData).filter(data => data.absent).length}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>Absent</Text>
+                    </View>
+                    
+                    <View style={{ alignItems: 'center', flex: 1 }}>
+                      <Text style={{ fontSize: 20, fontWeight: '700', color: '#10b981' }}>
+                        {Object.values(marksData).filter(data => !data.absent && data.marks && !isNaN(parseFloat(data.marks))).length}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>Marks Entered</Text>
+                    </View>
+                    
+                    <View style={{ alignItems: 'center', flex: 1 }}>
+                      <Text style={{ fontSize: 20, fontWeight: '700', color: '#f59e0b' }}>
+                        {students.length - Object.values(marksData).filter(data => data.absent).length - Object.values(marksData).filter(data => !data.absent && data.marks && !isNaN(parseFloat(data.marks))).length}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#6b7280' }}>Pending</Text>
+                    </View>
+                  </View>
+
+                  {/* Grade Distribution */}
+                  {Object.values(marksData).some(data => !data.absent && data.marks && !isNaN(parseFloat(data.marks))) && (
+                    <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 8 }}>
+                        Grade Distribution
+                      </Text>
+                      
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                        {['A+', 'A', 'B+', 'B', 'C', 'D', 'F'].map(gradeLevel => {
+                          const count = Object.values(marksData).filter(data => {
+                            if (data.absent || !data.marks || isNaN(parseFloat(data.marks))) return false;
+                            return calculateGrade(parseFloat(data.marks), selectedPaper!.max_marks) === gradeLevel;
+                          }).length;
+                          
+                          if (count === 0) return null;
+                          
+                          return (
+                            <View key={gradeLevel} style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              backgroundColor: '#f3f4f6',
+                              borderRadius: 4
+                            }}>
+                              <Text style={{ fontSize: 12, fontWeight: '600', color: '#111827' }}>
+                                {gradeLevel}: {count}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Save Button */}
               <View style={{ marginTop: 24, marginBottom: 32 }}>
@@ -718,7 +986,7 @@ export const TeacherMarksScreen: React.FC = () => {
                       color: selectedExamPaper === paper.id ? '#1d4ed8' : '#6b7280',
                       marginBottom: 2
                     }}>
-                      {paper.exam_groups.name} • Grade {paper.exam_groups.grade} {paper.exam_groups.section}
+                      {paper.exam_groups?.name || 'Unknown'} • {paper.section}
                     </Text>
                       <Text style={{ 
                         fontSize: 12, 

@@ -5,13 +5,17 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  SafeAreaView
+  SafeAreaView,
+  Modal,
+  TextInput,
+  Alert
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
-import { useQuery } from '@tanstack/react-query';
-import { Card } from '../../components/ui/Card';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, CardContent, CardHeader } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
 import {
   Calendar,
   Clock,
@@ -24,7 +28,12 @@ import {
   Users,
   Trophy,
   Music,
-  Zap
+  Zap,
+  Plus,
+  Edit,
+  Trash2,
+  X,
+  Save
 } from 'lucide-react-native';
 
 interface CalendarEvent {
@@ -53,11 +62,36 @@ const EVENT_TYPES = [
   { value: 'other', label: 'Other', color: '#6B7280', icon: Calendar }
 ];
 
+interface EventFormData {
+  title: string;
+  description: string;
+  event_date: string;
+  start_time: string;
+  end_time: string;
+  event_type: string;
+  location: string;
+  status: 'draft' | 'published';
+}
+
 const TeacherCalendarScreen = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [selectedType, setSelectedType] = useState('all');
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [formData, setFormData] = useState<EventFormData>({
+    title: '',
+    description: '',
+    event_date: new Date().toISOString().split('T')[0],
+    start_time: '',
+    end_time: '',
+    event_type: 'academic',
+    location: '',
+    status: 'draft'
+  });
 
   // Get current month and year
   const currentMonth = currentDate.getMonth();
@@ -97,6 +131,151 @@ const TeacherCalendarScreen = () => {
     enabled: !!user?.school_id,
     staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
   });
+
+  // Create event mutation
+  const createEventMutation = useMutation({
+    mutationFn: async (data: EventFormData) => {
+      const eventTypeData = EVENT_TYPES.find(t => t.value === data.event_type);
+      const payload = {
+        ...data,
+        color: eventTypeData?.color || '#6B7280',
+        school_id: user?.school_id,
+        created_by: user?.id
+      };
+
+      const { error } = await supabase
+        .from('calendar_events')
+        .insert(payload);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      Alert.alert('Success', 'Event created successfully!');
+      setShowCreateModal(false);
+      resetForm();
+      refetch();
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.message || 'Failed to create event');
+    },
+  });
+
+  // Update event mutation
+  const updateEventMutation = useMutation({
+    mutationFn: async (data: EventFormData) => {
+      if (!editingEvent) return;
+
+      const eventTypeData = EVENT_TYPES.find(t => t.value === data.event_type);
+      const payload = {
+        ...data,
+        color: eventTypeData?.color || '#6B7280'
+      };
+
+      const { error } = await supabase
+        .from('calendar_events')
+        .update(payload)
+        .eq('id', editingEvent.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      Alert.alert('Success', 'Event updated successfully!');
+      setShowEditModal(false);
+      setEditingEvent(null);
+      resetForm();
+      refetch();
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.message || 'Failed to update event');
+    },
+  });
+
+  // Delete event mutation
+  const deleteEventMutation = useMutation({
+    mutationFn: async (eventId: string) => {
+      const { error } = await supabase
+        .from('calendar_events')
+        .delete()
+        .eq('id', eventId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      Alert.alert('Success', 'Event deleted successfully!');
+      refetch();
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.message || 'Failed to delete event');
+    },
+  });
+
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      description: '',
+      event_date: new Date().toISOString().split('T')[0],
+      start_time: '',
+      end_time: '',
+      event_type: 'academic',
+      location: '',
+      status: 'draft'
+    });
+  };
+
+  const openCreateModal = () => {
+    resetForm();
+    setShowCreateModal(true);
+  };
+
+  const openEditModal = (event: CalendarEvent) => {
+    setEditingEvent(event);
+    setFormData({
+      title: event.title,
+      description: event.description || '',
+      event_date: event.event_date,
+      start_time: event.start_time || '',
+      end_time: event.end_time || '',
+      event_type: event.event_type,
+      location: event.location || '',
+      status: event.is_published ? 'published' : 'draft'
+    });
+    setShowEditModal(true);
+  };
+
+  const handleDeleteEvent = (eventId: string) => {
+    Alert.alert(
+      'Delete Event',
+      'Are you sure you want to delete this event? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteEventMutation.mutate(eventId) }
+      ]
+    );
+  };
+
+  const handleCreateEvent = () => {
+    if (!formData.title.trim()) {
+      Alert.alert('Error', 'Please enter event title');
+      return;
+    }
+    if (!formData.event_date) {
+      Alert.alert('Error', 'Please select event date');
+      return;
+    }
+    createEventMutation.mutate(formData);
+  };
+
+  const handleUpdateEvent = () => {
+    if (!formData.title.trim()) {
+      Alert.alert('Error', 'Please enter event title');
+      return;
+    }
+    if (!formData.event_date) {
+      Alert.alert('Error', 'Please select event date');
+      return;
+    }
+    updateEventMutation.mutate(formData);
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -178,25 +357,42 @@ const TeacherCalendarScreen = () => {
         elevation: 3
       }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ 
-              backgroundColor: '#0d9488', 
-              padding: 10, 
-              borderRadius: 12, 
-              marginRight: 12 
-            }}>
-              <Calendar size={24} color="white" />
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ 
+                backgroundColor: '#0d9488', 
+                padding: 10, 
+                borderRadius: 12, 
+                marginRight: 12 
+              }}>
+                <Calendar size={24} color="white" />
+              </View>
+              <View>
+                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111827' }}>
+                  Academic Calendar
+                </Text>
+                <Text style={{ fontSize: 14, color: '#6b7280' }}>
+                  School events and important dates
+                </Text>
+              </View>
             </View>
-            <View>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111827' }}>
-                Academic Calendar
+            
+            <TouchableOpacity
+              onPress={openCreateModal}
+              style={{
+                backgroundColor: '#0d9488',
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 8
+              }}
+            >
+              <Plus size={16} color="white" />
+              <Text style={{ color: 'white', fontSize: 14, fontWeight: '600', marginLeft: 4 }}>
+                Create
               </Text>
-              <Text style={{ fontSize: 14, color: '#6b7280' }}>
-                School events and important dates
-              </Text>
-            </View>
+            </TouchableOpacity>
           </View>
-        </View>
 
         {/* Month Navigation */}
         <View style={{ 
@@ -395,6 +591,485 @@ const TeacherCalendarScreen = () => {
           </View>
         )}
       </ScrollView>
+
+      {/* Create Event Modal */}
+      <Modal
+        visible={showCreateModal}
+        animationType="slide"
+        presentationStyle="formSheet"
+        onRequestClose={() => setShowCreateModal(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: '#e5e7eb'
+          }}>
+            <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827' }}>
+              Create New Event
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowCreateModal(false)}
+              style={{ padding: 8 }}
+            >
+              <X size={20} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ flex: 1, padding: 16 }} showsVerticalScrollIndicator={false}>
+            {/* Event Title */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                Event Title *
+              </Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#d1d5db',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: 16
+                }}
+                placeholder="Enter event title"
+                value={formData.title}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, title: text }))}
+              />
+            </View>
+
+            {/* Event Type */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                Event Type
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {EVENT_TYPES.filter(t => t.value !== 'all').map((type) => (
+                    <TouchableOpacity
+                      key={type.value}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: formData.event_type === type.value ? type.color : '#d1d5db',
+                        backgroundColor: formData.event_type === type.value ? type.color + '20' : 'white'
+                      }}
+                      onPress={() => setFormData(prev => ({ ...prev, event_type: type.value }))}
+                    >
+                      <Text style={{
+                        fontSize: 12,
+                        fontWeight: '500',
+                        color: formData.event_type === type.value ? type.color : '#6b7280'
+                      }}>
+                        {type.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+
+            {/* Event Date */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                Event Date *
+              </Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#d1d5db',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: 16
+                }}
+                placeholder="YYYY-MM-DD"
+                value={formData.event_date}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, event_date: text }))}
+              />
+            </View>
+
+            {/* Time Fields */}
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                  Start Time
+                </Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#d1d5db',
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: 16
+                  }}
+                  placeholder="HH:MM"
+                  value={formData.start_time}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, start_time: text }))}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                  End Time
+                </Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#d1d5db',
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: 16
+                  }}
+                  placeholder="HH:MM"
+                  value={formData.end_time}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, end_time: text }))}
+                />
+              </View>
+            </View>
+
+            {/* Location */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                Location
+              </Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#d1d5db',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: 16
+                }}
+                placeholder="Event location"
+                value={formData.location}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, location: text }))}
+              />
+            </View>
+
+            {/* Description */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                Description
+              </Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#d1d5db',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: 16,
+                  minHeight: 80,
+                  textAlignVertical: 'top'
+                }}
+                multiline
+                placeholder="Event description"
+                value={formData.description}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
+              />
+            </View>
+
+            {/* Status */}
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                Status
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                {[
+                  { value: 'draft', label: 'Save as Draft', color: '#f59e0b' },
+                  { value: 'published', label: 'Publish Event', color: '#10b981' }
+                ].map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      paddingHorizontal: 16,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: formData.status === option.value ? option.color : '#d1d5db',
+                      backgroundColor: formData.status === option.value ? option.color + '20' : 'white',
+                      alignItems: 'center'
+                    }}
+                    onPress={() => setFormData(prev => ({ ...prev, status: option.value as 'draft' | 'published' }))}
+                  >
+                    <Text style={{
+                      fontSize: 14,
+                      fontWeight: '600',
+                      color: formData.status === option.value ? option.color : '#6b7280'
+                    }}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </ScrollView>
+
+          {/* Action Buttons */}
+          <View style={{
+            padding: 16,
+            borderTopWidth: 1,
+            borderTopColor: '#e5e7eb',
+            flexDirection: 'row',
+            gap: 12
+          }}>
+            <Button
+              title="Cancel"
+              variant="outline"
+              onPress={() => setShowCreateModal(false)}
+              style={{ flex: 1 }}
+            />
+            <Button
+              title={createEventMutation.isPending ? 'Creating...' : 'Create Event'}
+              onPress={handleCreateEvent}
+              disabled={createEventMutation.isPending}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Edit Event Modal */}
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        presentationStyle="formSheet"
+        onRequestClose={() => setShowEditModal(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: '#e5e7eb'
+          }}>
+            <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827' }}>
+              Edit Event
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowEditModal(false)}
+              style={{ padding: 8 }}
+            >
+              <X size={20} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ flex: 1, padding: 16 }} showsVerticalScrollIndicator={false}>
+            {/* Same form fields as create modal */}
+            {/* Event Title */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                Event Title *
+              </Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#d1d5db',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: 16
+                }}
+                placeholder="Enter event title"
+                value={formData.title}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, title: text }))}
+              />
+            </View>
+
+            {/* Event Type */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                Event Type
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {EVENT_TYPES.filter(t => t.value !== 'all').map((type) => (
+                    <TouchableOpacity
+                      key={type.value}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: formData.event_type === type.value ? type.color : '#d1d5db',
+                        backgroundColor: formData.event_type === type.value ? type.color + '20' : 'white'
+                      }}
+                      onPress={() => setFormData(prev => ({ ...prev, event_type: type.value }))}
+                    >
+                      <Text style={{
+                        fontSize: 12,
+                        fontWeight: '500',
+                        color: formData.event_type === type.value ? type.color : '#6b7280'
+                      }}>
+                        {type.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+
+            {/* Event Date */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                Event Date *
+              </Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#d1d5db',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: 16
+                }}
+                placeholder="YYYY-MM-DD"
+                value={formData.event_date}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, event_date: text }))}
+              />
+            </View>
+
+            {/* Time Fields */}
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                  Start Time
+                </Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#d1d5db',
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: 16
+                  }}
+                  placeholder="HH:MM"
+                  value={formData.start_time}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, start_time: text }))}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                  End Time
+                </Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#d1d5db',
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: 16
+                  }}
+                  placeholder="HH:MM"
+                  value={formData.end_time}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, end_time: text }))}
+                />
+              </View>
+            </View>
+
+            {/* Location */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                Location
+              </Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#d1d5db',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: 16
+                }}
+                placeholder="Event location"
+                value={formData.location}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, location: text }))}
+              />
+            </View>
+
+            {/* Description */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                Description
+              </Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#d1d5db',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: 16,
+                  minHeight: 80,
+                  textAlignVertical: 'top'
+                }}
+                multiline
+                placeholder="Event description"
+                value={formData.description}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
+              />
+            </View>
+
+            {/* Status */}
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+                Status
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                {[
+                  { value: 'draft', label: 'Save as Draft', color: '#f59e0b' },
+                  { value: 'published', label: 'Publish Event', color: '#10b981' }
+                ].map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      paddingHorizontal: 16,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: formData.status === option.value ? option.color : '#d1d5db',
+                      backgroundColor: formData.status === option.value ? option.color + '20' : 'white',
+                      alignItems: 'center'
+                    }}
+                    onPress={() => setFormData(prev => ({ ...prev, status: option.value as 'draft' | 'published' }))}
+                  >
+                    <Text style={{
+                      fontSize: 14,
+                      fontWeight: '600',
+                      color: formData.status === option.value ? option.color : '#6b7280'
+                    }}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </ScrollView>
+
+          {/* Action Buttons */}
+          <View style={{
+            padding: 16,
+            borderTopWidth: 1,
+            borderTopColor: '#e5e7eb',
+            flexDirection: 'row',
+            gap: 12
+          }}>
+            <Button
+              title="Cancel"
+              variant="outline"
+              onPress={() => setShowEditModal(false)}
+              style={{ flex: 1 }}
+            />
+            <Button
+              title={updateEventMutation.isPending ? 'Updating...' : 'Update Event'}
+              onPress={handleUpdateEvent}
+              disabled={updateEventMutation.isPending}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };

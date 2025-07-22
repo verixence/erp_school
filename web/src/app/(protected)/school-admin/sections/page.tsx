@@ -49,7 +49,7 @@ import {
 
 // Validation schema
 const sectionSchema = z.object({
-  grade: z.number().min(1).max(12),
+  grade: z.union([z.number().min(1).max(12), z.string().min(1)]),
   section: z.string().min(1, 'Section is required').max(10, 'Section name too long'),
   class_teacher: z.string().optional(),
   capacity: z.number().min(1, 'Capacity must be at least 1').max(100, 'Capacity too high'),
@@ -59,7 +59,7 @@ type SectionFormData = z.infer<typeof sectionSchema>;
 
 interface Section {
   id: string;
-  grade: number;
+  grade: number | string;
   section: string;
   class_teacher?: string;
   teacher?: {
@@ -79,7 +79,25 @@ interface Teacher {
   email: string;
 }
 
-const GRADES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const GRADES = [
+  { value: 'nursery', label: 'Nursery' },
+  { value: 'lkg', label: 'LKG' },
+  { value: 'ukg', label: 'UKG' },
+  { value: 'ppe1', label: 'PPE-1' },
+  { value: 'ppe2', label: 'PPE-2' },
+  { value: 1, label: 'Grade 1' },
+  { value: 2, label: 'Grade 2' },
+  { value: 3, label: 'Grade 3' },
+  { value: 4, label: 'Grade 4' },
+  { value: 5, label: 'Grade 5' },
+  { value: 6, label: 'Grade 6' },
+  { value: 7, label: 'Grade 7' },
+  { value: 8, label: 'Grade 8' },
+  { value: 9, label: 'Grade 9' },
+  { value: 10, label: 'Grade 10' },
+  { value: 11, label: 'Grade 11' },
+  { value: 12, label: 'Grade 12' },
+];
 const SECTIONS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
 export default function SectionsPage() {
@@ -95,7 +113,7 @@ export default function SectionsPage() {
   const form = useForm<SectionFormData>({
     resolver: zodResolver(sectionSchema),
     defaultValues: {
-      grade: 1,
+      grade: 'nursery',
       section: '',
       class_teacher: 'none',
       capacity: 30,
@@ -134,8 +152,12 @@ export default function SectionsPage() {
           }
         }
         
+        // Handle both grade (integer) and grade_text (string) fields
+        const displayGrade = section.grade_text || section.grade?.toString();
+        
         return {
           ...section,
+          grade: displayGrade, // Use unified grade field for display
           students_count: studentCount,
           teacher: section.users || null // Map users to teacher for consistency
         };
@@ -185,12 +207,22 @@ export default function SectionsPage() {
         }
       }
 
-      // Convert "none" to null for class_teacher
-      const processedData = {
-        ...data,
+      // Prepare data for database insertion
+      const isTextGrade = typeof data.grade === 'string' && isNaN(Number(data.grade));
+      
+      const processedData: any = {
+        section: data.section,
         class_teacher: data.class_teacher === 'none' ? null : data.class_teacher,
+        capacity: data.capacity,
         school_id: user?.school_id,
       };
+
+      // Add either grade or grade_text based on the input
+      if (isTextGrade) {
+        processedData.grade_text = data.grade;
+      } else {
+        processedData.grade = Number(data.grade);
+      }
 
       const { error } = await supabase
         .from('sections')
@@ -226,11 +258,23 @@ export default function SectionsPage() {
         }
       }
 
-      // Convert "none" to null for class_teacher
-      const processedData = {
-        ...data,
+      // Prepare data for database update
+      const isTextGrade = typeof data.grade === 'string' && isNaN(Number(data.grade));
+      
+      const processedData: any = {
+        section: data.section,
         class_teacher: data.class_teacher === 'none' ? null : data.class_teacher,
+        capacity: data.capacity,
       };
+
+      // Add either grade or grade_text based on the input
+      if (isTextGrade) {
+        processedData.grade_text = data.grade;
+        processedData.grade = null; // Clear the integer grade
+      } else {
+        processedData.grade = Number(data.grade);
+        processedData.grade_text = null; // Clear the text grade
+      }
 
       const { error } = await supabase
         .from('sections')
@@ -276,7 +320,7 @@ export default function SectionsPage() {
   const handleCreate = () => {
     setIsCreateOpen(true);
     form.reset({
-      grade: 1,
+      grade: 'nursery',
       section: '',
       class_teacher: 'none',
       capacity: 30,
@@ -335,11 +379,11 @@ export default function SectionsPage() {
       key: 'grade',
       label: 'Grade',
       sortable: true,
-      render: (value: number, section: Section) => (
-        <Badge variant="outline">
-          Grade {value}
-        </Badge>
-      ),
+              render: (value: number | string, section: Section) => (
+          <Badge variant="outline">
+            {typeof value === 'string' ? value.toUpperCase() : `Grade ${value}`}
+          </Badge>
+        ),
     },
     {
       key: 'section',
@@ -567,10 +611,10 @@ export default function SectionsPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Grade</FormLabel>
-                    <Select 
-                      onValueChange={(value) => field.onChange(parseInt(value))} 
-                      value={field.value?.toString()}
-                    >
+                                          <Select 
+                        onValueChange={(value) => field.onChange(isNaN(Number(value)) ? value : parseInt(value))} 
+                        value={field.value?.toString() || ''}
+                      >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select grade" />
@@ -578,8 +622,8 @@ export default function SectionsPage() {
                       </FormControl>
                       <SelectContent>
                         {GRADES.map((grade) => (
-                          <SelectItem key={grade} value={grade.toString()}>
-                            Grade {grade}
+                          <SelectItem key={grade.value} value={grade.value.toString()}>
+                            {grade.label}
                           </SelectItem>
                         ))}
                       </SelectContent>

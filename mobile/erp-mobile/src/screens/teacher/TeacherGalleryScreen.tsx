@@ -8,13 +8,16 @@ import {
   SafeAreaView,
   Modal,
   Image,
-  Dimensions
+  Dimensions,
+  TextInput,
+  Alert
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
-import { useQuery } from '@tanstack/react-query';
-import { Card } from '../../components/ui/Card';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, CardContent, CardHeader } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
 import {
   Camera,
   Image as ImageIcon,
@@ -23,7 +26,12 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  Download
+  Download,
+  Plus,
+  Upload,
+  Edit,
+  Trash2,
+  Save
 } from 'lucide-react-native';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -49,13 +57,30 @@ interface GalleryImage {
   created_at: string;
 }
 
+interface AlbumFormData {
+  title: string;
+  description: string;
+  event_date: string;
+  event_name: string;
+}
+
 const TeacherGalleryScreen = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [showImages, setShowImages] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [images, setImages] = useState<GalleryImage[]>([]);
+  const [showCreateAlbumModal, setShowCreateAlbumModal] = useState(false);
+  const [showEditAlbumModal, setShowEditAlbumModal] = useState(false);
+  const [editingAlbum, setEditingAlbum] = useState<Album | null>(null);
+  const [albumFormData, setAlbumFormData] = useState<AlbumFormData>({
+    title: '',
+    description: '',
+    event_date: new Date().toISOString().split('T')[0],
+    event_name: ''
+  });
 
   // Fetch albums
   const { data: albums = [], isLoading, refetch } = useQuery({
@@ -104,6 +129,126 @@ const TeacherGalleryScreen = () => {
     enabled: !!user?.school_id,
     staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
   });
+
+  // Create album mutation
+  const createAlbumMutation = useMutation({
+    mutationFn: async (data: AlbumFormData) => {
+      const { error } = await supabase
+        .from('gallery_albums')
+        .insert({
+          ...data,
+          school_id: user?.school_id,
+          created_by: user?.id,
+          is_published: true
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      Alert.alert('Success', 'Album created successfully!');
+      setShowCreateAlbumModal(false);
+      resetAlbumForm();
+      refetch();
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.message || 'Failed to create album');
+    },
+  });
+
+  // Update album mutation
+  const updateAlbumMutation = useMutation({
+    mutationFn: async (data: AlbumFormData) => {
+      if (!editingAlbum) return;
+
+      const { error } = await supabase
+        .from('gallery_albums')
+        .update(data)
+        .eq('id', editingAlbum.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      Alert.alert('Success', 'Album updated successfully!');
+      setShowEditAlbumModal(false);
+      setEditingAlbum(null);
+      resetAlbumForm();
+      refetch();
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.message || 'Failed to update album');
+    },
+  });
+
+  // Delete album mutation
+  const deleteAlbumMutation = useMutation({
+    mutationFn: async (albumId: string) => {
+      const { error } = await supabase
+        .from('gallery_albums')
+        .delete()
+        .eq('id', albumId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      Alert.alert('Success', 'Album deleted successfully!');
+      refetch();
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.message || 'Failed to delete album');
+    },
+  });
+
+  const resetAlbumForm = () => {
+    setAlbumFormData({
+      title: '',
+      description: '',
+      event_date: new Date().toISOString().split('T')[0],
+      event_name: ''
+    });
+  };
+
+  const openCreateAlbumModal = () => {
+    resetAlbumForm();
+    setShowCreateAlbumModal(true);
+  };
+
+  const openEditAlbumModal = (album: Album) => {
+    setEditingAlbum(album);
+    setAlbumFormData({
+      title: album.title,
+      description: album.description || '',
+      event_date: album.event_date || new Date().toISOString().split('T')[0],
+      event_name: album.event_name || ''
+    });
+    setShowEditAlbumModal(true);
+  };
+
+  const handleDeleteAlbum = (albumId: string) => {
+    Alert.alert(
+      'Delete Album',
+      'Are you sure you want to delete this album? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteAlbumMutation.mutate(albumId) }
+      ]
+    );
+  };
+
+  const handleCreateAlbum = () => {
+    if (!albumFormData.title.trim()) {
+      Alert.alert('Error', 'Please enter album title');
+      return;
+    }
+    createAlbumMutation.mutate(albumFormData);
+  };
+
+  const handleUpdateAlbum = () => {
+    if (!albumFormData.title.trim()) {
+      Alert.alert('Error', 'Please enter album title');
+      return;
+    }
+    updateAlbumMutation.mutate(albumFormData);
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -177,23 +322,42 @@ const TeacherGalleryScreen = () => {
         shadowRadius: 4,
         elevation: 3
       }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ 
-            backgroundColor: '#7c3aed', 
-            padding: 10, 
-            borderRadius: 12, 
-            marginRight: 12 
-          }}>
-            <Camera size={24} color="white" />
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ 
+              backgroundColor: '#7c3aed', 
+              padding: 10, 
+              borderRadius: 12, 
+              marginRight: 12 
+            }}>
+              <Camera size={24} color="white" />
+            </View>
+            <View>
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111827' }}>
+                Gallery
+              </Text>
+              <Text style={{ fontSize: 14, color: '#6b7280' }}>
+                Manage school photo albums and memories
+              </Text>
+            </View>
           </View>
-          <View>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111827' }}>
-              Gallery
+          
+          <TouchableOpacity
+            onPress={openCreateAlbumModal}
+            style={{
+              backgroundColor: '#7c3aed',
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 8
+            }}
+          >
+            <Plus size={16} color="white" />
+            <Text style={{ color: 'white', fontSize: 14, fontWeight: '600', marginLeft: 4 }}>
+              Album
             </Text>
-            <Text style={{ fontSize: 14, color: '#6b7280' }}>
-              Browse and explore school memories and events
-            </Text>
-          </View>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -441,4 +605,4 @@ const TeacherGalleryScreen = () => {
   );
 };
 
-export default TeacherGalleryScreen; 
+export { TeacherGalleryScreen }; 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, SafeAreaView, TouchableOpacity, RefreshControl } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
@@ -18,7 +18,13 @@ import {
   Target,
   Activity,
   Filter,
-  Download
+  Download,
+  Send,
+  Eye,
+  Plus,
+  X,
+  Search,
+  Edit3
 } from 'lucide-react-native';
 
 interface Child {
@@ -41,20 +47,33 @@ interface Homework {
   assigned_date: string;
   due_date: string;
   section_id: string;
-  file_url?: string;
+  teacher_id: string;
+  is_published: boolean;
+  created_at: string;
+  sections?: {
+    grade: number;
+    section: string;
+  };
   homework_submissions?: {
     id: string;
     submitted_at: string;
-    status: string;
+    submission_text?: string;
+    submission_type: 'text' | 'offline';
+    status: 'submitted' | 'pending_review' | 'reviewed';
     file_url?: string;
   }[];
 }
 
 export const ParentHomeworkScreen: React.FC = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [selectedChild, setSelectedChild] = useState<string>('');
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed' | 'overdue' | 'due_soon'>('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [showSubmissionModal, setShowSubmissionModal] = useState(false);
+  const [selectedHomework, setSelectedHomework] = useState<Homework | null>(null);
+  const [submissionText, setSubmissionText] = useState('');
+  const [submissionType, setSubmissionType] = useState<'text' | 'offline'>('text');
 
   // Fetch children using correct student_parents relationship
   const { data: children = [], isLoading: childrenLoading, refetch: refetchChildren } = useQuery({
@@ -124,16 +143,14 @@ export const ParentHomeworkScreen: React.FC = () => {
           assigned_date,
           due_date,
           section_id,
-          file_url,
-          homework_submissions!left(
-            id,
-            submitted_at,
-            status,
-            file_url
-          )
+          teacher_id,
+          is_published,
+          created_at,
+          sections!inner(grade, section)
         `)
         .eq('section_id', currentChild.section_id)
         .eq('school_id', user?.school_id)
+        .eq('is_published', true)
         .order('due_date', { ascending: false });
 
       if (error) {
@@ -141,7 +158,24 @@ export const ParentHomeworkScreen: React.FC = () => {
         return [];
       }
 
-      return data || [];
+      // Fetch submissions for each homework
+      const homeworkWithSubmissions = await Promise.all(
+        (data || []).map(async (homeworkItem) => {
+          const { data: submissions, error: submissionError } = await supabase
+            .from('homework_submissions')
+            .select('*')
+            .eq('homework_id', homeworkItem.id)
+            .eq('student_id', selectedChild);
+
+          return {
+            ...homeworkItem,
+            sections: homeworkItem.sections?.[0], // Take first section since it's inner join
+            homework_submissions: submissions || []
+          };
+        })
+      );
+
+      return homeworkWithSubmissions;
     },
     enabled: !!selectedChild && children.length > 0,
     staleTime: 1000 * 60 * 3, // Consider homework fresh for 3 minutes
@@ -435,16 +469,7 @@ export const ParentHomeworkScreen: React.FC = () => {
                         </View>
                       </View>
                       
-                      {hw.file_url && (
-                        <View style={{ marginTop: 12 }}>
-                          <Button
-                            title="Download Attachment"
-                            onPress={() => console.log('Download', hw.file_url)}
-                            variant="outline"
-                            style={{ backgroundColor: '#f3f4f6' }}
-                          />
-                        </View>
-                      )}
+
                       
                       {hw.homework_submissions && hw.homework_submissions.length > 0 && (
                         <View style={{ marginTop: 12, padding: 12, backgroundColor: '#f0fdf4', borderRadius: 8 }}>
