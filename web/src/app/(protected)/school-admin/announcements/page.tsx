@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from '@/components/ui/badge';
 import { Plus, Edit, Trash2, Megaphone, Eye, EyeOff } from 'lucide-react';
 import { Footer } from '@/components/ui/footer';
+import { toast } from 'sonner';
 
 export default function AnnouncementsPage() {
   const { user } = useAuth();
@@ -31,15 +32,21 @@ export default function AnnouncementsPage() {
     e.preventDefault();
     if (!user?.school_id) return;
 
-    const newAnnouncement = await createAnnouncement(user.school_id, {
-      ...formData,
-      target_audience: formData.target_audience as 'all' | 'teachers' | 'parents' | 'students',
-      priority: formData.priority as 'low' | 'normal' | 'high' | 'urgent'
-    });
-    if (newAnnouncement) {
-      setFormData({ title: '', content: '', target_audience: 'all', priority: 'normal', is_published: false });
-      setIsCreateOpen(false);
-      refetch();
+    try {
+      const newAnnouncement = await createAnnouncement(user.school_id, {
+        ...formData,
+        target_audience: formData.target_audience as 'all' | 'teachers' | 'parents' | 'students',
+        priority: formData.priority as 'low' | 'normal' | 'high' | 'urgent'
+      });
+      if (newAnnouncement) {
+        toast.success('Announcement created successfully!');
+        setFormData({ title: '', content: '', target_audience: 'all', priority: 'normal', is_published: false });
+        setIsCreateOpen(false);
+        refetch();
+      }
+    } catch (error) {
+      console.error('Error creating announcement:', error);
+      toast.error('Failed to create announcement');
     }
   };
 
@@ -47,14 +54,20 @@ export default function AnnouncementsPage() {
     e.preventDefault();
     if (!editingAnnouncement) return;
 
-    const updated = await updateAnnouncement(editingAnnouncement.id, {
-      ...formData,
-      target_audience: formData.target_audience as 'all' | 'teachers' | 'parents' | 'students',
-      priority: formData.priority as 'low' | 'normal' | 'high' | 'urgent'
-    });
-    if (updated) {
-      setEditingAnnouncement(null);
-      refetch();
+    try {
+      const updated = await updateAnnouncement(editingAnnouncement.id, {
+        ...formData,
+        target_audience: formData.target_audience as 'all' | 'teachers' | 'parents' | 'students',
+        priority: formData.priority as 'low' | 'normal' | 'high' | 'urgent'
+      });
+      if (updated) {
+        toast.success('Announcement updated successfully!');
+        setEditingAnnouncement(null);
+        refetch();
+      }
+    } catch (error) {
+      console.error('Error updating announcement:', error);
+      toast.error('Failed to update announcement');
     }
   };
 
@@ -62,9 +75,11 @@ export default function AnnouncementsPage() {
     if (confirm('Are you sure you want to delete this announcement?')) {
       try {
         await deleteAnnouncement(announcementId);
+        toast.success('Announcement deleted successfully!');
         refetch();
       } catch (error) {
         console.error('Error deleting announcement:', error);
+        toast.error('Failed to delete announcement');
       }
     }
   };

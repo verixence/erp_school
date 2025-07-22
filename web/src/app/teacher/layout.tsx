@@ -85,13 +85,8 @@ export default function TeacherLayout({
       icon: Home,
     },
     {
-      href: '/feed',
-      label: 'Community Feed',
-      icon: MessageSquare,
-    },
-    {
       href: '/teacher/community',
-      label: 'Create Posts',
+      label: 'Community',
       icon: MessageSquare,
     },
     {

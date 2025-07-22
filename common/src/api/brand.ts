@@ -71,14 +71,26 @@ function lightenColor(hex: string, percent: number): string {
 }
 
 export function generateThemeVars(brand: Brand): Record<string, string> {
-  const primary = brand.primary;
-  const secondary = brand.secondary;
-  const accent = brand.accent;
+  // Add null checks and fallbacks for brand colors
+  const primary = brand?.primary || '#6366f1';
+  const secondary = brand?.secondary || '#8b5cf6';
+  const accent = brand?.accent || '#ec4899';
 
   // Convert hex colors to HSL format for better CSS variable compatibility
   const convertToHSL = (hex: string) => {
+    // Add null check and default fallback
+    if (!hex || typeof hex !== 'string') {
+      hex = '#6366f1'; // Default primary color fallback
+    }
+    
     // Remove the hash if present
     const color = hex.replace('#', '');
+    
+    // Validate hex format
+    if (!/^[0-9A-Fa-f]{6}$/.test(color)) {
+      console.warn(`Invalid hex color: ${hex}, using default`);
+      return '99 102 241'; // Default HSL for #6366f1
+    }
     
     // Parse RGB values
     const r = parseInt(color.substr(0, 2), 16) / 255;
@@ -138,6 +150,12 @@ export function generateThemeCSS(brand: Brand): string {
 }
 
 export function injectBrandCSS(brand: Brand) {
+  // Add null check for brand
+  if (!brand) {
+    console.warn('No brand data provided to injectBrandCSS');
+    return;
+  }
+  
   // Remove existing brand styles
   const existingStyle = document.getElementById('brand-theme');
   if (existingStyle) {

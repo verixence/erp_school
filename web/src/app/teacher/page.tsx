@@ -170,13 +170,21 @@ export default function TeacherDashboard() {
           Manage your classes, exams, and student progress from your dashboard
         </p>
         <div className="flex flex-wrap gap-4">
-          <Button variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-white/30">
+          <Button 
+            variant="secondary" 
+            className="bg-white/20 hover:bg-white/30 text-white border-white/30 font-medium"
+            style={{ color: 'white' }}
+          >
             <Eye className="w-4 h-4 mr-2" />
-            View My Profile
+            <span className="text-white">View My Profile</span>
           </Button>
-          <Button variant="outline" className="border-white/30 text-white hover:bg-white/10">
+          <Button 
+            variant="outline" 
+            className="border-white/30 text-white hover:bg-white/10 font-medium"
+            style={{ color: 'white' }}
+          >
             <Calendar className="w-4 h-4 mr-2" />
-            Today's Schedule
+            <span className="text-white">Today's Schedule</span>
           </Button>
         </div>
       </motion.div>
