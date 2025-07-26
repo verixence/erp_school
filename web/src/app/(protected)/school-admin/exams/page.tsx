@@ -55,6 +55,8 @@ import {
   type CreateExamPaperData,
   type ExamPaper 
 } from '@erp/common';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase-client';
 import { toast } from 'sonner';
 import { format, parse } from 'date-fns';
 
@@ -74,6 +76,15 @@ const examTypeOptions: { value: ExamType; label: string; category?: string }[] =
   { value: 'cbse_fa3', label: 'FA3 - Formative Assessment 3', category: 'CBSE' },
   { value: 'cbse_fa4', label: 'FA4 - Formative Assessment 4', category: 'CBSE' },
   { value: 'cbse_sa2', label: 'SA2 - Summative Assessment 2 (Final)', category: 'CBSE' },
+  
+  // State Board (Telangana) Exam Types
+  { value: 'state_fa1', label: 'FA1 - Formative Assessment 1 (20 marks)', category: 'State Board' },
+  { value: 'state_fa2', label: 'FA2 - Formative Assessment 2 (20 marks)', category: 'State Board' },
+  { value: 'state_fa3', label: 'FA3 - Formative Assessment 3 (20 marks)', category: 'State Board' },
+  { value: 'state_fa4', label: 'FA4 - Formative Assessment 4 (20 marks)', category: 'State Board' },
+  { value: 'state_sa1', label: 'SA1 - Summative Assessment 1 (100 marks)', category: 'State Board' },
+  { value: 'state_sa2', label: 'SA2 - Summative Assessment 2 (100 marks)', category: 'State Board' },
+  { value: 'state_sa3', label: 'SA3 - Summative Assessment 3 (100 marks)', category: 'State Board' },
 ];
 
 // Helper function to determine CBSE term and exam type
@@ -88,6 +99,21 @@ const getCBSEDetails = (examType: ExamType) => {
   };
   
   return cbseMapping[examType as keyof typeof cbseMapping] || null;
+};
+
+// Helper function to determine State Board assessment details
+const getStateBoardDetails = (examType: ExamType) => {
+  const stateBoardMapping = {
+    'state_fa1': { assessmentType: 'FA' as const, assessmentNumber: 1, defaultMarks: 20, term: 'Term1' as const },
+    'state_fa2': { assessmentType: 'FA' as const, assessmentNumber: 2, defaultMarks: 20, term: 'Term1' as const },
+    'state_fa3': { assessmentType: 'FA' as const, assessmentNumber: 3, defaultMarks: 20, term: 'Term2' as const },
+    'state_fa4': { assessmentType: 'FA' as const, assessmentNumber: 4, defaultMarks: 20, term: 'Term2' as const },
+    'state_sa1': { assessmentType: 'SA' as const, assessmentNumber: 1, defaultMarks: 100, term: 'Term1' as const },
+    'state_sa2': { assessmentType: 'SA' as const, assessmentNumber: 2, defaultMarks: 100, term: 'Term2' as const },
+    'state_sa3': { assessmentType: 'SA' as const, assessmentNumber: 3, defaultMarks: 100, term: 'Annual' as const },
+  };
+  
+  return stateBoardMapping[examType as keyof typeof stateBoardMapping] || null;
 };
 
 // Helper function to format date as dd/mm/yyyy for display
@@ -136,6 +162,57 @@ export default function ExamsPage() {
   const { data: allExamPapers = [] } = useSchoolExamPapers(user?.school_id || undefined);
   const { data: examPapers = [] } = useExamPapers(selectedExamGroup ?? undefined);
 
+  // Fetch school details to determine board type
+  const { data: school } = useQuery({
+    queryKey: ['school-details', user?.school_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('schools')
+        .select('id, name, board_type, state_board_type, assessment_pattern, board_affiliation')
+        .eq('id', user?.school_id!)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.school_id,
+  });
+
+  // Determine if this is a State Board school
+  const isStateBoardSchool = React.useMemo(() => {
+    const isStateBoard = school?.state_board_type === 'Telangana' || 
+           school?.assessment_pattern === 'State_FA_SA' ||
+           school?.board_type === 'State Board' ||
+           school?.board_affiliation === 'State Board';
+    
+    // Debug logging to help troubleshoot
+    console.log('School board detection:', {
+      school_name: school?.name,
+      state_board_type: school?.state_board_type,
+      assessment_pattern: school?.assessment_pattern,
+      board_type: school?.board_type,
+      board_affiliation: school?.board_affiliation,
+      isStateBoardSchool: isStateBoard
+    });
+    
+    return isStateBoard;
+  }, [school]);
+
+  // Filter exam types based on board type
+  const filteredExamTypeOptions = React.useMemo(() => {
+    if (isStateBoardSchool) {
+      // Show only Traditional and State Board exam types
+      return examTypeOptions.filter(option => 
+        option.category === 'Traditional' || option.category === 'State Board'
+      );
+    } else {
+      // Show Traditional and CBSE exam types
+      return examTypeOptions.filter(option => 
+        option.category === 'Traditional' || option.category === 'CBSE'
+      );
+    }
+  }, [isStateBoardSchool]);
+
   const createExamGroupMutation = useCreateExamGroup();
   const updateExamGroupMutation = useUpdateExamGroup();
   const deleteExamGroupMutation = useDeleteExamGroup();
@@ -180,6 +257,20 @@ export default function ExamsPage() {
 
   // Get selected exam group details for date restrictions
   const selectedExamGroupData = examGroups.find(eg => eg.id === selectedExamGroup);
+
+  // Auto-set marks based on State Board exam type when exam group changes
+  React.useEffect(() => {
+    if (selectedExamGroupData && selectedExamGroupData.exam_type.startsWith('state_')) {
+      const stateBoardDetails = getStateBoardDetails(selectedExamGroupData.exam_type);
+      if (stateBoardDetails) {
+        setPaperFormData(prev => ({
+          ...prev,
+          max_marks: stateBoardDetails.defaultMarks,
+          pass_marks: stateBoardDetails.assessmentType === 'FA' ? 8 : 35, // 40% of max marks for FA, 35% for SA
+        }));
+      }
+    }
+  }, [selectedExamGroup, selectedExamGroupData]);
 
   // Filter teachers based on selected subject
   const availableTeachers = React.useMemo(() => {
@@ -236,10 +327,18 @@ export default function ExamsPage() {
       // Get CBSE details if it's a CBSE exam type
       const cbseDetails = getCBSEDetails(formData.exam_type);
       
+      // Get State Board details if it's a State Board exam type
+      const stateBoardDetails = getStateBoardDetails(formData.exam_type);
+      
       const examGroupData: CreateExamGroupData = {
         ...formData,
         cbse_term: cbseDetails?.term,
         cbse_exam_type: cbseDetails?.examType,
+        // Add State Board specific fields if available
+        assessment_type: stateBoardDetails?.assessmentType,
+        assessment_number: stateBoardDetails?.assessmentNumber,
+        total_marks: stateBoardDetails?.defaultMarks,
+        state_board_term: stateBoardDetails?.term,
       };
 
       if (editingExamGroup) {
@@ -713,8 +812,23 @@ export default function ExamsPage() {
         className="flex items-center justify-between"
       >
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Exam Management</h1>
-          <p className="text-gray-600 mt-1">Create and manage exam groups, papers, and schedules</p>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-3xl font-bold text-gray-900">Exam Management</h1>
+            {school && (
+              <Badge 
+                className={
+                  isStateBoardSchool 
+                    ? "bg-green-100 text-green-800 border-green-200" 
+                    : "bg-blue-100 text-blue-800 border-blue-200"
+                }
+              >
+                {isStateBoardSchool ? '🏫 State Board' : '🎓 CBSE Board'}
+              </Badge>
+            )}
+          </div>
+          <p className="text-gray-600 mt-1">
+            Create and manage exam groups, papers, and schedules for {school?.name || 'your school'}
+          </p>
         </div>
         
         <div className="flex space-x-3">
@@ -799,28 +913,55 @@ export default function ExamsPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        {/* Traditional Exams Section */}
                         <div className="p-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Traditional Exams</div>
-                        {examTypeOptions.filter(option => option.category === 'Traditional').map(option => (
+                        {filteredExamTypeOptions.filter(option => option.category === 'Traditional').map(option => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}
                           </SelectItem>
                         ))}
                         
-                        <div className="p-2 text-xs font-medium text-blue-600 uppercase tracking-wide border-t mt-2 pt-2">
-                          🎓 CBSE Board Exams
-                        </div>
-                        {examTypeOptions.filter(option => option.category === 'CBSE').map(option => (
-                          <SelectItem key={option.value} value={option.value}>
-                            <div className="flex flex-col">
-                              <span>{option.label}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {getCBSEDetails(option.value)?.term} • Max Marks: {
-                                  option.value.includes('fa') ? '20' : '80'
-                                }
-                              </span>
+                        {/* CBSE Board Exams Section (only for CBSE schools) */}
+                        {!isStateBoardSchool && (
+                          <>
+                            <div className="p-2 text-xs font-medium text-blue-600 uppercase tracking-wide border-t mt-2 pt-2">
+                              🎓 CBSE Board Exams
                             </div>
-                          </SelectItem>
-                        ))}
+                            {filteredExamTypeOptions.filter(option => option.category === 'CBSE').map(option => (
+                              <SelectItem key={option.value} value={option.value}>
+                                <div className="flex flex-col">
+                                  <span>{option.label}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {getCBSEDetails(option.value)?.term} • Max Marks: {
+                                      option.value.includes('fa') ? '20' : '80'
+                                    }
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
+                        
+                        {/* State Board Exams Section (only for State Board schools) */}
+                        {isStateBoardSchool && (
+                          <>
+                            <div className="p-2 text-xs font-medium text-green-600 uppercase tracking-wide border-t mt-2 pt-2">
+                              🏫 State Board Exams
+                            </div>
+                            {filteredExamTypeOptions.filter(option => option.category === 'State Board').map(option => (
+                              <SelectItem key={option.value} value={option.value}>
+                                <div className="flex flex-col">
+                                  <span>{option.label}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {getStateBoardDetails(option.value)?.term} • Max Marks: {
+                                      getStateBoardDetails(option.value)?.defaultMarks
+                                    }
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
                       </SelectContent>
                     </Select>
                     
@@ -835,6 +976,22 @@ export default function ExamsPage() {
                         </div>
                         <p className="text-xs text-blue-600 mt-1">
                           This exam will be automatically categorized for CBSE report card generation.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Show State Board info if State Board exam type is selected */}
+                    {formData.exam_type.startsWith('state_') && (
+                      <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span className="text-sm font-medium text-green-800">
+                            State Board {getStateBoardDetails(formData.exam_type)?.assessmentType}-{getStateBoardDetails(formData.exam_type)?.assessmentNumber} ({getStateBoardDetails(formData.exam_type)?.term})
+                          </span>
+                        </div>
+                        <p className="text-xs text-green-600 mt-1">
+                          This exam will be automatically categorized for State Board SSC report card generation.
+                          Max marks will be set to {getStateBoardDetails(formData.exam_type)?.defaultMarks} for all papers.
                         </p>
                       </div>
                     )}

@@ -13,6 +13,13 @@ export type ExamType =
   | 'cbse_fa3'    // CBSE Formative Assessment 3
   | 'cbse_fa4'    // CBSE Formative Assessment 4
   | 'cbse_sa2'    // CBSE Summative Assessment 2 (Final)
+  | 'state_fa1'   // State Board Formative Assessment 1 (20 marks)
+  | 'state_fa2'   // State Board Formative Assessment 2 (20 marks)
+  | 'state_fa3'   // State Board Formative Assessment 3 (20 marks)
+  | 'state_fa4'   // State Board Formative Assessment 4 (20 marks)
+  | 'state_sa1'   // State Board Summative Assessment 1 (100 marks)
+  | 'state_sa2'   // State Board Summative Assessment 2 (100 marks)
+  | 'state_sa3'   // State Board Summative Assessment 3 (100 marks)
   | 'other';
 
 export interface Section {
@@ -92,6 +99,11 @@ export interface CreateExamGroupData {
   // CBSE-specific fields
   cbse_term?: 'Term1' | 'Term2';
   cbse_exam_type?: 'FA1' | 'FA2' | 'SA1' | 'FA3' | 'FA4' | 'SA2';
+  // State Board-specific fields
+  assessment_type?: 'FA' | 'SA' | 'Unit_Test' | 'Monthly' | 'Other';
+  assessment_number?: number;
+  total_marks?: number;
+  state_board_term?: 'Term1' | 'Term2' | 'Annual';
   sync_to_calendar?: boolean; // Whether to sync exam dates to academic calendar
 }
 
@@ -569,31 +581,54 @@ export const useCreateMarksForExam = () => {
           .eq('school_id', userData.school_id)
           .eq('section', examPaper.section);
         
-                 if (studentsError) throw studentsError;
-         students = studentsData || [];
-       }
+        if (studentsError) throw studentsError;
+        students = studentsData || [];
+      }
 
       if (!students || students.length === 0) {
         throw new Error(`No students found in section ${examPaper.section}. Please ensure students are enrolled in this section.`);
       }
 
-      // Create marks entries for all students
-      const marks = students.map(student => ({
-        exam_paper_id: examPaperId,
-        student_id: student.id,
-        school_id: userData.school_id,
-        entered_by: user.user.id,
-        is_absent: false,
-        marks_obtained: null,
-      }));
-
-      const { data, error } = await supabase
-        .from('marks')
-        .upsert(marks, { onConflict: 'exam_paper_id,student_id' })
-        .select();
+      // Process students in smaller batches to avoid timeouts
+      const batchSize = 10; // Process 10 students at a time
+      const results = [];
       
-      if (error) throw error;
-      return data as Mark[];
+      for (let i = 0; i < students.length; i += batchSize) {
+        const batch = students.slice(i, i + batchSize);
+        
+        // Create marks entries for this batch
+        const marks = batch.map(student => ({
+          exam_paper_id: examPaperId,
+          student_id: student.id,
+          school_id: userData.school_id,
+          entered_by: user.user.id,
+          is_absent: false,
+          marks_obtained: null,
+          subject: examPaper.subject,
+        }));
+
+        // Use a simple insert with ignore conflicts instead of upsert
+        const { data, error } = await supabase
+          .from('marks')
+          .insert(marks)
+          .select();
+        
+        // If there's a conflict (marks already exist), that's okay - ignore the error
+        if (error && !error.message.includes('duplicate key')) {
+          throw error;
+        }
+        
+        if (data) {
+          results.push(...data);
+        }
+        
+        // Small delay between batches to avoid overwhelming the database
+        if (i + batchSize < students.length) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+      
+      return results as Mark[];
     },
     onSuccess: (_, examPaperId) => {
       queryClient.invalidateQueries({ queryKey: ['marks', examPaperId] });
@@ -644,12 +679,22 @@ export const useBulkCreateMarks = () => {
       
       if (!userData?.school_id) throw new Error('No school associated');
 
+      // Get the exam paper details to include subject
+      const { data: examPaper, error: examPaperError } = await supabase
+        .from('exam_papers')
+        .select('subject')
+        .eq('id', examPaperId)
+        .single();
+
+      if (examPaperError) throw examPaperError;
+
       const marks = studentIds.map(studentId => ({
         exam_paper_id: examPaperId,
         student_id: studentId,
         school_id: userData.school_id,
         entered_by: user.user.id,
         is_absent: false,
+        subject: examPaper.subject, // Add the required subject column
       }));
 
       const { data, error } = await supabase

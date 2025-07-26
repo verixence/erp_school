@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useParams, useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { 
   ArrowLeft, 
   Save, 
@@ -11,13 +12,14 @@ import {
   CheckCircle2,
   AlertCircle,
   Download,
-  Upload
+  Upload,
+  Award,
+  BookOpen
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { 
   Table,
@@ -28,6 +30,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
+import { supabase } from '@/lib/supabase-client';
 import { 
   useExamPaper,
   useMarks,
@@ -35,8 +38,12 @@ import {
   useBulkCreateMarks,
   useBulkUpdateMarks,
   useCreateMarksForExam,
+  calculateGrade,
+  DEFAULT_FA_GRADING,
+  DEFAULT_SA_GRADING,
   type Mark,
-  type UpdateMarkData
+  type UpdateMarkData,
+  type GradeBand
 } from '@erp/common';
 import { toast } from 'sonner';
 
@@ -54,10 +61,91 @@ export default function MarksEntryPage() {
   const { data: examPaper, isLoading: examPaperLoading } = useExamPaper(paperId);
   const { data: marks = [], isLoading: marksLoading } = useMarks(paperId);
   
+  // Fetch school details to determine board type
+  const { data: school } = useQuery({
+    queryKey: ['school-details', user?.school_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('schools')
+        .select('id, name, board_type, state_board_type, assessment_pattern')
+        .eq('id', user?.school_id!)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.school_id,
+  });
+  
   const updateMarkMutation = useUpdateMark();
   const bulkCreateMarksMutation = useBulkCreateMarks();
   const bulkUpdateMarksMutation = useBulkUpdateMarks();
   const createMarksForExamMutation = useCreateMarksForExam();
+
+  // Determine if this is a State Board assessment
+  const isStateBoardAssessment = useMemo(() => {
+    return school?.state_board_type === 'Telangana' || 
+           school?.assessment_pattern === 'State_FA_SA' ||
+           examPaper?.exam_group?.exam_type?.startsWith('state_');
+  }, [school, examPaper]);
+
+  // Determine assessment type for grading
+  const assessmentType = useMemo(() => {
+    if (!examPaper) return null;
+    
+    if (isStateBoardAssessment) {
+      if (examPaper.exam_group?.exam_type?.includes('fa') || examPaper.max_marks <= 20) {
+        return 'FA';
+      } else if (examPaper.exam_group?.exam_type?.includes('sa') || examPaper.max_marks >= 80) {
+        return 'SA';
+      }
+    }
+    return null;
+  }, [examPaper, isStateBoardAssessment]);
+
+  // Get appropriate grading scale
+  const gradingScale = useMemo((): GradeBand[] => {
+    if (isStateBoardAssessment && assessmentType) {
+      return assessmentType === 'FA' ? DEFAULT_FA_GRADING : DEFAULT_SA_GRADING;
+    }
+    return []; // Use CBSE grading for non-State Board
+  }, [isStateBoardAssessment, assessmentType]);
+
+  // Calculate grade and remark for State Board assessments
+  const calculateStateBoardGrade = (marks: number, maxMarks: number): { grade: string; remark: string } => {
+    if (!isStateBoardAssessment || gradingScale.length === 0) {
+      return { grade: '', remark: '' };
+    }
+
+    if (assessmentType === 'FA') {
+      // For FA, use marks directly (out of 20)
+      const gradeBand = gradingScale.find(band => marks >= band.min && marks <= band.max);
+      return gradeBand ? { grade: gradeBand.grade, remark: gradeBand.remark } : { grade: 'D', remark: 'Work Hard' };
+    } else {
+      // For SA, use percentage
+      const percentage = (marks / maxMarks) * 100;
+      const gradeBand = gradingScale.find(band => percentage >= band.min && percentage <= band.max);
+      return gradeBand ? { grade: gradeBand.grade, remark: gradeBand.remark } : { grade: 'D', remark: 'Need to Improve' };
+    }
+  };
+
+  // Enhanced calculateGrade function with State Board support
+  const calculateGradeEnhanced = (marks: number, maxMarks: number) => {
+    if (isStateBoardAssessment) {
+      const gradeInfo = calculateStateBoardGrade(marks, maxMarks);
+      return gradeInfo.grade;
+    }
+    
+    // Original CBSE grading logic
+    const percentage = (marks / maxMarks) * 100;
+    if (percentage >= 90) return 'A+';
+    if (percentage >= 80) return 'A';
+    if (percentage >= 70) return 'B+';
+    if (percentage >= 60) return 'B';
+    if (percentage >= 50) return 'C';
+    if (percentage >= 40) return 'D';
+    return 'F';
+  };
 
   // Initialize marks data when marks are loaded
   useEffect(() => {
@@ -209,17 +297,6 @@ export default function MarksEntryPage() {
     }
   };
 
-  const calculateGrade = (marks: number, maxMarks: number) => {
-    const percentage = (marks / maxMarks) * 100;
-    if (percentage >= 90) return 'A+';
-    if (percentage >= 80) return 'A';
-    if (percentage >= 70) return 'B+';
-    if (percentage >= 60) return 'B';
-    if (percentage >= 50) return 'C';
-    if (percentage >= 40) return 'D';
-    return 'F';
-  };
-
   if (examPaperLoading) {
     return (
       <div className="flex items-center justify-center min-h-64">
@@ -328,6 +405,17 @@ export default function MarksEntryPage() {
         transition={{ delay: 0.1 }}
       >
         <Card className="glass-morphism border-0 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <BookOpen className="h-6 w-6 text-blue-600" />
+              <h2 className="text-xl font-semibold text-gray-900">Exam Details</h2>
+            </div>
+            {isStateBoardAssessment && (
+              <Badge className="bg-green-100 text-green-800 text-lg px-4 py-2">
+                {assessmentType} Assessment
+              </Badge>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div>
               <Label className="text-sm font-medium text-gray-500">Subject</Label>
@@ -342,8 +430,12 @@ export default function MarksEntryPage() {
               <p className="text-lg font-semibold text-gray-900">{examPaper.max_marks}</p>
             </div>
             <div>
-              <Label className="text-sm font-medium text-gray-500">Pass Marks</Label>
-              <p className="text-lg font-semibold text-gray-900">{examPaper.pass_marks}</p>
+              <Label className="text-sm font-medium text-gray-500">
+                {isStateBoardAssessment ? 'Assessment Type' : 'Pass Marks'}
+              </Label>
+              <p className="text-lg font-semibold text-gray-900">
+                {isStateBoardAssessment ? assessmentType : examPaper.pass_marks}
+              </p>
             </div>
           </div>
           
@@ -369,6 +461,40 @@ export default function MarksEntryPage() {
           )}
         </Card>
       </motion.div>
+
+      {/* Grading Legend for State Board */}
+      {isStateBoardAssessment && gradingScale.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <Card className="glass-morphism border-0">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Award className="h-5 w-5 text-purple-600" />
+                Grading Scale - {assessmentType} Assessment
+              </CardTitle>
+              <CardDescription>
+                {assessmentType === 'FA' ? 'Formative Assessment grading based on marks obtained out of 20' : 'Summative Assessment grading based on percentage scored'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                {gradingScale.map((band, index) => (
+                  <div key={index} className="text-center p-3 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border">
+                    <div className="text-xl font-bold text-purple-600 mb-1">{band.grade}</div>
+                    <div className="text-sm text-gray-600 font-medium">
+                      {assessmentType === 'FA' ? `${band.min}-${band.max}` : `${band.min}-${band.max}%`}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">{band.remark}</div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Marks Entry Table */}
       <motion.div
@@ -403,8 +529,11 @@ export default function MarksEntryPage() {
                       <TableHead>Admission No.</TableHead>
                       <TableHead className="text-center">Marks Obtained</TableHead>
                       <TableHead className="text-center">Grade</TableHead>
+                      {isStateBoardAssessment && (
+                        <TableHead className="text-center">Remark</TableHead>
+                      )}
                       <TableHead className="text-center">Absent</TableHead>
-                      <TableHead>Remarks</TableHead>
+                      <TableHead>Notes</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -414,8 +543,12 @@ export default function MarksEntryPage() {
                         marks: mark.marks_obtained !== null && mark.marks_obtained !== undefined ? mark.marks_obtained : undefined 
                       };
                       const grade = markData.marks && !markData.isAbsent 
-                        ? calculateGrade(markData.marks, examPaper.max_marks) 
+                        ? calculateGradeEnhanced(markData.marks, examPaper.max_marks) 
                         : markData.isAbsent ? 'AB' : '';
+                      
+                      const gradeInfo = isStateBoardAssessment && markData.marks && !markData.isAbsent 
+                        ? calculateStateBoardGrade(markData.marks, examPaper.max_marks)
+                        : { grade: '', remark: '' };
                       
                       return (
                         <motion.tr
@@ -459,10 +592,11 @@ export default function MarksEntryPage() {
                           <TableCell className="text-center">
                             <Badge 
                               className={
-                                grade === 'A+' || grade === 'A' ? 'bg-green-100 text-green-800' :
-                                grade === 'B+' || grade === 'B' ? 'bg-blue-100 text-blue-800' :
-                                grade === 'C' ? 'bg-yellow-100 text-yellow-800' :
-                                grade === 'D' ? 'bg-orange-100 text-orange-800' :
+                                grade === 'O' ? 'bg-green-100 text-green-800' :
+                                grade === 'A+' || grade === 'A' ? 'bg-blue-100 text-blue-800' :
+                                grade === 'B+' || grade === 'B' ? 'bg-yellow-100 text-yellow-800' :
+                                grade === 'C' ? 'bg-orange-100 text-orange-800' :
+                                grade === 'D' ? 'bg-red-100 text-red-800' :
                                 grade === 'F' ? 'bg-red-100 text-red-800' :
                                 grade === 'AB' ? 'bg-gray-100 text-gray-800' :
                                 'bg-gray-100 text-gray-500'
@@ -471,6 +605,13 @@ export default function MarksEntryPage() {
                               {grade || '-'}
                             </Badge>
                           </TableCell>
+                          {isStateBoardAssessment && (
+                            <TableCell className="text-center">
+                              <span className="text-sm text-gray-600">
+                                {gradeInfo.remark || (markData.isAbsent ? 'Absent' : '--')}
+                              </span>
+                            </TableCell>
+                          )}
                           <TableCell className="text-center">
                             <input
                               type="checkbox"

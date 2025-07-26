@@ -176,17 +176,9 @@ export function AdminSidebar({ brand, isOpen, onClose }: AdminSidebarProps) {
         <SidebarLink
           href="/school-admin/reports"
           icon={FileText}
-          isActive={pathname.startsWith("/school-admin/reports")}
+          isActive={pathname.startsWith("/school-admin/reports") || pathname.startsWith("/school-admin/cbse-reports") || pathname.startsWith("/school-admin/ssc-reports") || pathname.startsWith("/school-admin/state-board-reports")}
         >
           Reports
-        </SidebarLink>
-
-        <SidebarLink
-          href="/school-admin/cbse-reports"
-          icon={Star}
-          isActive={pathname.startsWith("/school-admin/cbse-reports")}
-        >
-          CBSE Reports
         </SidebarLink>
 
         <SidebarLink

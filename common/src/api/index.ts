@@ -91,6 +91,41 @@ export {
   type ExamSchedule
 } from './exams';
 
+// State Board API exports
+export {
+  useSchoolSubjects,
+  useCreateSchoolSubject,
+  useUpdateSchoolSubject,
+  useDeleteSchoolSubject,
+  useGradingScales,
+  useCreateGradingScale,
+  useStateBoardExamGroups,
+  useCreateStateBoardExamGroup,
+  useMonthlyAttendance,
+  useCreateMonthlyAttendance,
+  useBulkCreateMonthlyAttendance,
+  useStateBoardReports,
+  useGenerateStateBoardReports,
+  usePublishStateBoardReport,
+  calculateGrade,
+  calculateOverallGrade,
+  DEFAULT_FA_GRADING,
+  DEFAULT_SA_GRADING,
+  type AssessmentType,
+  type StateBoardTerm,
+  type ReportStatus,
+  type SchoolSubject,
+  type GradeBand,
+  type GradingScale,
+  type StateBoardExamGroup,
+  type MonthlyAttendance,
+  type SubjectMarks,
+  type StateBoardReport,
+  type CreateSchoolSubjectData,
+  type CreateMonthlyAttendanceData,
+  type CreateStateBoardExamGroupData
+} from './state-board';
+
 // Report Templates API exports
 export {
   useReportTemplates,

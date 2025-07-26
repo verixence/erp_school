@@ -41,7 +41,14 @@ const examTypeLabels = {
   cbse_fa3: 'FA3',
   cbse_fa4: 'FA4',
   cbse_sa1: 'SA1',
-  cbse_sa2: 'SA2'
+  cbse_sa2: 'SA2',
+  state_fa1: 'FA1',
+  state_fa2: 'FA2',
+  state_fa3: 'FA3',
+  state_fa4: 'FA4',
+  state_sa1: 'SA1',
+  state_sa2: 'SA2',
+  state_sa3: 'SA3'
 } as const;
 
 const statusColors = {

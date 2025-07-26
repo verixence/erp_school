@@ -37,9 +37,13 @@ import {
   useSchoolExamPapers,
   useMarksSummary,
   useSchoolSections,
+  DEFAULT_FA_GRADING,
+  DEFAULT_SA_GRADING,
   type Mark,
   type ExamPaper
 } from '@erp/common';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase-client';
 import { toast } from 'sonner';
 import Link from 'next/link';
 
@@ -57,6 +61,22 @@ export default function MarksManagementPage() {
   const { data: marks = [] } = useSchoolMarks(user?.school_id || undefined, selectedExamGroup !== 'all' ? selectedExamGroup : undefined);
   const { data: sections = [] } = useSchoolSections(user?.school_id || undefined);
   const { data: marksSummary } = useMarksSummary(user?.school_id || undefined);
+
+  // Fetch school details to determine board type
+  const { data: school } = useQuery({
+    queryKey: ['school-details', user?.school_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('schools')
+        .select('id, name, board_type, state_board_type, assessment_pattern')
+        .eq('id', user?.school_id!)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.school_id,
+  });
 
   // Filter marks based on search criteria
   const filteredMarks = useMemo(() => {
@@ -106,7 +126,28 @@ export default function MarksManagementPage() {
     };
   }, [filteredMarks]);
 
-  const calculateGrade = (marks: number, maxMarks: number) => {
+  // Enhanced grade calculation with State Board support
+  const calculateGrade = (marks: number, maxMarks: number, examType?: string) => {
+    // Check if this is a State Board assessment
+    const isStateBoardAssessment = school?.state_board_type === 'Telangana' || 
+                                   school?.assessment_pattern === 'State_FA_SA' ||
+                                   examType?.startsWith('state_');
+
+    if (isStateBoardAssessment) {
+      // State Board grading
+      if (examType?.includes('fa') || maxMarks <= 20) {
+        // FA grading (out of 20)
+        const gradeBand = DEFAULT_FA_GRADING.find(band => marks >= band.min && marks <= band.max);
+        return gradeBand ? gradeBand.grade : 'D';
+      } else {
+        // SA grading (percentage-based)
+        const percentage = (marks / maxMarks) * 100;
+        const gradeBand = DEFAULT_SA_GRADING.find(band => percentage >= band.min && percentage <= band.max);
+        return gradeBand ? gradeBand.grade : 'D';
+      }
+    }
+
+    // CBSE/Traditional grading
     const percentage = (marks / maxMarks) * 100;
     if (percentage >= 90) return 'A+';
     if (percentage >= 80) return 'A';
@@ -119,12 +160,14 @@ export default function MarksManagementPage() {
 
   const getGradeColor = (grade: string) => {
     switch (grade) {
+      case 'O': return 'bg-green-100 text-green-800'; // State Board Outstanding
       case 'A+': 
-      case 'A': return 'bg-green-100 text-green-800';
+      case 'A': return 'bg-blue-100 text-blue-800';
       case 'B+': 
-      case 'B': return 'bg-blue-100 text-blue-800';
-      case 'C': return 'bg-yellow-100 text-yellow-800';
-      case 'D': return 'bg-orange-100 text-orange-800';
+      case 'B': return 'bg-yellow-100 text-yellow-800';
+      case 'C': return 'bg-orange-100 text-orange-800';
+      case 'D': return 'bg-red-100 text-red-800';
+      case 'E': return 'bg-red-100 text-red-800'; // State Board E grade
       case 'F': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -388,7 +431,7 @@ export default function MarksManagementPage() {
                   <TableBody>
                     {filteredMarks.map((mark, index) => {
                       const grade = mark.marks_obtained && mark.exam_paper?.max_marks && !mark.is_absent 
-                        ? calculateGrade(mark.marks_obtained, mark.exam_paper.max_marks) 
+                        ? calculateGrade(mark.marks_obtained, mark.exam_paper.max_marks, mark.exam_paper?.exam_group?.exam_type) 
                         : (mark.is_absent ? 'AB' : '');
                       
                       return (
