@@ -13,6 +13,7 @@ import {
   GraduationCap, 
   UserCheck, 
   Users, 
+  UserPlus,
   ClipboardCheck,
   Calendar,
   BookOpen,
@@ -139,6 +140,14 @@ export function AdminSidebar({ brand, isOpen, onClose }: AdminSidebarProps) {
           isActive={pathname.startsWith("/school-admin/parents")}
         >
           Parents
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/admission-enquiry"
+          icon={UserPlus}
+          isActive={pathname.startsWith("/school-admin/admission-enquiry")}
+        >
+          Admission Enquiry
         </SidebarLink>
 
         <SidebarLink

@@ -98,5 +98,11 @@ export {
   type UpdateReportTemplateData
 } from './api/report-templates';
 
+// Attendance calculator exports
+export * from './api/attendance-calculator';
+
+// Online classes exports
+export * from './api/online-classes';
+
 
  

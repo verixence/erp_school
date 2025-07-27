@@ -53,9 +53,6 @@ export default function LoginPage() {
           case 'parent':
             window.location.href = '/parent';
             break;
-          case 'student':
-            window.location.href = '/student';
-            break;
           default:
             window.location.href = '/dashboard';
         }

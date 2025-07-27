@@ -2,12 +2,15 @@
 
 import { useAuth } from '@/hooks/use-auth';
 import { useChildren, useParentDashboardStats } from '@/hooks/use-parent';
+import { useParentOnlineClasses } from '@erp/common';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Users, BookOpen, Calendar, TrendingUp, Clock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Users, BookOpen, Calendar, TrendingUp, Clock, Video, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import Link from 'next/link';
 
 export default function ParentDashboard() {
   const { user } = useAuth();
@@ -15,6 +18,7 @@ export default function ParentDashboard() {
   
   const { data: children, isLoading: childrenLoading } = useChildren(user?.id);
   const { data: stats, isLoading: statsLoading } = useParentDashboardStats(user?.id);
+  const { data: allOnlineClasses = [] } = useParentOnlineClasses(user?.id || '');
 
   // Set default selected child when children load
   if (children && children.length > 0 && !selectedChild) {
@@ -22,6 +26,12 @@ export default function ParentDashboard() {
   }
 
   const currentChild = children?.find(child => child.id === selectedChild);
+
+  // Filter today's online classes
+  const today = new Date().toISOString().split('T')[0];
+  const todaysOnlineClasses = allOnlineClasses.filter(onlineClass => 
+    onlineClass.scheduled_date === today && onlineClass.status !== 'cancelled'
+  );
 
   if (childrenLoading || statsLoading) {
     return (
@@ -115,6 +125,81 @@ export default function ParentDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Today's Online Classes */}
+      {todaysOnlineClasses.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-2xl font-bold text-gray-900">Today's Online Classes</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {todaysOnlineClasses.map((onlineClass) => (
+              <Card key={onlineClass.id} className="hover:shadow-lg transition-shadow">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 rounded-lg bg-blue-100">
+                        <Video className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg font-semibold text-gray-900">
+                          {onlineClass.title}
+                        </CardTitle>
+                        <Badge variant="outline" className="mt-1">
+                          {onlineClass.subject}
+                        </Badge>
+                      </div>
+                    </div>
+                    <Badge 
+                      className={
+                        onlineClass.status === 'scheduled' 
+                          ? 'bg-blue-100 text-blue-800' 
+                          : onlineClass.status === 'ongoing'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }
+                    >
+                      {onlineClass.status}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center text-sm text-gray-600">
+                      <Clock className="w-4 h-4 mr-2" />
+                      {onlineClass.start_time} - {onlineClass.end_time}
+                    </div>
+                    {(onlineClass as any).student_names && (
+                      <div className="flex items-center text-sm text-gray-600">
+                        <Users className="w-4 h-4 mr-2" />
+                        For: {(onlineClass as any).student_names.join(', ')}
+                      </div>
+                    )}
+                    {onlineClass.description && (
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        {onlineClass.description}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      className="flex-1"
+                      onClick={() => window.open(onlineClass.meeting_link, '_blank')}
+                    >
+                      <ExternalLink className="w-4 h-4 mr-1" />
+                      Join Class
+                    </Button>
+                    <Link href="/parent/online-classes">
+                      <Button size="sm" variant="outline">
+                        View All
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Current Child Info */}
       {currentChild && (

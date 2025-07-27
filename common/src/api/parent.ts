@@ -199,7 +199,13 @@ export const useParentDashboardStats = (parentId?: string) => {
         };
       }
 
-      const sectionIds = [...new Set(children.map(c => c.section_id))];
+      // Get section information for homework queries
+      const { data: sectionsData } = await supabase
+        .from('sections')
+        .select('id, grade, section')
+        .in('id', [...new Set(children.map(c => c.section_id))]);
+
+      const homeworkSections = sectionsData?.map(s => `${s.grade} ${s.section}`) || [];
 
       // Get upcoming homework count (next 7 days)
       const nextWeek = new Date();
@@ -208,7 +214,7 @@ export const useParentDashboardStats = (parentId?: string) => {
       const { data: upcomingHomework } = await supabase
         .from('homeworks')
         .select('*', { count: 'exact', head: true })
-        .in('section_id', sectionIds)
+        .in('section', homeworkSections)
         .gte('due_date', new Date().toISOString().split('T')[0])
         .lte('due_date', nextWeek.toISOString().split('T')[0]);
 

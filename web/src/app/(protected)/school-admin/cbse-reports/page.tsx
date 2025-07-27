@@ -61,6 +61,7 @@ import {
   isCumulativeReport,
   isTermReport
 } from '@/types/cbse-reports';
+import { calculateLast2MonthsAttendance } from '@erp/common';
 
 declare global {
   interface Window {
@@ -1158,6 +1159,16 @@ export default function CBSEReportsPage() {
               coScholastic
             );
           }
+
+          // Calculate attendance for last 2 months
+          const attendanceData = await calculateLast2MonthsAttendance(student.id, user.school_id!);
+          
+          // Update report data with actual attendance
+          reportData.attendance = {
+            working_days: attendanceData.working_days,
+            present_days: attendanceData.present_days,
+            percentage: attendanceData.percentage
+          };
 
           // Save report to database
           const { data: savedReport, error: saveError } = await supabase

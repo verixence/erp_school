@@ -16,7 +16,9 @@ import {
   PenTool,
   Eye,
   GraduationCap,
-  UserCheck
+  UserCheck,
+  Video,
+  ExternalLink
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,6 +31,7 @@ import {
   useReportCards,
   useTeacherSections,
   useSectionStudents,
+  useTeacherOnlineClasses,
   type ExamGroup,
   type ExamPaper 
 } from '@erp/common';
@@ -43,6 +46,9 @@ export default function TeacherDashboard() {
 
   // Fetch teacher's assigned sections
   const { data: teacherSections = [] } = useTeacherSections(user?.id);
+  
+  // Fetch teacher's online classes
+  const { data: allOnlineClasses = [] } = useTeacherOnlineClasses(user?.id || '');
 
   // Get total students count across all sections
   const { data: totalStudentsData } = useQuery({
@@ -64,6 +70,12 @@ export default function TeacherDashboard() {
 
   // Get class teacher sections (sections where this teacher is the class teacher)
   const classTeacherSections = teacherSections.filter(section => section.class_teacher === user?.id);
+
+  // Filter today's online classes
+  const today = new Date().toISOString().split('T')[0];
+  const todaysOnlineClasses = allOnlineClasses.filter(onlineClass => 
+    onlineClass.scheduled_date === today && onlineClass.status !== 'cancelled'
+  );
 
   // API hooks
   const { data: examGroups = [] } = useExamGroups(user?.school_id || undefined);
@@ -327,6 +339,86 @@ export default function TeacherDashboard() {
           ))}
         </div>
       </motion.div>
+
+      {/* Today's Online Classes */}
+      {todaysOnlineClasses.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+        >
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Today's Online Classes</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {todaysOnlineClasses.map((onlineClass, index) => (
+              <motion.div
+                key={onlineClass.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 + index * 0.1 }}
+              >
+                <Card className="glass-morphism border-0 hover:shadow-lg transition-shadow">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2 rounded-lg bg-blue-100">
+                          <Video className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-lg font-semibold text-gray-900">
+                            {onlineClass.title}
+                          </CardTitle>
+                          <Badge variant="outline" className="mt-1">
+                            {onlineClass.subject}
+                          </Badge>
+                        </div>
+                      </div>
+                      <Badge 
+                        className={
+                          onlineClass.status === 'scheduled' 
+                            ? 'bg-blue-100 text-blue-800' 
+                            : onlineClass.status === 'ongoing'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }
+                      >
+                        {onlineClass.status}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 mb-4">
+                      <div className="flex items-center text-sm text-gray-600">
+                        <Clock className="w-4 h-4 mr-2" />
+                        {onlineClass.start_time} - {onlineClass.end_time} ({onlineClass.duration_minutes}min)
+                      </div>
+                      {onlineClass.description && (
+                        <p className="text-sm text-gray-600 line-clamp-2">
+                          {onlineClass.description}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => window.open(onlineClass.meeting_link, '_blank')}
+                      >
+                        <ExternalLink className="w-4 h-4 mr-1" />
+                        Join Class
+                      </Button>
+                      <Link href="/teacher/online-classes">
+                        <Button size="sm" variant="outline">
+                          Manage
+                        </Button>
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* Recent Exam Groups */}
       {recentExamGroups.length > 0 && (

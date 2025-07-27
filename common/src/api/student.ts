@@ -69,11 +69,23 @@ export const useStudentHomework = (studentId?: string) => {
       // Get student's section to find homework assignments
       const { data: student, error: studentError } = await supabase
         .from('students')
-        .select('section_id, grade')
+        .select('section_id')
         .eq('id', studentId)
         .single();
 
       if (studentError) throw studentError;
+
+      // Get section details for homework query
+      const { data: sectionData, error: sectionError } = await supabase
+        .from('sections')
+        .select('grade, section, school_id')
+        .eq('id', student.section_id)
+        .single();
+
+      if (sectionError) throw sectionError;
+
+      // Construct section format to match homework table (e.g., "1 A")
+      const homeworkSection = `${sectionData.grade} ${sectionData.section}`;
 
       const { data, error } = await supabase
         .from('homeworks')
@@ -87,7 +99,8 @@ export const useStudentHomework = (studentId?: string) => {
             notes
           )
         `)
-        .eq('section_id', student.section_id)
+        .eq('section', homeworkSection)
+        .eq('school_id', sectionData.school_id)
         .order('due_date', { ascending: true });
 
       if (error) throw error;
@@ -196,6 +209,15 @@ export const useStudentDashboardStats = (studentId?: string) => {
 
       if (studentError) throw studentError;
 
+      // Get section details for homework query
+      const { data: sectionData, error: sectionError } = await supabase
+        .from('sections')
+        .select('grade, section, school_id')
+        .eq('id', student.section_id)
+        .single();
+
+      if (sectionError) throw sectionError;
+
       const { data: todaysClasses } = await supabase
         .from('timetables')
         .select('*', { count: 'exact', head: true })
@@ -206,10 +228,14 @@ export const useStudentDashboardStats = (studentId?: string) => {
       const nextWeek = new Date();
       nextWeek.setDate(nextWeek.getDate() + 7);
       
+      // Construct section format to match homework table (e.g., "1 A")
+      const homeworkSection = `${sectionData.grade} ${sectionData.section}`;
+      
       const { data: pendingHomework } = await supabase
         .from('homeworks')
         .select('*', { count: 'exact', head: true })
-        .eq('section_id', student.section_id)
+        .eq('section', homeworkSection)
+        .eq('school_id', sectionData.school_id)
         .gte('due_date', new Date().toISOString().split('T')[0])
         .lte('due_date', nextWeek.toISOString().split('T')[0]);
 

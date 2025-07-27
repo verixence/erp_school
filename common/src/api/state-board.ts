@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
+import { calculateLast2MonthsMonthlyAttendance } from './attendance-calculator';
 
 // ============================================
 // TYPES AND INTERFACES
@@ -670,17 +671,8 @@ export const useGenerateStateBoardReports = () => {
           const totalObtained = subjectMarks.reduce((sum, subject) => sum + subject.marks_obtained, 0);
           const totalMax = subjectMarks.reduce((sum, subject) => sum + subject.max_marks, 0);
           
-          // Get monthly attendance for the academic year
-          const { data: attendance } = await supabase
-            .from('monthly_attendance')
-            .select('*')
-            .eq('student_id', studentId)
-            .eq('year', new Date().getFullYear());
-
-          const attendanceData = attendance?.reduce((acc, att) => {
-            acc[att.month] = att;
-            return acc;
-          }, {} as Record<string, MonthlyAttendance>) || {};
+          // Calculate attendance for the last 2 months using actual attendance records
+          const attendanceData = await calculateLast2MonthsMonthlyAttendance(studentId, userData.school_id);
 
           // Calculate overall grade
           let overallGrade = '';

@@ -20,11 +20,9 @@ export default function DashboardPage() {
           router.replace('/school-admin');
           break;
         case 'teacher':
-          // Future: redirect to teacher dashboard
           router.replace('/teacher');
           break;
         case 'parent':
-          // Future: redirect to parent dashboard
           router.replace('/parent');
           break;
         default:

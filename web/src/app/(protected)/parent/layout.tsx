@@ -9,7 +9,7 @@ import { getBrandForSchool, injectBrandCSS } from '@erp/common';
 import { CampusHeader } from '@/components/CampusHeader';
 import { CampusFooter } from '@/components/CampusFooter';
 import { KBarProviderWrapper } from '@/components/kbar-provider';
-import { BookOpen, Calendar, Bell, Settings, Home, GraduationCap, MessageSquare, FileText, LogOut, Camera, CalendarDays, Mail } from 'lucide-react';
+import { BookOpen, Calendar, Bell, Settings, Home, GraduationCap, MessageSquare, FileText, LogOut, Camera, CalendarDays, Mail, Video } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase-client';
@@ -81,6 +81,7 @@ export default function ParentLayout({
   const sidebarItems = [
     { href: '/parent', label: 'Dashboard', icon: Home },
     { href: '/parent/community', label: 'Community', icon: MessageSquare },
+    { href: '/parent/online-classes', label: 'Online Classes', icon: Video },
     { href: '/parent/attendance/enhanced', label: 'Attendance', icon: Calendar },
     { href: '/parent/homework', label: 'Homework', icon: BookOpen },
     { href: '/parent/timetable', label: 'Timetable', icon: GraduationCap },
