@@ -89,9 +89,7 @@ interface StudentFormDrawerProps {
   student?: any;
 }
 
-const GRADES = [
-  '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'
-];
+// Grades are now dynamically generated from existing sections
 
 const steps = [
   {
@@ -239,9 +237,20 @@ export default function StudentFormDrawer({
     enabled: !!student?.id && open,
   });
 
-  // Filter sections by selected grade
+  // Get unique grades from existing sections for the dropdown
+  const availableGrades = React.useMemo(() => {
+    const uniqueGrades = [...new Set(
+      sections
+        .map(s => s.grade)
+        .filter(grade => grade !== null && grade !== undefined)
+        .map(grade => grade.toString())
+    )];
+    return uniqueGrades.sort((a, b) => parseInt(a) - parseInt(b));
+  }, [sections]);
+
+  // Filter sections by selected grade (with null safety)
   const availableSections = sections.filter(s => 
-    selectedGrade ? s.grade.toString() === selectedGrade : true
+    selectedGrade ? (s.grade && s.grade.toString() === selectedGrade) : true
   );
 
   // Watch grade changes to reset section
@@ -615,11 +624,17 @@ export default function StudentFormDrawer({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {GRADES.map((grade) => (
-                          <SelectItem key={grade} value={grade}>
-                            Grade {grade}
-                          </SelectItem>
-                        ))}
+                        {availableGrades.length > 0 ? (
+                          availableGrades.map((grade) => (
+                            <SelectItem key={grade} value={grade}>
+                              Grade {grade}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className="p-2 text-sm text-muted-foreground text-center">
+                            No grades available. Please create sections first.
+                          </div>
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />

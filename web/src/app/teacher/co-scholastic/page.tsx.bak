@@ -46,7 +46,7 @@ interface CoScholasticAssessment {
   term: 'Term1' | 'Term2';
   academic_year: string;
   school_id?: string;
-  assessed_by?: string;
+  teacher_id?: string;
   updated_by?: string;
   updated_at?: string;
   
@@ -186,7 +186,7 @@ export default function TeacherCoScholasticPage() {
         school_id: user?.school_id || '',
         academic_year: school?.academic_year || '2024-25',
         updated_by: user?.id,
-        assessed_by: user?.id,
+        teacher_id: user?.id,
         updated_at: new Date().toISOString()
       };
 

@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/use-auth';
 import EnhancedCrudTable from '@/components/enhanced-crud-table';
 import StudentFormDrawer from '@/components/student-form-drawer';
 import CSVUploadModal from '@/components/csv-upload-modal';
+import ErrorBoundary from '@/components/error-boundary';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -20,7 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar, User, GraduationCap, Users, Upload, Plus, Key, MoreHorizontal, Building2, ArrowRight } from 'lucide-react';
+import { Calendar, User, GraduationCap, Users, Upload, Plus, Key, MoreHorizontal, Building2, ArrowRight, AlertTriangle } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,108 +46,163 @@ interface Student {
   has_login?: boolean;
 }
 
-export default function StudentsPage() {
+function StudentsPageContent() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
-  // Removed invite functionality - students don't need login accounts
 
-  // Fetch students with parent information - SIMPLE APPROACH
-  const { data: studentsData = [] } = useQuery({
+  // Fetch students with improved error handling
+  const { 
+    data: studentsData = [], 
+    isLoading: studentsLoading,
+    error: studentsError 
+  } = useQuery({
     queryKey: ['students', user?.school_id],
     queryFn: async () => {
-      // Get all data in parallel
-      const [studentsResult, relationshipsResult, parentsResult] = await Promise.all([
-        supabase
-          .from('students')
-          .select('*')
-          .eq('school_id', user?.school_id)
-          .order('created_at', { ascending: false }),
-        
-        supabase
-          .from('student_parents')
-          .select('student_id, parent_id'),
-        
-        supabase
-          .from('users')
-          .select('id, first_name, last_name')
-          .eq('role', 'parent')
-          .eq('school_id', user?.school_id)
-      ]);
-
-      if (studentsResult.error) throw studentsResult.error;
-      if (relationshipsResult.error) throw relationshipsResult.error;
-      if (parentsResult.error) {
-        console.warn('Parents query failed, continuing without parent data:', parentsResult.error);
+      if (!user?.school_id) {
+        throw new Error('School ID not available');
       }
 
-      const students = studentsResult.data || [];
-      const allRelationships = relationshipsResult.data || [];
-      const parents = parentsResult.data || [];
+      try {
+        // Get all data in parallel with timeout
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), 30000)
+        );
 
-      // Filter relationships to only include students from this school
-      const studentIds = students.map(s => s.id);
-      const relationships = allRelationships.filter(rel => 
-        studentIds.includes(rel.student_id)
-      );
+        const dataPromise = Promise.all([
+          supabase
+            .from('students')
+            .select('*')
+            .eq('school_id', user.school_id)
+            .order('created_at', { ascending: false }),
+          
+          supabase
+            .from('student_parents')
+            .select('student_id, parent_id'),
+          
+          supabase
+            .from('users')
+            .select('id, first_name, last_name')
+            .eq('role', 'parent')
+            .eq('school_id', user.school_id)
+        ]);
 
-      // Create parent lookup map
-      const parentMap: Record<string, { first_name: string; last_name: string }> = {};
-      parents.forEach(parent => {
-        parentMap[parent.id] = {
-          first_name: parent.first_name,
-          last_name: parent.last_name
-        };
-      });
+        const [studentsResult, relationshipsResult, parentsResult] = await Promise.race([
+          dataPromise,
+          timeoutPromise
+        ]) as any;
 
-      // Add parent info to students
-      const studentsWithParents = students.map(student => {
-        const studentRelationships = relationships.filter(rel => rel.student_id === student.id);
-        const parentNames = studentRelationships
-          .map(rel => parentMap[rel.parent_id])
-          .filter(parent => parent)
-          .map(parent => `${parent.first_name} ${parent.last_name}`);
+        if (studentsResult.error) throw studentsResult.error;
+        if (relationshipsResult.error) throw relationshipsResult.error;
+        
+        // Parents query can fail gracefully
+        if (parentsResult.error) {
+          console.warn('Parents query failed, continuing without parent data:', parentsResult.error);
+        }
 
-        return {
-          ...student,
-          parent_names: parentNames
-        };
-      });
+        const students = studentsResult.data || [];
+        const allRelationships = relationshipsResult.data || [];
+        const parents = parentsResult.data || [];
 
-      console.log('Enhanced approach results:', {
-        students: students.length,
-        allRelationships: allRelationships.length,
-        filteredRelationships: relationships.length, 
-        parents: parents.length,
-        parentMap: Object.keys(parentMap).length,
-        sampleStudent: studentsWithParents[0],
-        sampleParentNames: studentsWithParents[0]?.parent_names
-      });
+                 // Safely process data
+         const studentIds = students.map((s: any) => s?.id).filter(Boolean);
+         const relationships = allRelationships.filter((rel: any) => 
+           rel && studentIds.includes(rel.student_id)
+         );
 
-      return studentsWithParents as Student[];
+         // Create parent lookup map
+         const parentMap: Record<string, { first_name: string; last_name: string }> = {};
+         parents.forEach((parent: any) => {
+           if (parent?.id && parent?.first_name && parent?.last_name) {
+             parentMap[parent.id] = {
+               first_name: parent.first_name,
+               last_name: parent.last_name
+             };
+           }
+         });
+
+         // Add parent info to students
+         const studentsWithParents = students.map((student: any) => {
+           if (!student) return null;
+           
+           const studentRelationships = relationships.filter((rel: any) => 
+             rel && rel.student_id === student.id
+           );
+           const parentNames = studentRelationships
+             .map((rel: any) => parentMap[rel.parent_id])
+             .filter((parent: any) => parent)
+             .map((parent: any) => `${parent.first_name} ${parent.last_name}`);
+
+           return {
+             ...student,
+             parent_names: parentNames
+           };
+         }).filter(Boolean);
+
+        return studentsWithParents as Student[];
+      } catch (error) {
+        console.error('Students query error:', error);
+        throw error;
+      }
     },
     enabled: !!user?.school_id,
+    retry: 2,
+    retryDelay: 1000,
   });
 
   // Fetch sections for stats
-  const { data: sectionsData = [] } = useQuery({
+  const { 
+    data: sectionsData = [], 
+    isLoading: sectionsLoading,
+    error: sectionsError 
+  } = useQuery({
     queryKey: ['sections', user?.school_id],
     queryFn: async () => {
+      if (!user?.school_id) {
+        throw new Error('School ID not available');
+      }
+
       const { data, error } = await supabase
         .from('sections')
         .select('*')
-        .eq('school_id', user?.school_id);
+        .eq('school_id', user.school_id);
       
       if (error) throw error;
-      return data;
+      return data || [];
     },
     enabled: !!user?.school_id,
+    retry: 2,
   });
 
   // Check if sections exist
   const hasSections = sectionsData.length > 0;
+
+  // Error states
+  if (studentsError || sectionsError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="max-w-lg w-full">
+          <CardContent className="p-6 text-center space-y-4">
+            <AlertTriangle className="w-12 h-12 text-red-600 mx-auto" />
+            <h3 className="text-lg font-semibold text-gray-900">Failed to Load Data</h3>
+            <p className="text-gray-600">
+              {studentsError?.message || sectionsError?.message || 'Unable to fetch student data'}
+            </p>
+            <Button 
+              onClick={() => {
+                queryClient.invalidateQueries({ queryKey: ['students'] });
+                queryClient.invalidateQueries({ queryKey: ['sections'] });
+              }}
+            >
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Handlers
   const handleAdd = () => {
@@ -163,12 +219,7 @@ export default function StudentsPage() {
     setIsDrawerOpen(true);
   };
 
-  // Removed invite handlers - students don't need login accounts
-
-  const getCustomActions = (student: Student) => [
-    // Students don't need login accounts in this system
-    // Removed "Create Login" action
-  ];
+  const getCustomActions = (student: Student) => [];
 
   const handleBulkUpload = async (csvData: any[]) => {
     if (!hasSections) {
@@ -210,15 +261,16 @@ export default function StudentsPage() {
     }
   };
 
-  // Calculate stats
-  const totalStudents = studentsData.length;
-  const maleStudents = studentsData.filter(s => s.gender === 'male').length;
-  const femaleStudents = studentsData.filter(s => s.gender === 'female').length;
-  const avgAge = studentsData.length > 0 
+  // Calculate stats safely
+  const totalStudents = studentsData?.length || 0;
+  const maleStudents = studentsData?.filter(s => s?.gender === 'male').length || 0;
+  const femaleStudents = studentsData?.filter(s => s?.gender === 'female').length || 0;
+  const avgAge = totalStudents > 0 
     ? Math.round(studentsData.reduce((sum, student) => {
+        if (!student?.date_of_birth) return sum;
         const age = new Date().getFullYear() - new Date(student.date_of_birth).getFullYear();
-        return sum + age;
-      }, 0) / studentsData.length)
+        return sum + (isNaN(age) ? 0 : age);
+      }, 0) / totalStudents)
     : 0;
 
   // Table columns
@@ -228,7 +280,7 @@ export default function StudentsPage() {
       label: 'Admission No',
       sortable: true,
       render: (value: string) => (
-        <Badge variant="outline">{value}</Badge>
+        <Badge variant="outline">{value || 'N/A'}</Badge>
       ),
     },
     {
@@ -239,7 +291,7 @@ export default function StudentsPage() {
         <div className="flex items-center gap-2">
           <User className="h-4 w-4 text-muted-foreground" />
           <div>
-            <div className="font-medium">{value}</div>
+            <div className="font-medium">{value || 'N/A'}</div>
             {item.student_email && (
               <div className="text-xs text-muted-foreground">{item.student_email}</div>
             )}
@@ -254,7 +306,7 @@ export default function StudentsPage() {
       render: (value: string, item: Student) => (
         <div className="flex items-center gap-2">
           <GraduationCap className="h-4 w-4 text-muted-foreground" />
-          <span>Grade {value}{item.section}</span>
+          <span>Grade {value || 'N/A'}{item.section || ''}</span>
         </div>
       ),
     },
@@ -263,7 +315,7 @@ export default function StudentsPage() {
       label: 'Gender',
       render: (value: string) => (
         <Badge variant="secondary" className="capitalize">
-          {value}
+          {value || 'N/A'}
         </Badge>
       ),
     },
@@ -273,7 +325,7 @@ export default function StudentsPage() {
       render: (value: string) => (
         <div className="flex items-center gap-2">
           <Calendar className="h-4 w-4 text-muted-foreground" />
-          <span>{value ? new Date(value).toLocaleDateString() : '-'}</span>
+          <span>{value ? new Date(value).toLocaleDateString() : 'N/A'}</span>
         </div>
       ),
     },
@@ -316,7 +368,7 @@ export default function StudentsPage() {
               setIsBulkUploadOpen(true);
             }}
             variant="outline"
-            disabled={!hasSections}
+            disabled={!hasSections || studentsLoading}
             className="flex items-center gap-2"
             title={!hasSections ? "Create sections first" : ""}
           >
@@ -325,7 +377,7 @@ export default function StudentsPage() {
           </Button>
           <Button
             onClick={handleAdd}
-            disabled={!hasSections}
+            disabled={!hasSections || studentsLoading}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400"
             title={!hasSections ? "Create sections first" : ""}
           >
@@ -336,7 +388,7 @@ export default function StudentsPage() {
       </div>
 
       {/* Setup guidance for new schools */}
-      {!hasSections && (
+      {!hasSections && !sectionsLoading && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
           <div className="flex items-start gap-4">
             <div className="p-3 bg-blue-100 rounded-lg">
@@ -356,13 +408,6 @@ export default function StudentsPage() {
                   <Building2 className="h-4 w-4 mr-2" />
                   Create Sections
                   <ArrowRight className="h-4 w-4 ml-1" />
-                </Button>
-                <Button 
-                  variant="outline"
-                  onClick={() => window.open('https://docs.example.com/setup-guide', '_blank')}
-                  className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                >
-                  View Setup Guide
                 </Button>
               </div>
             </div>
@@ -428,7 +473,7 @@ export default function StudentsPage() {
           onEdit={handleEdit}
           addButtonText="Add Student"
           customData={studentsData}
-          isCustomDataLoading={false}
+          isCustomDataLoading={studentsLoading}
           customActions={getCustomActions}
         />
       ) : (
@@ -463,8 +508,14 @@ export default function StudentsPage() {
         entity="students"
         onUpload={handleBulkUpload}
       />
-
-      {/* Removed invite dialog - students don't need login accounts */}
     </div>
+  );
+}
+
+export default function StudentsPage() {
+  return (
+    <ErrorBoundary>
+      <StudentsPageContent />
+    </ErrorBoundary>
   );
 } 
