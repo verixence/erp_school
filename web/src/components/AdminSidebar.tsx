@@ -35,7 +35,8 @@ import {
   X,
   Image,
   Heart,
-  Settings
+  Settings,
+  UserX
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -148,6 +149,14 @@ export function AdminSidebar({ brand, isOpen, onClose }: AdminSidebarProps) {
           isActive={pathname.startsWith("/school-admin/admission-enquiry")}
         >
           Admission Enquiry
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/leave-requests"
+          icon={UserX}
+          isActive={pathname.startsWith("/school-admin/leave-requests")}
+        >
+          Leave Requests
         </SidebarLink>
 
         <SidebarLink

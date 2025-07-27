@@ -103,6 +103,7 @@ export * from './api/attendance-calculator';
 
 // Online classes exports
 export * from './api/online-classes';
+export * from './api/leave-requests';
 
 
  
