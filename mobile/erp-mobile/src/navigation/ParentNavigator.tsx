@@ -11,7 +11,11 @@ import {
   Settings,
   Award,
   Users,
-  Clock
+  Clock,
+  Camera,
+  Video,
+  Mail,
+  CalendarDays
 } from 'lucide-react-native';
 
 // Parent Screens
@@ -22,6 +26,12 @@ import { ParentHomeworkScreen } from '../screens/parent/ParentHomeworkScreen';
 import { ParentExamsScreen } from '../screens/parent/ParentExamsScreen';
 import { ParentReportsScreen } from '../screens/parent/ParentReportsScreen';
 import { ParentAnnouncementsScreen } from '../screens/parent/ParentAnnouncementsScreen';
+import { ParentGalleryScreen } from '../screens/parent/ParentGalleryScreen';
+import { ParentCommunityScreen } from '../screens/parent/ParentCommunityScreen';
+import { ParentCalendarScreen } from '../screens/parent/ParentCalendarScreen';
+import { ParentFeedbackScreen } from '../screens/parent/ParentFeedbackScreen';
+import { ParentOnlineClassesScreen } from '../screens/parent/ParentOnlineClassesScreen';
+import { ParentAnalyticsScreen } from '../screens/parent/ParentAnalyticsScreen';
 import { SettingsScreen } from '../screens/shared/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
@@ -33,6 +43,11 @@ const DashboardStack = () => (
       name="Dashboard" 
       component={ParentDashboardScreen}
       options={{ headerShown: false }}
+    />
+    <Stack.Screen 
+      name="Analytics" 
+      component={ParentAnalyticsScreen}
+      options={{ title: 'Performance Analytics' }}
     />
   </Stack.Navigator>
 );
@@ -64,15 +79,45 @@ const AcademicsStack = () => (
       component={ParentReportsScreen}
       options={{ title: 'Report Cards' }}
     />
+    <Stack.Screen 
+      name="OnlineClasses" 
+      component={ParentOnlineClassesScreen}
+      options={{ title: 'Online Classes' }}
+    />
   </Stack.Navigator>
 );
 
 const CommunicationStack = () => (
   <Stack.Navigator>
     <Stack.Screen 
+      name="Community" 
+      component={ParentCommunityScreen}
+      options={{ title: 'Community' }}
+    />
+    <Stack.Screen 
       name="Announcements" 
       component={ParentAnnouncementsScreen}
       options={{ title: 'Announcements' }}
+    />
+    <Stack.Screen 
+      name="Feedback" 
+      component={ParentFeedbackScreen}
+      options={{ title: 'Feedback' }}
+    />
+  </Stack.Navigator>
+);
+
+const MediaStack = () => (
+  <Stack.Navigator>
+    <Stack.Screen 
+      name="Gallery" 
+      component={ParentGalleryScreen}
+      options={{ title: 'School Gallery' }}
+    />
+    <Stack.Screen 
+      name="Calendar" 
+      component={ParentCalendarScreen}
+      options={{ title: 'Academic Calendar' }}
     />
   </Stack.Navigator>
 );
@@ -103,6 +148,9 @@ export const ParentNavigator: React.FC = () => {
               break;
             case 'MessagesTab':
               IconComponent = MessageSquare;
+              break;
+            case 'MediaTab':
+              IconComponent = Camera;
               break;
             case 'SettingsTab':
               IconComponent = Settings;
@@ -145,6 +193,11 @@ export const ParentNavigator: React.FC = () => {
         name="MessagesTab" 
         component={CommunicationStack}
         options={{ title: 'Messages' }}
+      />
+      <Tab.Screen 
+        name="MediaTab" 
+        component={MediaStack}
+        options={{ title: 'Media' }}
       />
       <Tab.Screen 
         name="SettingsTab" 

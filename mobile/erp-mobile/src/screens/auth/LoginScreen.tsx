@@ -223,7 +223,7 @@ export const LoginScreen: React.FC = () => {
                       keyboardType="email-address"
                       autoCapitalize="none"
                       autoCorrect={false}
-                      leftIcon={<Mail size={20} color="#6b7280" />}
+
                       error={errors.email}
                     />
                   </View>
@@ -234,16 +234,8 @@ export const LoginScreen: React.FC = () => {
                       value={password}
                       onChangeText={setPassword}
                       secureTextEntry={!showPassword}
-                      leftIcon={<Lock size={20} color="#6b7280" />}
-                      rightIcon={
-                        <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                          {showPassword ? (
-                            <EyeOff size={20} color="#6b7280" />
-                          ) : (
-                            <Eye size={20} color="#6b7280" />
-                          )}
-                        </TouchableOpacity>
-                      }
+
+                      
                       error={errors.password}
                     />
                   </View>
@@ -257,7 +249,7 @@ export const LoginScreen: React.FC = () => {
                       borderRadius: 16,
                       backgroundColor: '#667eea'
                     }}
-                    rightIcon={<ArrowRight size={20} color="white" />}
+
                   />
 
                   <TouchableOpacity style={{ marginTop: 16, alignItems: 'center' }}>

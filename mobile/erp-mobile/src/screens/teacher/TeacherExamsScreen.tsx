@@ -1,162 +1,214 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
-  RefreshControl,
-  FlatList,
+  StyleSheet,
   TouchableOpacity,
-  Modal,
-  TextInput,
-  Alert
+  RefreshControl,
+  Alert,
+  Linking
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../services/supabase';
-import { Button } from '../../components/ui/Button';
-import { Card } from '../../components/ui/Card';
-import { Input } from '../../components/ui/Input';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNavigation } from '@react-navigation/native';
+import {
+  Calendar,
+  Clock,
+  Users,
+  Award,
+  CheckCircle,
+  AlertCircle,
+  Eye,
+  Edit3,
+  MapPin,
+  BookOpen,
+  FileText,
+  GraduationCap
+} from 'lucide-react-native';
 
-interface ExamGroup {
+interface Exam {
   id: string;
-  name: string;
-  description: string;
-  exam_type: string;
-  start_date: string;
-  end_date: string;
-  is_published: boolean;
-}
-
-interface ExamPaper {
-  id: string;
+  exam_name: string;
   subject: string;
   section: string;
-  exam_date: string;
-  exam_time: string;
-  duration_minutes: number;
-  max_marks: number;
-  venue: string;
-  exam_groups: {
-    name: string;
-    exam_type: string;
-  };
-}
-
-interface Section {
-  id: string;
   grade: number;
-  section: string;
+  date: string;
+  start_time: string;
+  duration_minutes: number;
+  venue: string;
+  status: 'scheduled' | 'ongoing' | 'completed' | 'cancelled';
+  max_marks: number;
+  instructions?: string;
+  marks_entered: boolean;
+  total_students: number;
+  marks_completed: number;
+  created_at: string;
 }
 
 const TeacherExamsScreen: React.FC = () => {
-  const [selectedExamGroup, setSelectedExamGroup] = useState<string>('');
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showMarksModal, setShowMarksModal] = useState(false);
-  const [selectedPaper, setSelectedPaper] = useState<ExamPaper | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'papers' | 'marks'>('papers');
-  const [searchQuery, setSearchQuery] = useState('');
-
+  const { user } = useAuth();
+  const navigation = useNavigation();
   const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'scheduled' | 'ongoing' | 'completed'>('all');
 
-  // Fetch exam groups
-  const { data: examGroups = [], isLoading: examGroupsLoading } = useQuery({
-    queryKey: ['exam-groups'],
-    queryFn: async () => {
-      const { data: profile } = await supabase.auth.getUser();
-      if (!profile.user) throw new Error('Not authenticated');
+  // Helper function to determine exam status
+  const getExamStatus = (exam: any): 'scheduled' | 'ongoing' | 'completed' | 'cancelled' => {
+    const now = new Date();
+    const examDate = new Date(exam.exam_date);
+    const examTime = new Date(`${exam.exam_date}T${exam.exam_time}`);
+    const examEndTime = new Date(examTime.getTime() + (exam.duration_minutes * 60000));
 
-      const { data, error } = await supabase
-        .from('exam_groups')
-        .select('*')
-        .eq('school_id', profile.user.user_metadata.school_id)
-        .eq('is_published', true)
-        .order('created_at', { ascending: false });
+    if (now < examTime) return 'scheduled';
+    if (now >= examTime && now <= examEndTime) return 'ongoing';
+    if (now > examEndTime) return 'completed';
+    
+    return 'scheduled';
+  };
 
-      if (error) throw error;
-      return data as ExamGroup[];
-    }
-  });
+  // Fetch exams for this teacher
+  const { data: exams = [], isLoading, refetch } = useQuery({
+    queryKey: ['teacher-exams', user?.id],
+    queryFn: async (): Promise<Exam[]> => {
+      if (!user?.id) return [];
 
-  // Fetch exam papers for teacher
-  const { data: examPapers = [], isLoading: examPapersLoading } = useQuery({
-    queryKey: ['teacher-exam-papers'],
-    queryFn: async () => {
-      const { data: profile } = await supabase.auth.getUser();
-      if (!profile.user) throw new Error('Not authenticated');
-
-      const { data, error } = await supabase
+      const { data: examData, error } = await supabase
         .from('exam_papers')
         .select(`
-          *,
-          exam_groups(name, exam_type),
-          teachers!inner(user_id)
+          id,
+          subject,
+          section,
+          exam_date,
+          exam_time,
+          duration_minutes,
+          venue,
+          max_marks,
+          instructions,
+          created_at,
+          teacher_id,
+          school_id,
+          exam_groups(
+            name,
+            exam_type,
+            start_date,
+            end_date,
+            is_published
+          ),
+          teachers!inner(
+            user_id
+          )
         `)
-        .eq('teachers.user_id', profile.user.id)
+        .eq('school_id', user.school_id)
+        .eq('teachers.user_id', user.id)
         .order('exam_date', { ascending: true });
 
       if (error) throw error;
-      return data as ExamPaper[];
-    }
+
+      // Get marks statistics for each exam
+      const examsWithMarks = await Promise.all(
+        (examData || []).map(async (exam: any) => {
+          // Get total students and marks completion
+          const { data: marksData } = await supabase
+            .from('marks')
+            .select(`
+              id,
+              marks_obtained,
+              is_absent,
+              student_id
+            `)
+            .eq('exam_paper_id', exam.id);
+
+          const totalStudents = marksData?.length || 0;
+          const marksCompleted = marksData?.filter(mark => 
+            mark.marks_obtained !== null || mark.is_absent
+          ).length || 0;
+
+          const status = getExamStatus(exam);
+          
+          // Parse grade and section from the section text field
+          const sectionText = exam.section || '';
+          const gradeMatch = sectionText.match(/(\d+)/);
+          const grade = gradeMatch ? parseInt(gradeMatch[1]) : 0;
+
+          return {
+            id: exam.id,
+            exam_name: exam.exam_groups?.name || `${exam.subject} Exam`,
+            subject: exam.subject,
+            section: sectionText,
+            grade: grade,
+            date: exam.exam_date,
+            start_time: exam.exam_time,
+            duration_minutes: exam.duration_minutes,
+            venue: exam.venue || 'TBA',
+            status,
+            max_marks: exam.max_marks,
+            instructions: exam.instructions,
+            marks_entered: totalStudents > 0,
+            total_students: totalStudents,
+            marks_completed: marksCompleted,
+            created_at: exam.created_at
+          };
+        })
+      );
+
+      return examsWithMarks as Exam[];
+    },
+    enabled: !!user?.id,
   });
 
-     // Fetch teacher sections
-   const { data: sections = [] } = useQuery({
-     queryKey: ['teacher-sections'],
-     queryFn: async () => {
-       const { data: profile } = await supabase.auth.getUser();
-       if (!profile.user) throw new Error('Not authenticated');
-
-       const { data, error } = await supabase
-         .from('teacher_sections')
-         .select(`
-           sections(id, grade, section)
-         `)
-         .eq('teacher_id', profile.user.id);
-
-       if (error) throw error;
-       return data
-         .map((ts: any) => ts.sections)
-         .filter((section: any) => section !== null && section !== undefined) as Section[];
-     }
-   });
-
-  const filteredExamPapers = examPapers.filter(paper => {
-    const matchesSearch = paper.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         paper.section.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesGroup = !selectedExamGroup || paper.exam_groups?.name === selectedExamGroup;
-    return matchesSearch && matchesGroup;
-  });
-
-  const getExamStatus = (examDate: string, examTime: string) => {
-    const now = new Date();
-    const examDateTime = new Date(`${examDate}T${examTime}`);
-    
-    if (examDateTime > now) return 'upcoming';
-    if (examDateTime < now) return 'completed';
-    return 'ongoing';
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
   };
+
+  const filteredExams = exams.filter(exam => {
+    if (statusFilter === 'all') return true;
+    return exam.status === statusFilter;
+  });
+
+  const getExamStats = () => {
+    const total = exams.length;
+    const scheduled = exams.filter(e => e.status === 'scheduled').length;
+    const completed = exams.filter(e => e.status === 'completed').length;
+    const ongoing = exams.filter(e => e.status === 'ongoing').length;
+
+    return { total, scheduled, completed, ongoing };
+  };
+
+  const stats = getExamStats();
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'upcoming': return '#3B82F6';
-      case 'ongoing': return '#10B981';
-      case 'completed': return '#6B7280';
-      default: return '#F59E0B';
+      case 'scheduled': return '#3b82f6';
+      case 'ongoing': return '#10b981';
+      case 'completed': return '#6b7280';
+      case 'cancelled': return '#ef4444';
+      default: return '#6b7280';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'scheduled': return Calendar;
+      case 'ongoing': return Clock;
+      case 'completed': return CheckCircle;
+      case 'cancelled': return AlertCircle;
+      default: return Calendar;
     }
   };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'short',
+      year: 'numeric',
       month: 'short',
       day: 'numeric'
     });
   };
 
   const formatTime = (timeString: string) => {
-    if (!timeString) return 'Not scheduled';
     return new Date(`2000-01-01T${timeString}`).toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
@@ -164,390 +216,512 @@ const TeacherExamsScreen: React.FC = () => {
     });
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ['exam-groups'] });
-    await queryClient.invalidateQueries({ queryKey: ['teacher-exam-papers'] });
-    setRefreshing(false);
+  const handleEnterMarks = (exam: Exam) => {
+    // Navigate to marks entry screen
+    (navigation as any).navigate('AcademicsTab', { 
+      screen: 'Marks',
+      params: { examId: exam.id, examDetails: exam }
+    });
   };
 
-  const renderExamPaper = ({ item }: { item: ExamPaper }) => {
-    const status = getExamStatus(item.exam_date, item.exam_time);
-    const statusColor = getStatusColor(status);
-
-    return (
-      <Card style={styles.examPaperCard}>
-        <View style={styles.examPaperHeader}>
-          <View style={styles.examPaperInfo}>
-            <Text style={styles.examSubject}>{item.subject}</Text>
-            <Text style={styles.examSection}>Grade {item.section}</Text>
-            <Text style={styles.examGroup}>{item.exam_groups?.name}</Text>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.statusText}>{status.charAt(0).toUpperCase() + status.slice(1)}</Text>
-          </View>
-        </View>
-
-        <View style={styles.examDetails}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Date:</Text>
-            <Text style={styles.detailValue}>{formatDate(item.exam_date)}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Time:</Text>
-            <Text style={styles.detailValue}>{formatTime(item.exam_time)}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Duration:</Text>
-            <Text style={styles.detailValue}>{item.duration_minutes} minutes</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Max Marks:</Text>
-            <Text style={styles.detailValue}>{item.max_marks}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Venue:</Text>
-            <Text style={styles.detailValue}>{item.venue || 'TBA'}</Text>
-          </View>
-        </View>
-
-        {status === 'completed' && (
-          <Button
-            title="Enter Marks"
-            onPress={() => {
-              setSelectedPaper(item);
-              setShowMarksModal(true);
-            }}
-            style={styles.enterMarksButton}
-          />
-        )}
-      </Card>
+  const handleViewDetails = (exam: Exam) => {
+    Alert.alert(
+      'Exam Details',
+      `Subject: ${exam.subject}\nSection: Grade ${exam.grade} ${exam.section}\nDate: ${formatDate(exam.date)}\nTime: ${formatTime(exam.start_time)}\nDuration: ${exam.duration_minutes} mins\nVenue: ${exam.venue}\nMax Marks: ${exam.max_marks}${exam.instructions ? `\n\nInstructions: ${exam.instructions}` : ''}`,
+      [{ text: 'OK' }]
     );
   };
 
-  const renderExamGroupFilter = () => (
-    <View style={styles.filterContainer}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <TouchableOpacity
-          style={[styles.filterChip, !selectedExamGroup && styles.filterChipActive]}
-          onPress={() => setSelectedExamGroup('')}
-        >
-          <Text style={[styles.filterChipText, !selectedExamGroup && styles.filterChipTextActive]}>
-            All Groups
-          </Text>
-        </TouchableOpacity>
-        {examGroups.map((group) => (
-          <TouchableOpacity
-            key={group.id}
-            style={[styles.filterChip, selectedExamGroup === group.name && styles.filterChipActive]}
-            onPress={() => setSelectedExamGroup(group.name)}
-          >
-            <Text style={[styles.filterChipText, selectedExamGroup === group.name && styles.filterChipTextActive]}>
-              {group.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+  const renderStatsCards = () => (
+    <View style={styles.statsContainer}>
+      <View style={styles.statCard}>
+        <View style={[styles.statIcon, { backgroundColor: '#3b82f6' + '15' }]}>
+          <FileText size={20} color="#3b82f6" />
+        </View>
+        <Text style={styles.statNumber}>{stats.total}</Text>
+        <Text style={styles.statLabel}>Total Exams</Text>
+      </View>
+      
+      <View style={styles.statCard}>
+        <View style={[styles.statIcon, { backgroundColor: '#f59e0b' + '15' }]}>
+          <Calendar size={20} color="#f59e0b" />
+        </View>
+        <Text style={styles.statNumber}>{stats.scheduled}</Text>
+        <Text style={styles.statLabel}>Scheduled</Text>
+      </View>
+      
+      <View style={styles.statCard}>
+        <View style={[styles.statIcon, { backgroundColor: '#10b981' + '15' }]}>
+          <Clock size={20} color="#10b981" />
+        </View>
+        <Text style={styles.statNumber}>{stats.ongoing}</Text>
+        <Text style={styles.statLabel}>Ongoing</Text>
+      </View>
+      
+      <View style={styles.statCard}>
+        <View style={[styles.statIcon, { backgroundColor: '#6b7280' + '15' }]}>
+          <CheckCircle size={20} color="#6b7280" />
+        </View>
+        <Text style={styles.statNumber}>{stats.completed}</Text>
+        <Text style={styles.statLabel}>Completed</Text>
+      </View>
     </View>
   );
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Exam Management</Text>
-        <Text style={styles.headerSubtitle}>View exam schedules and enter marks</Text>
-      </View>
-
-      {/* Tab Navigation */}
-      <View style={styles.tabContainer}>
+  const renderFilterButtons = () => (
+    <View style={styles.filterContainer}>
+      {(['all', 'scheduled', 'ongoing', 'completed'] as const).map((filter) => (
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'papers' && styles.activeTab]}
-          onPress={() => setActiveTab('papers')}
+          key={filter}
+          style={[
+            styles.filterButton,
+            statusFilter === filter && styles.activeFilter
+          ]}
+          onPress={() => setStatusFilter(filter)}
         >
-          <Text style={[styles.tabText, activeTab === 'papers' && styles.activeTabText]}>
-            Exam Papers
+          <Text style={[
+            styles.filterText,
+            statusFilter === filter && styles.activeFilterText
+          ]}>
+            {filter === 'all' ? 'All Status' : filter.charAt(0).toUpperCase() + filter.slice(1)}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'marks' && styles.activeTab]}
-          onPress={() => setActiveTab('marks')}
-        >
-          <Text style={[styles.tabText, activeTab === 'marks' && styles.activeTabText]}>
-            Marks Entry
-          </Text>
-        </TouchableOpacity>
-      </View>
+      ))}
+    </View>
+  );
 
-      <View style={styles.content}>
-        {/* Search */}
-        <Input
-          placeholder="Search by subject or section..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          style={styles.searchInput}
-        />
-
-        {/* Exam Group Filter */}
-        {renderExamGroupFilter()}
-
-        {/* Exam Papers List */}
-        <FlatList
-          data={filteredExamPapers}
-          renderItem={renderExamPaper}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No exam papers found</Text>
-              <Text style={styles.emptySubtext}>
-                {searchQuery ? 'Try adjusting your search criteria' : 'Exam papers will appear here when scheduled'}
+  const renderExamCard = (exam: Exam) => {
+    const StatusIcon = getStatusIcon(exam.status);
+    const statusColor = getStatusColor(exam.status);
+    const marksProgress = exam.total_students > 0 ? (exam.marks_completed / exam.total_students) * 100 : 0;
+    
+    return (
+      <View key={exam.id} style={styles.examCard}>
+        {/* Header */}
+        <View style={styles.examHeader}>
+          <View style={styles.examTitleContainer}>
+            <Text style={styles.examTitle}>{exam.exam_name}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
+              <StatusIcon size={14} color={statusColor} />
+              <Text style={[styles.statusText, { color: statusColor }]}>
+                {exam.status.toUpperCase()}
               </Text>
             </View>
-          }
-        />
-      </View>
-
-      {/* Marks Entry Modal */}
-      <Modal
-        visible={showMarksModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Enter Marks</Text>
-            <TouchableOpacity onPress={() => setShowMarksModal(false)}>
-              <Text style={styles.modalCloseButton}>Close</Text>
-            </TouchableOpacity>
           </View>
-          
-          {selectedPaper && (
-            <View style={styles.modalContent}>
-              <Card style={styles.examInfoCard}>
-                <Text style={styles.examInfoTitle}>{selectedPaper.subject}</Text>
-                <Text style={styles.examInfoDetails}>
-                  Grade {selectedPaper.section} • {formatDate(selectedPaper.exam_date)}
-                </Text>
-                <Text style={styles.examInfoDetails}>
-                  Max Marks: {selectedPaper.max_marks}
-                </Text>
-              </Card>
+        </View>
 
-              <Text style={styles.marksNote}>
-                Marks entry functionality will be implemented in the next phase. 
-                This would include student list, marks input, and validation.
+        {/* Subject and Section */}
+        <View style={styles.examSubInfo}>
+          <View style={styles.infoRow}>
+            <BookOpen size={16} color="#6b7280" />
+            <Text style={styles.infoText}>
+              {exam.subject} • Grade {exam.grade} {exam.section}
+            </Text>
+          </View>
+        </View>
+
+        {/* Details Grid */}
+        <View style={styles.examDetails}>
+          <View style={styles.detailRow}>
+            <Calendar size={16} color="#6b7280" />
+            <Text style={styles.detailText}>{formatDate(exam.date)}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Clock size={16} color="#6b7280" />
+            <Text style={styles.detailText}>
+              {formatTime(exam.start_time)} ({exam.duration_minutes} mins)
+            </Text>
+          </View>
+          <View style={styles.detailRow}>
+            <MapPin size={16} color="#6b7280" />
+            <Text style={styles.detailText}>{exam.venue}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Award size={16} color="#6b7280" />
+            <Text style={styles.detailText}>{exam.max_marks} marks</Text>
+          </View>
+        </View>
+
+        {/* Marks Entry Status */}
+        {exam.status === 'completed' && (
+          <View style={styles.marksStatus}>
+            <View style={styles.marksProgress}>
+              <Text style={styles.marksProgressLabel}>
+                Marks Entry Progress
               </Text>
+              {exam.marks_entered ? (
+                <View style={styles.progressInfo}>
+                  <Text style={styles.progressText}>
+                    {exam.marks_completed}/{exam.total_students} students
+                  </Text>
+                  <View style={styles.progressBar}>
+                    <View 
+                      style={[
+                        styles.progressFill, 
+                        { 
+                          width: `${marksProgress}%`,
+                          backgroundColor: marksProgress === 100 ? '#10b981' : '#f59e0b'
+                        }
+                      ]} 
+                    />
+                  </View>
+                  <Text style={[
+                    styles.progressPercentage,
+                    { color: marksProgress === 100 ? '#10b981' : '#f59e0b' }
+                  ]}>
+                    {Math.round(marksProgress)}%
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.noMarksText}>No marks entered yet</Text>
+              )}
             </View>
+          </View>
+        )}
+
+        {/* Action Buttons */}
+        <View style={styles.examActions}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleViewDetails(exam)}
+          >
+            <Eye size={16} color="#6b7280" />
+            <Text style={styles.actionText}>View Details</Text>
+          </TouchableOpacity>
+
+          {exam.status === 'completed' && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.primaryAction]}
+              onPress={() => handleEnterMarks(exam)}
+            >
+              <Edit3 size={16} color="#fff" />
+              <Text style={[styles.actionText, styles.primaryActionText]}>
+                {exam.marks_entered ? 'Update Marks' : 'Enter Marks'}
+              </Text>
+            </TouchableOpacity>
           )}
-        </SafeAreaView>
-      </Modal>
-    </SafeAreaView>
+        </View>
+
+        {/* Completion Status Badge */}
+        {exam.status === 'completed' && exam.marks_entered && marksProgress === 100 && (
+          <View style={styles.completionBadge}>
+            <CheckCircle size={16} color="#10b981" />
+            <Text style={styles.completionText}>Marks Entry Complete</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading exams...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Exam Management</Text>
+      </View>
+
+      <ScrollView
+        style={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {/* Stats Cards */}
+        {renderStatsCards()}
+
+        {/* Filter Buttons */}
+        {renderFilterButtons()}
+
+        {/* Exams List */}
+        {filteredExams.length > 0 ? (
+          <View style={styles.examsList}>
+            {filteredExams.map(renderExamCard)}
+          </View>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <GraduationCap size={48} color="#9ca3af" />
+            <Text style={styles.emptyText}>
+              {statusFilter === 'all' ? 'No Exams Found' : `No ${statusFilter} Exams`}
+            </Text>
+            <Text style={styles.emptySubtext}>
+              {statusFilter === 'all' 
+                ? 'No exams are scheduled for your sections yet.'
+                : `There are no ${statusFilter} exams for your sections.`
+              }
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#f9fafb',
   },
   header: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#e5e7eb',
   },
-  headerTitle: {
+  title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1E293B',
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#64748B',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  activeTab: {
-    borderBottomColor: '#3B82F6',
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#64748B',
-  },
-  activeTabText: {
-    color: '#3B82F6',
+    color: '#111827',
   },
   content: {
     flex: 1,
-    padding: 20,
   },
-  searchInput: {
-    marginBottom: 16,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  statIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
   },
   filterContainer: {
-    marginBottom: 16,
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 8,
   },
-  filterChip: {
+  filterButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    marginRight: 8,
-    backgroundColor: '#F1F5F9',
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: '#f3f4f6',
   },
-  filterChipActive: {
-    backgroundColor: '#3B82F6',
-    borderColor: '#3B82F6',
+  activeFilter: {
+    backgroundColor: '#3b82f6',
   },
-  filterChipText: {
+  filterText: {
     fontSize: 14,
-    color: '#64748B',
     fontWeight: '500',
+    color: '#6b7280',
   },
-  filterChipTextActive: {
-    color: '#FFFFFF',
+  activeFilterText: {
+    color: '#fff',
   },
-  examPaperCard: {
+  examsList: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  examCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  examPaperHeader: {
+  examHeader: {
+    marginBottom: 12,
+  },
+  examTitleContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
   },
-  examPaperInfo: {
-    flex: 1,
-  },
-  examSubject: {
+  examTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1E293B',
-    marginBottom: 4,
-  },
-  examSection: {
-    fontSize: 14,
-    color: '#64748B',
-    marginBottom: 2,
-  },
-  examGroup: {
-    fontSize: 12,
-    color: '#6366F1',
-    fontWeight: '500',
+    color: '#111827',
+    flex: 1,
+    marginRight: 12,
   },
   statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    gap: 4,
   },
   statusText: {
     fontSize: 12,
-    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  examSubInfo: {
+    marginBottom: 12,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#6b7280',
     fontWeight: '500',
   },
   examDetails: {
     marginBottom: 16,
+    gap: 8,
   },
   detailRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    alignItems: 'center',
+    gap: 8,
   },
-  detailLabel: {
+  detailText: {
     fontSize: 14,
-    color: '#64748B',
+    color: '#374151',
+  },
+  marksStatus: {
+    marginBottom: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  marksProgress: {
+    gap: 8,
+  },
+  marksProgressLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  progressInfo: {
+    gap: 6,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  progressBar: {
+    height: 6,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  progressPercentage: {
+    fontSize: 12,
+    fontWeight: '600',
+    alignSelf: 'flex-end',
+  },
+  noMarksText: {
+    fontSize: 12,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+  },
+  examActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    gap: 4,
+  },
+  primaryAction: {
+    backgroundColor: '#3b82f6',
+  },
+  actionText: {
+    fontSize: 14,
     fontWeight: '500',
+    color: '#6b7280',
   },
-  detailValue: {
-    fontSize: 14,
-    color: '#1E293B',
+  primaryActionText: {
+    color: '#fff',
   },
-  enterMarksButton: {
-    backgroundColor: '#10B981',
+  completionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#10b981' + '15',
+    marginTop: 12,
+    gap: 4,
+  },
+  completionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10b981',
   },
   emptyContainer: {
-    alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
     paddingVertical: 40,
+    paddingHorizontal: 20,
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: '500',
-    color: '#64748B',
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 16,
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#6b7280',
     textAlign: 'center',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1E293B',
-  },
-  modalCloseButton: {
-    fontSize: 16,
-    color: '#3B82F6',
-    fontWeight: '500',
-  },
-  modalContent: {
-    flex: 1,
-    padding: 20,
-  },
-  examInfoCard: {
-    marginBottom: 20,
-  },
-  examInfoTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1E293B',
-    marginBottom: 8,
-  },
-  examInfoDetails: {
-    fontSize: 14,
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  marksNote: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontStyle: 'italic',
-    textAlign: 'center',
-    paddingHorizontal: 20,
+    lineHeight: 20,
   },
 });
 

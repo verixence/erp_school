@@ -7,6 +7,7 @@ import { supabase } from '../../services/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { ParentQuickActions } from '../../components/dashboard/ParentQuickActions';
 import { 
   Users, 
   BookOpen, 
@@ -497,6 +498,9 @@ export const ParentDashboardScreen: React.FC = () => {
             </View>
           </View>
         </View>
+
+        {/* Quick Actions Grid */}
+        <ParentQuickActions />
 
         {/* Current Child Info Enhanced */}
         {currentChild && (

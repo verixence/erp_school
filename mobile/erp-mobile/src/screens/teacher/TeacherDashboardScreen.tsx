@@ -7,6 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { StatusBar } from 'expo-status-bar';
+import { TeacherQuickActions } from '../../components/dashboard/TeacherQuickActions';
 import { 
   Users, 
   BookOpen, 
@@ -132,7 +133,12 @@ export const TeacherDashboardScreen: React.FC = () => {
   const { data: examPapers = [], isLoading: examsLoading } = useQuery({
     queryKey: ['teacher-exam-papers', user?.id],
     queryFn: async (): Promise<ExamPaper[]> => {
-      if (!user?.id) return [];
+      if (!user?.id) {
+        console.log('❌ Dashboard: No user ID for exam papers query');
+        return [];
+      }
+
+      console.log('🔍 Dashboard: Fetching exam papers for teacher:', user.id);
 
       const { data, error } = await supabase
         .from('exam_papers')
@@ -143,13 +149,22 @@ export const TeacherDashboardScreen: React.FC = () => {
           exam_time,
           duration_minutes,
           max_marks,
-          teachers!inner(user_id)
+          teachers!inner(
+            user_id
+          )
         `)
         .eq('school_id', user.school_id)
         .eq('teachers.user_id', user.id)
         .order('exam_date', { ascending: true });
 
-      if (error) throw error;
+      console.log('📊 Dashboard: Exam papers query result:', { data, error });
+
+      if (error) {
+        console.error('❌ Dashboard: Exam papers query error:', error);
+        throw error;
+      }
+      
+      console.log('✅ Dashboard: Fetched exam papers:', data?.length || 0, 'papers');
       return data || [];
     },
     enabled: !!user?.id,
@@ -161,8 +176,16 @@ export const TeacherDashboardScreen: React.FC = () => {
   ).length;
 
   const pendingMarksPapers = examPapers.filter(paper => {
-    return paper.exam_date && new Date(paper.exam_date) <= new Date();
+    const isPastExam = paper.exam_date && new Date(paper.exam_date) <= new Date();
+    return isPastExam;
   }).slice(0, 5);
+
+  console.log('📊 Dashboard: Pending marks calculation:', {
+    totalExamPapers: examPapers.length,
+    completedExams,
+    pendingMarksPapers: pendingMarksPapers.length,
+    pendingPapers: pendingMarksPapers.map(p => ({ id: p.id, subject: p.subject, date: p.exam_date }))
+  });
 
   const stats: TeacherStats = {
     totalStudents,
@@ -455,6 +478,9 @@ export const TeacherDashboardScreen: React.FC = () => {
           </View>
         </View>
 
+        {/* Quick Actions Grid */}
+        <TeacherQuickActions />
+
         {/* Assigned Sections */}
         {teacherSections.length > 0 && (
           <View style={{ marginBottom: 32 }}>
@@ -654,7 +680,26 @@ export const TeacherDashboardScreen: React.FC = () => {
                           paddingVertical: 8,
                           borderRadius: 8
                         }}
-                        onPress={() => console.log('Enter marks for', paper.id)}
+                        onPress={() => {
+                          console.log('🔍 Dashboard: Navigate to Enter Marks for exam:', paper.id);
+                          (navigation as any).navigate('AcademicsTab', { 
+                            screen: 'Marks',
+                            params: { 
+                              examId: paper.id, 
+                              examDetails: {
+                                id: paper.id,
+                                exam_name: `${paper.subject} Exam`,
+                                subject: paper.subject,
+                                date: paper.exam_date,
+                                max_marks: paper.max_marks,
+                                grade: 0, // Will be filled by the marks screen
+                                section: '', // Will be filled by the marks screen
+                                start_time: paper.exam_time || '',
+                                venue: 'TBA'
+                              }
+                            }
+                          });
+                        }}
                       >
                         <Text style={{ fontSize: 12, color: 'white', fontWeight: '600' }}>
                           Enter Marks

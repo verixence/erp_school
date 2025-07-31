@@ -1,548 +1,489 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-  SafeAreaView,
-  Modal
+import { 
+  View, 
+  Text, 
+  ScrollView, 
+  SafeAreaView, 
+  RefreshControl, 
+  TouchableOpacity
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
-import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent } from '../../components/ui/Card';
-import {
-  Calendar,
-  Clock,
-  MapPin,
+import { Card, CardContent, CardHeader } from '../../components/ui/Card';
+import { 
+  Calendar, 
+  Clock, 
+  MapPin, 
+  Users,
+  BookOpen,
+  Award,
+  AlertCircle,
+  Calendar as CalendarIcon,
   Filter,
   ChevronLeft,
-  ChevronRight,
-  BookOpen,
-  GraduationCap,
-  Users,
-  Trophy,
-  Music,
-  Zap,
-  User,
-  ChevronDown
+  ChevronRight
 } from 'lucide-react-native';
 
 interface CalendarEvent {
   id: string;
   title: string;
-  description: string | null;
-  event_date: string;
-  start_time: string | null;
-  end_time: string | null;
-  event_type: string;
-  location: string | null;
-  color: string;
-  is_published: boolean;
+  description?: string;
+  event_type: 'exam' | 'holiday' | 'event' | 'meeting' | 'announcement';
+  start_date: string;
+  end_date?: string;
+  start_time?: string;
+  end_time?: string;
+  location?: string;
+  is_all_day: boolean;
+  color?: string;
 }
 
-interface Child {
-  id: string;
-  full_name: string;
-  grade: number;
-  section: string;
-  school_id: string;
-}
-
-const EVENT_TYPES = [
-  { value: 'all', label: 'All Events', color: '#6B7280', icon: Calendar },
-  { value: 'holiday', label: 'Holiday', color: '#EF4444', icon: Calendar },
-  { value: 'exam', label: 'Exam', color: '#DC2626', icon: GraduationCap },
-  { value: 'ptm', label: 'Parent-Teacher Meeting', color: '#7C3AED', icon: Users },
-  { value: 'activity', label: 'Activity', color: '#059669', icon: Zap },
-  { value: 'assembly', label: 'Assembly', color: '#2563EB', icon: Users },
-  { value: 'sports', label: 'Sports', color: '#EA580C', icon: Trophy },
-  { value: 'cultural', label: 'Cultural', color: '#DB2777', icon: Music },
-  { value: 'academic', label: 'Academic', color: '#0D9488', icon: BookOpen },
-  { value: 'other', label: 'Other', color: '#6B7280', icon: Calendar }
-];
-
-export const ParentCalendarScreen = () => {
+export const ParentCalendarScreen: React.FC = () => {
   const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedType, setSelectedType] = useState('all');
-  const [selectedChild, setSelectedChild] = useState<string>('all');
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [showChildModal, setShowChildModal] = useState(false);
-
-  // Get current month and year
-  const currentMonth = currentDate.getMonth();
-  const currentYear = currentDate.getFullYear();
-
-  // Fetch parent's children
-  const { data: children = [] } = useQuery({
-    queryKey: ['parent-children', user?.id],
-    queryFn: async (): Promise<Child[]> => {
-      if (!user?.id) return [];
-
-      const { data: studentParents, error: spError } = await supabase
-        .from('student_parents')
-        .select('student_id')
-        .eq('parent_id', user.id);
-
-      if (spError || !studentParents?.length) return [];
-
-      const studentIds = studentParents.map(sp => sp.student_id);
-      const { data, error } = await supabase
-        .from('students')
-        .select('id, full_name, grade, section, school_id')
-        .in('id', studentIds);
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!user?.id,
-  });
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<'month' | 'list'>('month');
+  const [selectedEventType, setSelectedEventType] = useState<string>('all');
 
   // Fetch calendar events
-  const { data: events = [], isLoading, refetch } = useQuery({
-    queryKey: ['parent-calendar-events', user?.school_id, currentMonth, currentYear, selectedType, selectedChild],
+  const { data: events = [], isLoading: eventsLoading, refetch: refetchEvents } = useQuery({
+    queryKey: ['calendar-events', user?.school_id, selectedDate],
     queryFn: async (): Promise<CalendarEvent[]> => {
       if (!user?.school_id) return [];
 
-      // Get events for current month
-      const startDate = new Date(currentYear, currentMonth, 1);
-      const endDate = new Date(currentYear, currentMonth + 1, 0);
+      // Get the start and end of the month for the selected date
+      const startOfMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+      const endOfMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0);
 
-      let query = supabase
-        .from('academic_calendar_events')
-        .select('*')
+      const { data, error } = await supabase
+        .from('calendar_events')
+        .select(`
+          id,
+          title,
+          description,
+          event_type,
+          start_date,
+          end_date,
+          start_time,
+          end_time,
+          location,
+          is_all_day,
+          color
+        `)
         .eq('school_id', user.school_id)
-        .eq('is_published', true)
-        .gte('event_date', startDate.toISOString().split('T')[0])
-        .lte('event_date', endDate.toISOString().split('T')[0])
-        .order('event_date', { ascending: true });
+        .gte('start_date', startOfMonth.toISOString().split('T')[0])
+        .lte('start_date', endOfMonth.toISOString().split('T')[0])
+        .order('start_date', { ascending: true });
 
-      if (selectedType !== 'all') {
-        query = query.eq('event_type', selectedType);
-      }
+      if (error) throw error;
 
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('Error fetching calendar events:', error);
-        throw error;
-      }
       return data || [];
     },
     enabled: !!user?.school_id,
-    staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
   });
 
-  const handleRefresh = async () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    await refetch();
+    await refetchEvents();
     setRefreshing(false);
   };
 
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentDate);
-    if (direction === 'prev') {
-      newDate.setMonth(currentMonth - 1);
-    } else {
-      newDate.setMonth(currentMonth + 1);
-    }
-    setCurrentDate(newDate);
-  };
-
-  const getSelectedChildName = () => {
-    if (selectedChild === 'all') return 'All Children';
-    const child = children.find(c => c.id === selectedChild);
-    return child?.full_name || 'Select Child';
-  };
+  const filteredEvents = events.filter(event => {
+    if (selectedEventType === 'all') return true;
+    return event.event_type === selectedEventType;
+  });
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
+      weekday: 'short',
+      month: 'short',
       day: 'numeric'
     });
   };
 
   const formatTime = (timeString: string) => {
-    return new Date(`2000-01-01T${timeString}`).toLocaleTimeString('en-US', {
+    return new Date('2000-01-01 ' + timeString).toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true
     });
   };
 
-  const getEventTypeInfo = (type: string) => {
-    return EVENT_TYPES.find(t => t.value === type) || EVENT_TYPES[0];
-  };
-
-  const getMonthName = (date: Date) => {
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  };
-
-  // Group events by date
-  const groupedEvents = events.reduce((acc, event) => {
-    const date = event.event_date;
-    if (!acc[date]) {
-      acc[date] = [];
+  const getEventTypeColor = (eventType: string) => {
+    switch (eventType) {
+      case 'exam': return '#ef4444';
+      case 'holiday': return '#10b981';
+      case 'event': return '#3b82f6';
+      case 'meeting': return '#f59e0b';
+      case 'announcement': return '#8b5cf6';
+      default: return '#6b7280';
     }
-    acc[date].push(event);
-    return acc;
-  }, {} as Record<string, CalendarEvent[]>);
+  };
 
-  if (isLoading) {
+  const getEventTypeIcon = (eventType: string) => {
+    switch (eventType) {
+      case 'exam': return BookOpen;
+      case 'holiday': return CalendarIcon;
+      case 'event': return Users;
+      case 'meeting': return Users;
+      case 'announcement': return AlertCircle;
+      default: return Calendar;
+    }
+  };
+
+  const getEventTypeLabel = (eventType: string) => {
+    switch (eventType) {
+      case 'exam': return 'Exam';
+      case 'holiday': return 'Holiday';
+      case 'event': return 'Event';
+      case 'meeting': return 'Meeting';
+      case 'announcement': return 'Announcement';
+      default: return eventType;
+    }
+  };
+
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+
+    const days = [];
+    
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null);
+    }
+    
+    // Add days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayDate = new Date(year, month, day);
+      const dayEvents = events.filter(event => {
+        const eventDate = new Date(event.start_date);
+        return eventDate.toDateString() === dayDate.toDateString();
+      });
+      
+      days.push({
+        day,
+        date: dayDate,
+        events: dayEvents,
+        isToday: dayDate.toDateString() === new Date().toDateString()
+      });
+    }
+    
+    return days;
+  };
+
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    const newDate = new Date(selectedDate);
+    if (direction === 'prev') {
+      newDate.setMonth(newDate.getMonth() - 1);
+    } else {
+      newDate.setMonth(newDate.getMonth() + 1);
+    }
+    setSelectedDate(newDate);
+  };
+
+  const monthYear = selectedDate.toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric'
+  });
+
+  const renderCalendarView = () => {
+    const days = getDaysInMonth(selectedDate);
+    const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: '#6b7280' }}>Loading calendar...</Text>
+      <Card className="mb-4">
+        <CardContent className="p-4">
+          {/* Month Navigation */}
+          <View className="flex-row items-center justify-between mb-4">
+            <TouchableOpacity
+              onPress={() => navigateMonth('prev')}
+              className="p-2 rounded-lg bg-gray-100"
+            >
+              <ChevronLeft size={20} color="#6b7280" />
+            </TouchableOpacity>
+            
+            <Text className="text-xl font-semibold text-gray-900">
+              {monthYear}
+            </Text>
+            
+            <TouchableOpacity
+              onPress={() => navigateMonth('next')}
+              className="p-2 rounded-lg bg-gray-100"
+            >
+              <ChevronRight size={20} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Week Days Header */}
+          <View className="flex-row mb-2">
+            {weekDays.map((day, index) => (
+              <View key={index} className="flex-1 items-center py-2">
+                <Text className="text-sm font-medium text-gray-600">{day}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Calendar Grid */}
+          <View className="flex-row flex-wrap">
+            {days.map((dayData, index) => (
+              <View key={index} className="w-1/7 aspect-square p-1">
+                {dayData ? (
+                  <TouchableOpacity
+                    className={`flex-1 items-center justify-center rounded-lg ${
+                      dayData.isToday 
+                        ? 'bg-blue-600' 
+                        : dayData.events.length > 0 
+                        ? 'bg-blue-50' 
+                        : 'bg-transparent'
+                    }`}
+                  >
+                    <Text className={`text-sm font-medium ${
+                      dayData.isToday 
+                        ? 'text-white' 
+                        : dayData.events.length > 0 
+                        ? 'text-blue-600' 
+                        : 'text-gray-900'
+                    }`}>
+                      {dayData.day}
+                    </Text>
+                    {dayData.events.length > 0 && !dayData.isToday && (
+                      <View className="w-2 h-2 bg-blue-600 rounded-full mt-1" />
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <View className="flex-1" />
+                )}
+              </View>
+            ))}
+          </View>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const renderEventItem = (event: CalendarEvent) => {
+    const EventIcon = getEventTypeIcon(event.event_type);
+    const eventColor = event.color || getEventTypeColor(event.event_type);
+
+    return (
+      <Card key={event.id} className="mb-3">
+        <CardContent className="p-4">
+          <View className="flex-row items-start">
+            <View 
+              className="w-10 h-10 rounded-lg flex items-center justify-center mr-3"
+              style={{ backgroundColor: eventColor + '20' }}
+            >
+              <EventIcon size={20} color={eventColor} />
+            </View>
+            
+            <View className="flex-1">
+              <View className="flex-row items-center justify-between mb-1">
+                <Text className="text-lg font-semibold text-gray-900">
+                  {event.title}
+                </Text>
+                <View 
+                  className="px-2 py-1 rounded-full"
+                  style={{ backgroundColor: eventColor + '20' }}
+                >
+                  <Text 
+                    className="text-xs font-medium"
+                    style={{ color: eventColor }}
+                  >
+                    {getEventTypeLabel(event.event_type)}
+                  </Text>
+                </View>
+              </View>
+
+              {event.description && (
+                <Text className="text-sm text-gray-600 mb-2">
+                  {event.description}
+                </Text>
+              )}
+
+              <View className="flex-row items-center space-x-4">
+                <View className="flex-row items-center">
+                  <Calendar size={14} color="#6b7280" />
+                  <Text className="text-sm text-gray-600 ml-1">
+                    {formatDate(event.start_date)}
+                    {event.end_date && event.end_date !== event.start_date && 
+                      ` - ${formatDate(event.end_date)}`
+                    }
+                  </Text>
+                </View>
+
+                {!event.is_all_day && event.start_time && (
+                  <View className="flex-row items-center">
+                    <Clock size={14} color="#6b7280" />
+                    <Text className="text-sm text-gray-600 ml-1">
+                      {formatTime(event.start_time)}
+                      {event.end_time && ` - ${formatTime(event.end_time)}`}
+                    </Text>
+                  </View>
+                )}
+
+                {event.location && (
+                  <View className="flex-row items-center">
+                    <MapPin size={14} color="#6b7280" />
+                    <Text className="text-sm text-gray-600 ml-1">
+                      {event.location}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const renderListView = () => {
+    // Group events by date
+    const eventsByDate = filteredEvents.reduce((groups, event) => {
+      const date = event.start_date;
+      if (!groups[date]) {
+        groups[date] = [];
+      }
+      groups[date].push(event);
+      return groups;
+    }, {} as Record<string, CalendarEvent[]>);
+
+    const sortedDates = Object.keys(eventsByDate).sort();
+
+    if (sortedDates.length === 0) {
+      return (
+        <View className="flex-1 justify-center items-center py-20">
+          <Calendar size={48} color="#9ca3af" />
+          <Text className="text-gray-500 text-center mt-4">
+            No events found for the selected criteria
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <View>
+        {sortedDates.map(date => (
+          <View key={date} className="mb-6">
+            <Text className="text-lg font-semibold text-gray-900 mb-3">
+              {new Date(date).toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+              })}
+            </Text>
+            {eventsByDate[date].map(renderEventItem)}
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  if (eventsLoading) {
+    return (
+      <SafeAreaView className="flex-1 bg-gray-50">
+        <StatusBar style="dark" />
+        <View className="flex-1 justify-center items-center">
+          <Text className="text-gray-500">Loading calendar...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+    <SafeAreaView className="flex-1 bg-gray-50">
       <StatusBar style="dark" />
       
       {/* Header */}
-      <View style={{ 
-        backgroundColor: 'white', 
-        paddingHorizontal: 24, 
-        paddingTop: 16,
-        paddingBottom: 20,
-        borderBottomWidth: 1, 
-        borderBottomColor: '#e5e7eb',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3
-      }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ 
-              backgroundColor: '#0d9488', 
-              padding: 10, 
-              borderRadius: 12, 
-              marginRight: 12 
-            }}>
-              <Calendar size={24} color="white" />
-            </View>
-            <View>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111827' }}>
-                School Calendar
-              </Text>
-              <Text style={{ fontSize: 14, color: '#6b7280' }}>
-                Important dates and events
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Month Navigation */}
-        <View style={{ 
-          flexDirection: 'row', 
-          alignItems: 'center', 
-          justifyContent: 'space-between',
-          marginTop: 16
-        }}>
-          <TouchableOpacity
-            onPress={() => navigateMonth('prev')}
-            style={{
-              padding: 8,
-              borderRadius: 8,
-              backgroundColor: '#f3f4f6'
-            }}
-          >
-            <ChevronLeft size={20} color="#6b7280" />
-          </TouchableOpacity>
-
-          <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827' }}>
-            {getMonthName(currentDate)}
-          </Text>
-
-          <TouchableOpacity
-            onPress={() => navigateMonth('next')}
-            style={{
-              padding: 8,
-              borderRadius: 8,
-              backgroundColor: '#f3f4f6'
-            }}
-          >
-            <ChevronRight size={20} color="#6b7280" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Filters */}
-        <View style={{ flexDirection: 'row', marginTop: 16, gap: 12 }}>
-          {children.length > 1 && (
+      <View className="bg-white px-4 py-3 border-b border-gray-200">
+        <Text className="text-xl font-bold text-gray-900 mb-3">Academic Calendar</Text>
+        
+        {/* View Toggle */}
+        <View className="flex-row bg-gray-100 rounded-lg p-1 mb-3">
+          {[
+            { key: 'month', label: 'Month View' },
+            { key: 'list', label: 'List View' }
+          ].map((view) => (
             <TouchableOpacity
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                backgroundColor: '#f3f4f6',
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 8
-              }}
-              onPress={() => setShowChildModal(true)}
+              key={view.key}
+              onPress={() => setViewMode(view.key as any)}
+              className={`flex-1 py-2 px-3 rounded-lg ${
+                viewMode === view.key ? 'bg-white shadow-sm' : ''
+              }`}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <User size={16} color="#6b7280" />
-                <Text style={{ fontSize: 14, color: '#111827', marginLeft: 6 }}>
-                  {getSelectedChildName()}
-                </Text>
-              </View>
-              <ChevronDown size={16} color="#6b7280" />
+              <Text className={`text-center text-sm font-medium ${
+                viewMode === view.key ? 'text-gray-900' : 'text-gray-500'
+              }`}>
+                {view.label}
+              </Text>
             </TouchableOpacity>
-          )}
+          ))}
         </View>
-      </View>
 
-      {/* Event Type Filter */}
-      <View style={{ backgroundColor: 'white', paddingHorizontal: 24, paddingVertical: 16 }}>
+        {/* Event Type Filter */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            {EVENT_TYPES.slice(0, 6).map((type) => (
-              <TouchableOpacity
-                key={type.value}
-                style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderRadius: 20,
-                  backgroundColor: selectedType === type.value ? type.color : '#f3f4f6',
-                  flexDirection: 'row',
-                  alignItems: 'center'
-                }}
-                onPress={() => setSelectedType(type.value)}
-              >
-                <type.icon 
-                  size={16} 
-                  color={selectedType === type.value ? 'white' : '#6b7280'} 
-                />
-                <Text style={{
-                  marginLeft: 6,
-                  color: selectedType === type.value ? 'white' : '#6b7280',
-                  fontWeight: selectedType === type.value ? '600' : '400',
-                  fontSize: 12
-                }}>
-                  {type.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {[
+            { key: 'all', label: 'All Events', color: '#6b7280' },
+            { key: 'exam', label: 'Exams', color: '#ef4444' },
+            { key: 'holiday', label: 'Holidays', color: '#10b981' },
+            { key: 'event', label: 'Events', color: '#3b82f6' },
+            { key: 'meeting', label: 'Meetings', color: '#f59e0b' },
+            { key: 'announcement', label: 'Announcements', color: '#8b5cf6' }
+          ].map((filter) => (
+            <TouchableOpacity
+              key={filter.key}
+              onPress={() => setSelectedEventType(filter.key)}
+              className={`mr-2 px-3 py-2 rounded-lg ${
+                selectedEventType === filter.key ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
+            >
+              <Text className={`text-sm font-medium ${
+                selectedEventType === filter.key ? 'text-white' : 'text-gray-700'
+              }`}>
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
       </View>
 
-      {/* Events List */}
+      {/* Content */}
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 24 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
+        className="flex-1 px-4"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
       >
-        {Object.keys(groupedEvents).length === 0 ? (
-          <Card style={{ padding: 32, alignItems: 'center' }}>
-            <Calendar size={48} color="#6b7280" style={{ marginBottom: 16 }} />
-            <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827', marginBottom: 8 }}>
-              No Events This Month
-            </Text>
-            <Text style={{ fontSize: 14, color: '#6b7280', textAlign: 'center' }}>
-              {selectedType === 'all' 
-                ? 'No events are scheduled for this month.'
-                : `No ${selectedType} events are scheduled for this month.`
-              }
-            </Text>
-          </Card>
-        ) : (
-          <View style={{ gap: 16 }}>
-            {Object.entries(groupedEvents)
-              .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
-              .map(([date, dayEvents]) => (
-                <View key={date}>
-                  {/* Date Header */}
-                  <View style={{ 
-                    backgroundColor: '#f3f4f6',
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
-                    borderRadius: 8,
-                    marginBottom: 8
-                  }}>
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827' }}>
-                      {formatDate(date)}
-                    </Text>
-                  </View>
-
-                  {/* Events for this date */}
-                  {dayEvents.map((event) => {
-                    const typeInfo = getEventTypeInfo(event.event_type);
-                    return (
-                      <Card key={event.id} style={{ padding: 16, marginBottom: 8 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                          {/* Event Type Icon */}
-                          <View style={{
-                            backgroundColor: typeInfo.color + '20',
-                            padding: 8,
-                            borderRadius: 8,
-                            marginRight: 12
-                          }}>
-                            <typeInfo.icon size={20} color={typeInfo.color} />
-                          </View>
-
-                          {/* Event Details */}
-                          <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                              <Text style={{ 
-                                fontSize: 16, 
-                                fontWeight: '600', 
-                                color: '#111827',
-                                flex: 1
-                              }}>
-                                {event.title}
-                              </Text>
-                              <View style={{
-                                backgroundColor: typeInfo.color + '20',
-                                paddingHorizontal: 8,
-                                paddingVertical: 4,
-                                borderRadius: 12
-                              }}>
-                                <Text style={{
-                                  fontSize: 12,
-                                  color: typeInfo.color,
-                                  fontWeight: '500',
-                                  textTransform: 'capitalize'
-                                }}>
-                                  {typeInfo.label}
-                                </Text>
-                              </View>
-                            </View>
-
-                            {event.description && (
-                              <Text style={{ 
-                                fontSize: 14, 
-                                color: '#6b7280',
-                                marginBottom: 8,
-                                lineHeight: 20
-                              }}>
-                                {event.description}
-                              </Text>
-                            )}
-
-                            {/* Time and Location */}
-                            <View style={{ gap: 4 }}>
-                              {(event.start_time || event.end_time) && (
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                  <Clock size={14} color="#6b7280" />
-                                  <Text style={{ fontSize: 12, color: '#6b7280', marginLeft: 6 }}>
-                                    {event.start_time && formatTime(event.start_time)}
-                                    {event.start_time && event.end_time && ' - '}
-                                    {event.end_time && formatTime(event.end_time)}
-                                  </Text>
-                                </View>
-                              )}
-
-                              {event.location && (
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                  <MapPin size={14} color="#6b7280" />
-                                  <Text style={{ fontSize: 12, color: '#6b7280', marginLeft: 6 }}>
-                                    {event.location}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-                          </View>
-                        </View>
-                      </Card>
-                    );
-                  })}
-                </View>
-              ))}
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Child Selector Modal */}
-      {children.length > 1 && (
-        <Modal
-          visible={showChildModal}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowChildModal(false)}
-        >
-          <View style={{ 
-            flex: 1, 
-            backgroundColor: 'rgba(0,0,0,0.5)', 
-            justifyContent: 'center',
-            alignItems: 'center'
-          }}>
-            <View style={{ 
-              backgroundColor: 'white', 
-              borderRadius: 12,
-              padding: 24,
-              width: '80%',
-              maxWidth: 300
-            }}>
-              <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827', marginBottom: 16 }}>
-                Select Child
+        <View className="py-4">
+          {viewMode === 'month' ? (
+            <>
+              {renderCalendarView()}
+              <Text className="text-lg font-semibold text-gray-900 mb-3">
+                Events This Month
               </Text>
-              <TouchableOpacity
-                style={{
-                  paddingVertical: 12,
-                  paddingHorizontal: 16,
-                  borderRadius: 8,
-                  marginBottom: 8,
-                  backgroundColor: selectedChild === 'all' ? '#0d9488' + '20' : 'transparent'
-                }}
-                onPress={() => {
-                  setSelectedChild('all');
-                  setShowChildModal(false);
-                }}
-              >
-                <Text style={{ 
-                  fontSize: 16, 
-                  color: selectedChild === 'all' ? '#0d9488' : '#111827',
-                  fontWeight: selectedChild === 'all' ? '600' : '400'
-                }}>
-                  All Children
-                </Text>
-              </TouchableOpacity>
-              {children.map((child) => (
-                <TouchableOpacity
-                  key={child.id}
-                  style={{
-                    paddingVertical: 12,
-                    paddingHorizontal: 16,
-                    borderRadius: 8,
-                    marginBottom: 8,
-                    backgroundColor: selectedChild === child.id ? '#0d9488' + '20' : 'transparent'
-                  }}
-                  onPress={() => {
-                    setSelectedChild(child.id);
-                    setShowChildModal(false);
-                  }}
-                >
-                  <Text style={{ 
-                    fontSize: 16, 
-                    color: selectedChild === child.id ? '#0d9488' : '#111827',
-                    fontWeight: selectedChild === child.id ? '600' : '400'
-                  }}>
-                    {child.full_name}
+              {filteredEvents.length === 0 ? (
+                <View className="flex-1 justify-center items-center py-10">
+                  <Calendar size={48} color="#9ca3af" />
+                  <Text className="text-gray-500 text-center mt-4">
+                    No events this month
                   </Text>
-                  <Text style={{ fontSize: 12, color: '#6b7280' }}>
-                    Grade {child.grade} - {child.section}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </Modal>
-      )}
+                </View>
+              ) : (
+                filteredEvents.map(renderEventItem)
+              )}
+            </>
+          ) : (
+            renderListView()
+          )}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };

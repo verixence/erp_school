@@ -39,14 +39,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate type
-    const validTypes = ['complaint', 'feedback', 'suggestion'];
+    // Validate type and map to database-allowed types
+    const validTypes = [
+      'academic', 'behavioral', 'facilities', 'teaching', 'communication', 
+      'extracurricular', 'suggestion', 'complaint', 'other',
+      // Legacy support for original types
+      'feedback'
+    ];
     if (!validTypes.includes(type)) {
       return NextResponse.json(
         { error: `Type must be one of: ${validTypes.join(', ')}` },
         { status: 400 }
       );
     }
+
+    // Map specific types to database-allowed types
+    const getDbType = (frontendType: string) => {
+      switch (frontendType) {
+        case 'academic':
+        case 'behavioral': 
+        case 'facilities':
+        case 'teaching':
+        case 'communication':
+        case 'extracurricular':
+        case 'other':
+        case 'feedback':
+          return 'feedback';
+        case 'suggestion':
+          return 'suggestion';
+        case 'complaint':
+          return 'complaint';
+        default:
+          return 'feedback';
+      }
+    };
+    
+    const dbType = getDbType(type);
 
     // Validate subject and description length
     if (subject.length < 3 || subject.length > 255) {
@@ -118,7 +146,8 @@ export async function POST(request: NextRequest) {
       .from('feedback_box')
       .insert({
         school_id,
-        type,
+        type: dbType, // Use mapped database type
+        original_type: type, // Store original frontend type
         subject: subject.trim(),
         description: description.trim(),
         submitted_by: submitted_by || null,
@@ -146,7 +175,7 @@ export async function POST(request: NextRequest) {
       data: {
         id: submission.id,
         subject: submission.subject,
-        type: submission.type,
+        type: type, // Return original type for frontend
         submitted_at: submission.created_at
       },
       message: 'Feedback submitted successfully. Thank you for your input!'

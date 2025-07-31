@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, MessageSquare, Plus, Calendar, Clock, Reply, Mail, Phone, Star, AlertCircle, CheckCircle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '@/hooks/use-auth'
+import { supabase } from '@/lib/supabase-client'
 
 interface Feedback {
   id: string
@@ -70,7 +71,19 @@ export default function ParentFeedback() {
 
   const fetchFeedbacks = async () => {
     try {
-      const response = await fetch('/api/feedback/my-feedback')
+      // Get session token for authorization
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        toast.error('Authentication required')
+        return
+      }
+
+      const response = await fetch('/api/feedback/my-feedback', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+      
       if (response.ok) {
         const data = await response.json()
         setFeedbacks(data.feedbacks || [])
@@ -88,13 +101,27 @@ export default function ParentFeedback() {
       toast.error('Please fill in all required fields')
       return
     }
+
+    if (!user?.school_id) {
+      toast.error('User school information not found')
+      return
+    }
     
     setIsSubmitting(true)
     try {
+      // Transform the form data to match API expectations
+      const submissionData = {
+        school_id: user.school_id,
+        type: formData.feedback_type,
+        subject: formData.subject,
+        description: formData.message,
+        submitted_by: user.id
+      }
+
       const response = await fetch('/api/feedback/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(submissionData)
       })
       
       if (response.ok) {
@@ -103,7 +130,8 @@ export default function ParentFeedback() {
         resetForm()
         fetchFeedbacks()
       } else {
-        toast.error('Failed to submit feedback')
+        const errorData = await response.json()
+        toast.error(errorData.error || 'Failed to submit feedback')
       }
     } catch (error) {
       console.error('Failed to submit feedback:', error)

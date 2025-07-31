@@ -1,248 +1,208 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
+import { 
+  View, 
+  Text, 
+  ScrollView, 
+  SafeAreaView, 
+  RefreshControl, 
   TouchableOpacity,
-  RefreshControl,
-  SafeAreaView,
-  Modal,
   TextInput,
-  Alert,
-  FlatList
+  Alert
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import {
-  MessageSquare,
-  Clock,
+import { Card, CardContent, CardHeader } from '../../components/ui/Card';
+import { 
+  MessageSquare, 
+  Star, 
+  Send, 
   User,
-  Mail,
-  Star,
-  AlertCircle,
+  Calendar,
   CheckCircle,
-  Plus,
-  X,
-  Send,
-  ChevronDown,
+  Clock,
+  AlertCircle,
+  ThumbsUp,
+  BookOpen,
+  Users,
+  GraduationCap,
+  Heart,
   Filter
 } from 'lucide-react-native';
 
-interface Feedback {
+interface FeedbackItem {
   id: string;
-  subject: string;
-  description: string;
-  type: string;
-  status: 'new' | 'in_review' | 'resolved' | 'closed';
-  is_anonymous: boolean;
-  created_at: string;
-  updated_at: string;
-  admin_notes?: string;
-  responses?: {
-    id: string;
-    message: string;
-    created_at: string;
-    author: string;
-  }[];
+  title: string;
+  message: string;
+  category: 'academic' | 'behavior' | 'facilities' | 'transport' | 'general';
+  priority: 'low' | 'medium' | 'high';
+  status: 'pending' | 'reviewed' | 'resolved' | 'closed';
+  submitted_at: string;
+  response?: string;
+  responded_at?: string;
+  responder?: {
+    first_name: string;
+    last_name: string;
+    role: string;
+  };
+  student?: {
+    full_name: string;
+    grade: number;
+    section: string;
+  };
 }
 
 interface Child {
   id: string;
   full_name: string;
+  admission_no: string;
   grade: number;
   section: string;
-  school_id: string;
 }
 
-const FEEDBACK_TYPES = [
-  { value: 'academic', label: 'Academic', description: 'Issues related to curriculum, teaching methods, or learning' },
-  { value: 'behavioral', label: 'Behavioral', description: 'Student behavior or disciplinary concerns' },
-  { value: 'facilities', label: 'Facilities', description: 'School infrastructure, equipment, or environment' },
-  { value: 'communication', label: 'Communication', description: 'Information sharing and school communication' },
-  { value: 'extracurricular', label: 'Extracurricular', description: 'Sports, clubs, and after-school activities' },
-  { value: 'suggestion', label: 'Suggestion', description: 'Ideas for improvement or new initiatives' },
-  { value: 'complaint', label: 'Complaint', description: 'Formal complaints requiring attention' },
-  { value: 'other', label: 'Other', description: 'Other topics not covered above' }
-];
-
-const STATUS_OPTIONS = [
-  { value: 'all', label: 'All Status' },
-  { value: 'new', label: 'New', color: '#F59E0B' },
-  { value: 'in_review', label: 'In Review', color: '#3B82F6' },
-  { value: 'resolved', label: 'Resolved', color: '#10B981' },
-  { value: 'closed', label: 'Closed', color: '#6B7280' }
-];
-
-export const ParentFeedbackScreen = () => {
+export const ParentFeedbackScreen: React.FC = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showTypeModal, setShowTypeModal] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState('all');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Form state
-  const [formData, setFormData] = useState({
-    subject: '',
-    description: '',
-    type: 'academic',
-    isAnonymous: false
-  });
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+  const [selectedChild, setSelectedChild] = useState<string>('');
+  const [feedbackTitle, setFeedbackTitle] = useState('');
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [feedbackCategory, setFeedbackCategory] = useState<string>('general');
+  const [feedbackPriority, setFeedbackPriority] = useState<string>('medium');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   // Fetch parent's children
-  const { data: children = [] } = useQuery({
+  const { data: children = [], isLoading: childrenLoading } = useQuery({
     queryKey: ['parent-children', user?.id],
     queryFn: async (): Promise<Child[]> => {
       if (!user?.id) return [];
 
-      const { data: studentParents, error: spError } = await supabase
+      const { data, error } = await supabase
         .from('student_parents')
-        .select('student_id')
+        .select(`
+          student_id,
+          students!inner(
+            id,
+            full_name,
+            admission_no,
+            grade,
+            section
+          )
+        `)
         .eq('parent_id', user.id);
 
-      if (spError || !studentParents?.length) return [];
-
-      const studentIds = studentParents.map(sp => sp.student_id);
-      const { data, error } = await supabase
-        .from('students')
-        .select('id, full_name, grade, section, school_id')
-        .in('id', studentIds);
-
       if (error) throw error;
-      return data || [];
+
+      return (data || []).map((item: any) => ({
+        id: item.students.id,
+        full_name: item.students.full_name,
+        admission_no: item.students.admission_no,
+        grade: item.students.grade,
+        section: item.students.section
+      }));
     },
     enabled: !!user?.id,
   });
 
+  // Set default child
+  React.useEffect(() => {
+    if (children && children.length > 0 && !selectedChild) {
+      setSelectedChild(children[0].id);
+    }
+  }, [children, selectedChild]);
+
   // Fetch feedback submissions
-  const { data: feedbacks = [], isLoading, refetch } = useQuery({
-    queryKey: ['parent-feedback', user?.school_id, selectedStatus],
-    queryFn: async (): Promise<Feedback[]> => {
-      if (!user?.school_id) return [];
+  const { data: feedbacks = [], isLoading: feedbacksLoading, refetch: refetchFeedbacks } = useQuery({
+    queryKey: ['parent-feedback', user?.id],
+    queryFn: async (): Promise<FeedbackItem[]> => {
+      if (!user?.id) return [];
 
-      // Mock data for now since the feedback_box table might not exist
-      const mockFeedbacks: Feedback[] = [
-        {
-          id: '1',
-          subject: 'Homework Load Concern',
-          description: 'My child seems to be getting too much homework lately. It\'s affecting their sleep and playtime. Could you please review the homework policy for Grade 5?',
-          type: 'academic',
-          status: 'in_review',
-          is_anonymous: false,
-          created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-          updated_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-          admin_notes: 'We are reviewing the homework policy with the curriculum team.'
-        },
-        {
-          id: '2',
-          subject: 'Playground Safety Issue',
-          description: 'I noticed that some of the playground equipment needs maintenance. The swing set has loose chains that could be dangerous.',
-          type: 'facilities',
-          status: 'resolved',
-          is_anonymous: true,
-          created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-          updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          admin_notes: 'Playground equipment has been inspected and repaired. Thank you for bringing this to our attention.'
-        },
-        {
-          id: '3',
-          subject: 'Suggestion for Online Parent Portal',
-          description: 'It would be great to have push notifications for important announcements and homework updates.',
-          type: 'suggestion',
-          status: 'new',
-          is_anonymous: false,
-          created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          updated_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
-        }
-      ];
+      const { data, error } = await supabase
+        .from('parent_feedback')
+        .select(`
+          id,
+          title,
+          message,
+          category,
+          priority,
+          status,
+          submitted_at,
+          response,
+          responded_at,
+          responder:users!responder_id(first_name, last_name, role),
+          student:students!student_id(full_name, grade, section)
+        `)
+        .eq('parent_id', user.id)
+        .order('submitted_at', { ascending: false });
 
-      // Apply status filter
-      let filteredFeedbacks = mockFeedbacks;
-      if (selectedStatus !== 'all') {
-        filteredFeedbacks = filteredFeedbacks.filter(f => f.status === selectedStatus);
-      }
+      if (error) throw error;
 
-      return filteredFeedbacks;
+      return (data || []).map((feedback: any) => ({
+        id: feedback.id,
+        title: feedback.title,
+        message: feedback.message,
+        category: feedback.category,
+        priority: feedback.priority,
+        status: feedback.status,
+        submitted_at: feedback.submitted_at,
+        response: feedback.response,
+        responded_at: feedback.responded_at,
+        responder: feedback.responder,
+        student: feedback.student
+      }));
     },
-    enabled: !!user?.school_id,
-    staleTime: 1000 * 60 * 2, // Consider data fresh for 2 minutes
+    enabled: !!user?.id,
   });
 
   // Submit feedback mutation
   const submitFeedbackMutation = useMutation({
-    mutationFn: async (feedbackData: any) => {
-      const payload = {
-        school_id: user?.school_id,
-        subject: feedbackData.subject,
-        description: feedbackData.description,
-        type: feedbackData.type,
-        is_anonymous: feedbackData.isAnonymous,
-        submitted_by: feedbackData.isAnonymous ? null : user?.id,
-        submitter_name: feedbackData.isAnonymous ? null : `${user?.first_name} ${user?.last_name}`,
-        submitter_email: feedbackData.isAnonymous ? null : user?.email,
-        status: 'new'
-      };
+    mutationFn: async (feedbackData: {
+      title: string;
+      message: string;
+      category: string;
+      priority: string;
+      student_id?: string;
+    }) => {
+      const { data, error } = await supabase
+        .from('parent_feedback')
+        .insert({
+          ...feedbackData,
+          parent_id: user?.id,
+          school_id: user?.school_id,
+          status: 'pending',
+        })
+        .select()
+        .single();
 
-      // For now, just simulate success since the feedback_box table might not exist
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return payload;
+      if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['parent-feedback'] });
-      resetForm();
-      setShowCreateModal(false);
+      setShowFeedbackForm(false);
+      setFeedbackTitle('');
+      setFeedbackMessage('');
+      setFeedbackCategory('general');
+      setFeedbackPriority('medium');
       Alert.alert('Success', 'Your feedback has been submitted successfully!');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       Alert.alert('Error', 'Failed to submit feedback. Please try again.');
-      console.error('Submit feedback error:', error);
-    }
+    },
   });
 
-  const handleRefresh = async () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    await refetch();
+    await refetchFeedbacks();
     setRefreshing(false);
   };
 
-  const resetForm = () => {
-    setFormData({
-      subject: '',
-      description: '',
-      type: 'academic',
-      isAnonymous: false
-    });
-  };
-
-  const handleSubmit = async () => {
-    if (!formData.subject.trim() || !formData.description.trim()) {
-      Alert.alert('Error', 'Please fill in all required fields');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await submitFeedbackMutation.mutateAsync(formData);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const getTypeInfo = (type: string) => {
-    return FEEDBACK_TYPES.find(t => t.value === type) || FEEDBACK_TYPES[0];
-  };
-
-  const getStatusInfo = (status: string) => {
-    return STATUS_OPTIONS.find(s => s.value === status) || STATUS_OPTIONS[1];
-  };
+  const filteredFeedbacks = feedbacks.filter(feedback => {
+    if (statusFilter === 'all') return true;
+    return feedback.status === statusFilter;
+  });
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -254,685 +214,383 @@ export const ParentFeedbackScreen = () => {
     });
   };
 
-  const openFeedbackDetail = (feedback: Feedback) => {
-    setSelectedFeedback(feedback);
-    setShowDetailModal(true);
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'academic': return BookOpen;
+      case 'behavior': return Users;
+      case 'facilities': return GraduationCap;
+      case 'transport': return Users;
+      default: return MessageSquare;
+    }
   };
 
-  const closeFeedbackDetail = () => {
-    setShowDetailModal(false);
-    setSelectedFeedback(null);
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case 'academic': return '#3b82f6';
+      case 'behavior': return '#8b5cf6';
+      case 'facilities': return '#f59e0b';
+      case 'transport': return '#10b981';
+      default: return '#6b7280';
+    }
   };
 
-  // Calculate stats
-  const stats = {
-    total: feedbacks.length,
-    new: feedbacks.filter(f => f.status === 'new').length,
-    inReview: feedbacks.filter(f => f.status === 'in_review').length,
-    resolved: feedbacks.filter(f => f.status === 'resolved').length
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'high': return '#ef4444';
+      case 'medium': return '#f59e0b';
+      case 'low': return '#10b981';
+      default: return '#6b7280';
+    }
   };
 
-  const renderFeedbackItem = ({ item }: { item: Feedback }) => {
-    const typeInfo = getTypeInfo(item.type);
-    const statusInfo = getStatusInfo(item.status);
-    
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return '#f59e0b';
+      case 'reviewed': return '#3b82f6';
+      case 'resolved': return '#10b981';
+      case 'closed': return '#6b7280';
+      default: return '#6b7280';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending': return Clock;
+      case 'reviewed': return AlertCircle;
+      case 'resolved': return CheckCircle;
+      case 'closed': return CheckCircle;
+      default: return Clock;
+    }
+  };
+
+  const handleSubmitFeedback = () => {
+    if (!feedbackTitle.trim() || !feedbackMessage.trim()) {
+      Alert.alert('Error', 'Please fill in both title and message');
+      return;
+    }
+
+    submitFeedbackMutation.mutate({
+      title: feedbackTitle.trim(),
+      message: feedbackMessage.trim(),
+      category: feedbackCategory,
+      priority: feedbackPriority,
+      student_id: selectedChild || undefined
+    });
+  };
+
+  const renderFeedbackItem = (feedback: FeedbackItem) => {
+    const CategoryIcon = getCategoryIcon(feedback.category);
+    const StatusIcon = getStatusIcon(feedback.status);
+    const categoryColor = getCategoryColor(feedback.category);
+    const statusColor = getStatusColor(feedback.status);
+    const priorityColor = getPriorityColor(feedback.priority);
+
     return (
-      <TouchableOpacity onPress={() => openFeedbackDetail(item)}>
-        <Card style={{ marginBottom: 16 }}>
-          <CardContent style={{ padding: 16 }}>
-            {/* Header */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 4 }}>
-                  {item.subject}
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                  <View style={{ 
-                    backgroundColor: '#f3f4f6', 
-                    paddingHorizontal: 8, 
-                    paddingVertical: 2, 
-                    borderRadius: 4 
-                  }}>
-                    <Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '500', textTransform: 'capitalize' }}>
-                      {typeInfo.label}
-                    </Text>
-                  </View>
-                  {item.is_anonymous && (
-                    <View style={{ 
-                      backgroundColor: '#e5e7eb', 
-                      paddingHorizontal: 8, 
-                      paddingVertical: 2, 
-                      borderRadius: 4 
-                    }}>
-                      <Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '500' }}>
-                        Anonymous
-                      </Text>
-                    </View>
-                  )}
+      <Card key={feedback.id} className="mb-4">
+        <CardContent className="p-4">
+          {/* Header */}
+          <View className="flex-row items-start justify-between mb-3">
+            <View className="flex-1">
+              <View className="flex-row items-center mb-2">
+                <View 
+                  className="w-8 h-8 rounded-lg flex items-center justify-center mr-3"
+                  style={{ backgroundColor: categoryColor + '20' }}
+                >
+                  <CategoryIcon size={16} color={categoryColor} />
                 </View>
-              </View>
-              
-              <View style={{
-                backgroundColor: statusInfo.color + '20',
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 12,
-                flexDirection: 'row',
-                alignItems: 'center'
-              }}>
-                {item.status === 'new' && <Clock size={10} color={statusInfo.color} />}
-                {item.status === 'in_review' && <AlertCircle size={10} color={statusInfo.color} />}
-                {item.status === 'resolved' && <CheckCircle size={10} color={statusInfo.color} />}
-                <Text style={{
-                  fontSize: 10,
-                  color: statusInfo.color,
-                  fontWeight: '500',
-                  marginLeft: 4,
-                  textTransform: 'capitalize'
-                }}>
-                  {item.status.replace('_', ' ')}
-                </Text>
-              </View>
-            </View>
-
-            {/* Description Preview */}
-            <Text style={{ fontSize: 14, color: '#6b7280', lineHeight: 20, marginBottom: 12 }} numberOfLines={2}>
-              {item.description}
-            </Text>
-
-            {/* Footer */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Clock size={12} color="#6b7280" />
-                <Text style={{ fontSize: 12, color: '#6b7280', marginLeft: 4 }}>
-                  {formatDate(item.created_at)}
-                </Text>
-              </View>
-              
-              {item.admin_notes && (
-                <View style={{
-                  backgroundColor: '#dbeafe',
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  borderRadius: 12
-                }}>
-                  <Text style={{ fontSize: 12, color: '#3b82f6', fontWeight: '500' }}>
-                    Response Available
+                <View className="flex-1">
+                  <Text className="text-lg font-semibold text-gray-900">
+                    {feedback.title}
+                  </Text>
+                  <Text className="text-sm text-gray-600">
+                    {feedback.student?.full_name} • Grade {feedback.student?.grade}-{feedback.student?.section}
                   </Text>
                 </View>
+              </View>
+            </View>
+            
+            <View className="flex-row items-center space-x-2">
+              <View 
+                className="px-2 py-1 rounded-full"
+                style={{ backgroundColor: priorityColor + '20' }}
+              >
+                <Text 
+                  className="text-xs font-medium capitalize"
+                  style={{ color: priorityColor }}
+                >
+                  {feedback.priority}
+                </Text>
+              </View>
+              
+              <View 
+                className="px-2 py-1 rounded-full flex-row items-center"
+                style={{ backgroundColor: statusColor + '20' }}
+              >
+                <StatusIcon size={12} color={statusColor} />
+                <Text 
+                  className="text-xs font-medium capitalize ml-1"
+                  style={{ color: statusColor }}
+                >
+                  {feedback.status}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Message */}
+          <Text className="text-gray-700 mb-3">{feedback.message}</Text>
+
+          {/* Response */}
+          {feedback.response && (
+            <View className="bg-blue-50 p-3 rounded-lg mb-3">
+              <View className="flex-row items-center mb-2">
+                <User size={14} color="#3b82f6" />
+                <Text className="text-sm font-medium text-blue-900 ml-1">
+                  Response from {feedback.responder?.first_name} {feedback.responder?.last_name}
+                </Text>
+              </View>
+              <Text className="text-blue-800 text-sm">{feedback.response}</Text>
+              {feedback.responded_at && (
+                <Text className="text-blue-600 text-xs mt-1">
+                  {formatDate(feedback.responded_at)}
+                </Text>
               )}
             </View>
-          </CardContent>
-        </Card>
-      </TouchableOpacity>
+          )}
+
+          {/* Footer */}
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center">
+              <Calendar size={14} color="#6b7280" />
+              <Text className="text-sm text-gray-500 ml-1">
+                Submitted {formatDate(feedback.submitted_at)}
+              </Text>
+            </View>
+            
+            <View 
+              className="px-2 py-1 rounded-full"
+              style={{ backgroundColor: categoryColor + '20' }}
+            >
+              <Text 
+                className="text-xs font-medium capitalize"
+                style={{ color: categoryColor }}
+              >
+                {feedback.category}
+              </Text>
+            </View>
+          </View>
+        </CardContent>
+      </Card>
     );
   };
 
-  if (isLoading) {
+  if (childrenLoading || feedbacksLoading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: '#6b7280' }}>Loading feedback...</Text>
+      <SafeAreaView className="flex-1 bg-gray-50">
+        <StatusBar style="dark" />
+        <View className="flex-1 justify-center items-center">
+          <Text className="text-gray-500">Loading feedback...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+    <SafeAreaView className="flex-1 bg-gray-50">
       <StatusBar style="dark" />
       
       {/* Header */}
-      <View style={{ 
-        backgroundColor: 'white', 
-        paddingHorizontal: 24, 
-        paddingTop: 16,
-        paddingBottom: 20,
-        borderBottomWidth: 1, 
-        borderBottomColor: '#e5e7eb',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3
-      }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ 
-              backgroundColor: '#8b5cf6', 
-              padding: 10, 
-              borderRadius: 12, 
-              marginRight: 12 
-            }}>
-              <MessageSquare size={24} color="white" />
-            </View>
-            <View>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111827' }}>
-                Feedback & Support
-              </Text>
-              <Text style={{ fontSize: 14, color: '#6b7280' }}>
-                Share your thoughts with the school
-              </Text>
-            </View>
-          </View>
+      <View className="bg-white px-4 py-3 border-b border-gray-200">
+        <View className="flex-row items-center justify-between">
+          <Text className="text-xl font-bold text-gray-900">Feedback</Text>
           <TouchableOpacity
-            style={{
-              backgroundColor: '#8b5cf6',
-              paddingHorizontal: 16,
-              paddingVertical: 8,
-              borderRadius: 8,
-              flexDirection: 'row',
-              alignItems: 'center'
-            }}
-            onPress={() => setShowCreateModal(true)}
+            onPress={() => setShowFeedbackForm(!showFeedbackForm)}
+            className="bg-blue-600 px-3 py-1 rounded-lg"
           >
-            <Plus size={16} color="white" />
-            <Text style={{ color: 'white', fontWeight: '500', marginLeft: 4 }}>
-              Submit
-            </Text>
+            <Text className="text-white font-medium">New Feedback</Text>
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Stats Cards */}
-      <View style={{ backgroundColor: 'white', paddingHorizontal: 24, paddingVertical: 16 }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={{ flexDirection: 'row', gap: 16 }}>
-            <Card style={{ padding: 16, minWidth: 100, alignItems: 'center' }}>
-              <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#3b82f6' }}>{stats.total}</Text>
-              <Text style={{ fontSize: 12, color: '#6b7280' }}>Total</Text>
-            </Card>
-            <Card style={{ padding: 16, minWidth: 100, alignItems: 'center' }}>
-              <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#f59e0b' }}>{stats.new}</Text>
-              <Text style={{ fontSize: 12, color: '#6b7280' }}>New</Text>
-            </Card>
-            <Card style={{ padding: 16, minWidth: 100, alignItems: 'center' }}>
-              <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#3b82f6' }}>{stats.inReview}</Text>
-              <Text style={{ fontSize: 12, color: '#6b7280' }}>In Review</Text>
-            </Card>
-            <Card style={{ padding: 16, minWidth: 100, alignItems: 'center' }}>
-              <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#10b981' }}>{stats.resolved}</Text>
-              <Text style={{ fontSize: 12, color: '#6b7280' }}>Resolved</Text>
-            </Card>
-          </View>
+        {/* Status Filter */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3">
+          {[
+            { key: 'all', label: 'All' },
+            { key: 'pending', label: 'Pending' },
+            { key: 'reviewed', label: 'Reviewed' },
+            { key: 'resolved', label: 'Resolved' },
+            { key: 'closed', label: 'Closed' }
+          ].map((filter) => (
+            <TouchableOpacity
+              key={filter.key}
+              onPress={() => setStatusFilter(filter.key)}
+              className={`mr-2 px-3 py-2 rounded-lg ${
+                statusFilter === filter.key ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
+            >
+              <Text className={`text-sm font-medium ${
+                statusFilter === filter.key ? 'text-white' : 'text-gray-700'
+              }`}>
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
       </View>
 
-      {/* Status Filter */}
-      <View style={{ backgroundColor: 'white', paddingHorizontal: 24, paddingVertical: 16 }}>
-        <TouchableOpacity
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            backgroundColor: '#f3f4f6',
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            borderRadius: 8
-          }}
-          onPress={() => setShowStatusModal(true)}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Filter size={16} color="#6b7280" />
-            <Text style={{ fontSize: 14, color: '#111827', marginLeft: 6 }}>
-              {STATUS_OPTIONS.find(s => s.value === selectedStatus)?.label || 'All Status'}
-            </Text>
-          </View>
-          <ChevronDown size={16} color="#6b7280" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Feedback List */}
-      <FlatList
-        data={feedbacks}
-        renderItem={renderFeedbackItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 24 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
-        ListEmptyComponent={
-          <Card>
-            <CardContent style={{ padding: 32, alignItems: 'center' }}>
-              <MessageSquare size={48} color="#6b7280" style={{ marginBottom: 16 }} />
-              <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827', marginBottom: 8 }}>
-                No Feedback Found
-              </Text>
-              <Text style={{ fontSize: 14, color: '#6b7280', textAlign: 'center', marginBottom: 16 }}>
-                You haven't submitted any feedback yet. Share your thoughts with the school administration.
-              </Text>
-              <TouchableOpacity
-                style={{
-                  backgroundColor: '#8b5cf6',
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderRadius: 8,
-                  flexDirection: 'row',
-                  alignItems: 'center'
-                }}
-                onPress={() => setShowCreateModal(true)}
-              >
-                <Plus size={16} color="white" />
-                <Text style={{ color: 'white', fontWeight: '500', marginLeft: 4 }}>
-                  Submit First Feedback
-                </Text>
-              </TouchableOpacity>
-            </CardContent>
-          </Card>
-        }
-      />
-
-      {/* Create Feedback Modal */}
-      <Modal
-        visible={showCreateModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowCreateModal(false)}
+      <ScrollView
+        className="flex-1 px-4"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
       >
-        <View style={{ 
-          flex: 1, 
-          backgroundColor: 'rgba(0,0,0,0.5)', 
-          justifyContent: 'flex-end' 
-        }}>
-          <View style={{ 
-            backgroundColor: 'white', 
-            borderTopLeftRadius: 20, 
-            borderTopRightRadius: 20,
-            paddingTop: 20,
-            maxHeight: '90%'
-          }}>
-            <View style={{ 
-              paddingHorizontal: 24, 
-              paddingBottom: 16, 
-              borderBottomWidth: 1, 
-              borderBottomColor: '#e5e7eb',
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827' }}>
-                Submit Feedback
-              </Text>
-              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-                <X size={24} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView style={{ maxHeight: 500 }}>
-              <View style={{ padding: 24, gap: 16 }}>
-                {/* Subject */}
-                <View>
-                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#111827', marginBottom: 8 }}>
-                    Subject *
-                  </Text>
-                  <TextInput
-                    style={{
-                      borderWidth: 1,
-                      borderColor: '#d1d5db',
-                      borderRadius: 8,
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      fontSize: 16,
-                      color: '#111827'
-                    }}
-                    placeholder="Brief description of your feedback"
-                    value={formData.subject}
-                    onChangeText={(text) => setFormData({...formData, subject: text})}
-                    multiline={false}
-                  />
+        {/* New Feedback Form */}
+        {showFeedbackForm && (
+          <Card className="my-4">
+            <CardContent className="p-4">
+              <Text className="font-semibold text-gray-900 mb-3">Submit New Feedback</Text>
+              
+              {/* Child Selector */}
+              {children.length > 1 && (
+                <View className="mb-3">
+                  <Text className="text-sm font-medium text-gray-700 mb-2">Child:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {children.map((child) => (
+                      <TouchableOpacity
+                        key={child.id}
+                        onPress={() => setSelectedChild(child.id)}
+                        className={`mr-2 px-3 py-2 rounded-lg ${
+                          selectedChild === child.id ? 'bg-blue-600' : 'bg-gray-200'
+                        }`}
+                      >
+                        <Text className={`text-sm font-medium ${
+                          selectedChild === child.id ? 'text-white' : 'text-gray-700'
+                        }`}>
+                          {child.full_name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 </View>
+              )}
 
-                {/* Type */}
-                <View>
-                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#111827', marginBottom: 8 }}>
-                    Feedback Type
-                  </Text>
-                  <TouchableOpacity
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      borderWidth: 1,
-                      borderColor: '#d1d5db',
-                      borderRadius: 8,
-                      paddingHorizontal: 12,
-                      paddingVertical: 10
-                    }}
-                    onPress={() => setShowTypeModal(true)}
-                  >
-                    <Text style={{ fontSize: 16, color: '#111827' }}>
-                      {getTypeInfo(formData.type).label}
-                    </Text>
-                    <ChevronDown size={16} color="#6b7280" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Description */}
-                <View>
-                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#111827', marginBottom: 8 }}>
-                    Description *
-                  </Text>
-                  <TextInput
-                    style={{
-                      borderWidth: 1,
-                      borderColor: '#d1d5db',
-                      borderRadius: 8,
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      fontSize: 16,
-                      color: '#111827',
-                      minHeight: 100,
-                      textAlignVertical: 'top'
-                    }}
-                    placeholder="Please provide detailed feedback..."
-                    value={formData.description}
-                    onChangeText={(text) => setFormData({...formData, description: text})}
-                    multiline={true}
-                    numberOfLines={4}
-                  />
-                </View>
-
-                {/* Anonymous Toggle */}
-                <View style={{ 
-                  flexDirection: 'row', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between',
-                  backgroundColor: '#f9fafb',
-                  padding: 16,
-                  borderRadius: 8
-                }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '500', color: '#111827', marginBottom: 4 }}>
-                      Submit Anonymously
-                    </Text>
-                    <Text style={{ fontSize: 12, color: '#6b7280' }}>
-                      Your identity will not be shared with the school
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={{
-                      width: 44,
-                      height: 24,
-                      borderRadius: 12,
-                      backgroundColor: formData.isAnonymous ? '#8b5cf6' : '#d1d5db',
-                      justifyContent: 'center',
-                      alignItems: formData.isAnonymous ? 'flex-end' : 'flex-start',
-                      paddingHorizontal: 2
-                    }}
-                    onPress={() => setFormData({...formData, isAnonymous: !formData.isAnonymous})}
-                  >
-                    <View style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 10,
-                      backgroundColor: 'white'
-                    }} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </ScrollView>
-
-            <View style={{ padding: 24, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <Button
-                  title="Cancel"
-                  onPress={() => setShowCreateModal(false)}
-                  variant="outline"
-                  style={{ flex: 1 }}
-                />
-                <Button
-                  title={isSubmitting ? "Submitting..." : "Submit Feedback"}
-                  onPress={handleSubmit}
-                  loading={isSubmitting}
-                  disabled={!formData.subject.trim() || !formData.description.trim()}
-                  style={{ flex: 1, backgroundColor: '#8b5cf6' }}
-                />
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Feedback Detail Modal */}
-      <Modal
-        visible={showDetailModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={closeFeedbackDetail}
-      >
-        {selectedFeedback && (
-          <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-            {/* Modal Header */}
-            <View style={{ 
-              backgroundColor: 'white',
-              paddingHorizontal: 24,
-              paddingVertical: 16,
-              borderBottomWidth: 1,
-              borderBottomColor: '#e5e7eb',
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <TouchableOpacity onPress={closeFeedbackDetail}>
-                <X size={24} color="#6b7280" />
-              </TouchableOpacity>
-              <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827' }}>
-                Feedback Details
-              </Text>
-              <View style={{ width: 24 }} />
-            </View>
-
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24 }}>
-              <Card style={{ padding: 20 }}>
-                {/* Subject */}
-                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 16 }}>
-                  {selectedFeedback.subject}
-                </Text>
-
-                {/* Status and Type */}
-                <View style={{ flexDirection: 'row', marginBottom: 20, gap: 12 }}>
-                  <View style={{
-                    backgroundColor: getStatusInfo(selectedFeedback.status).color + '20',
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 12
-                  }}>
-                    <Text style={{
-                      fontSize: 12,
-                      color: getStatusInfo(selectedFeedback.status).color,
-                      fontWeight: '500',
-                      textTransform: 'capitalize'
-                    }}>
-                      {selectedFeedback.status.replace('_', ' ')}
-                    </Text>
-                  </View>
-                  <View style={{
-                    backgroundColor: '#f3f4f6',
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 12
-                  }}>
-                    <Text style={{
-                      fontSize: 12,
-                      color: '#6b7280',
-                      fontWeight: '500',
-                      textTransform: 'capitalize'
-                    }}>
-                      {getTypeInfo(selectedFeedback.type).label}
-                    </Text>
-                  </View>
-                  {selectedFeedback.is_anonymous && (
-                    <View style={{
-                      backgroundColor: '#e5e7eb',
-                      paddingHorizontal: 12,
-                      paddingVertical: 6,
-                      borderRadius: 12
-                    }}>
-                      <Text style={{
-                        fontSize: 12,
-                        color: '#6b7280',
-                        fontWeight: '500'
-                      }}>
-                        Anonymous
+              {/* Category */}
+              <View className="mb-3">
+                <Text className="text-sm font-medium text-gray-700 mb-2">Category:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {[
+                    { key: 'academic', label: 'Academic' },
+                    { key: 'behavior', label: 'Behavior' },
+                    { key: 'facilities', label: 'Facilities' },
+                    { key: 'transport', label: 'Transport' },
+                    { key: 'general', label: 'General' }
+                  ].map((category) => (
+                    <TouchableOpacity
+                      key={category.key}
+                      onPress={() => setFeedbackCategory(category.key)}
+                      className={`mr-2 px-3 py-2 rounded-lg ${
+                        feedbackCategory === category.key ? 'bg-blue-600' : 'bg-gray-200'
+                      }`}
+                    >
+                      <Text className={`text-sm font-medium ${
+                        feedbackCategory === category.key ? 'text-white' : 'text-gray-700'
+                      }`}>
+                        {category.label}
                       </Text>
-                    </View>
-                  )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Priority */}
+              <View className="mb-3">
+                <Text className="text-sm font-medium text-gray-700 mb-2">Priority:</Text>
+                <View className="flex-row space-x-2">
+                  {[
+                    { key: 'low', label: 'Low', color: '#10b981' },
+                    { key: 'medium', label: 'Medium', color: '#f59e0b' },
+                    { key: 'high', label: 'High', color: '#ef4444' }
+                  ].map((priority) => (
+                    <TouchableOpacity
+                      key={priority.key}
+                      onPress={() => setFeedbackPriority(priority.key)}
+                      className={`px-3 py-2 rounded-lg ${
+                        feedbackPriority === priority.key ? 'bg-blue-600' : 'bg-gray-200'
+                      }`}
+                    >
+                      <Text className={`text-sm font-medium ${
+                        feedbackPriority === priority.key ? 'text-white' : 'text-gray-700'
+                      }`}>
+                        {priority.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
+              </View>
 
-                {/* Description */}
-                <View style={{ marginBottom: 20 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 8 }}>
-                    Your Feedback:
-                  </Text>
-                  <Text style={{ fontSize: 14, color: '#374151', lineHeight: 20 }}>
-                    {selectedFeedback.description}
-                  </Text>
-                </View>
+              {/* Title */}
+              <TextInput
+                value={feedbackTitle}
+                onChangeText={setFeedbackTitle}
+                placeholder="Feedback title..."
+                className="border border-gray-300 rounded-lg p-3 text-gray-900 mb-3"
+              />
 
-                {/* Admin Response */}
-                {selectedFeedback.admin_notes && (
-                  <View style={{ 
-                    backgroundColor: '#dbeafe', 
-                    padding: 16, 
-                    borderRadius: 8, 
-                    marginBottom: 20 
-                  }}>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 8 }}>
-                      School Response:
-                    </Text>
-                    <Text style={{ fontSize: 14, color: '#374151', lineHeight: 20 }}>
-                      {selectedFeedback.admin_notes}
-                    </Text>
-                  </View>
-                )}
+              {/* Message */}
+              <TextInput
+                value={feedbackMessage}
+                onChangeText={setFeedbackMessage}
+                placeholder="Please describe your feedback in detail..."
+                multiline
+                numberOfLines={4}
+                className="border border-gray-300 rounded-lg p-3 text-gray-900 mb-3"
+                style={{ textAlignVertical: 'top' }}
+              />
 
-                {/* Timestamps */}
-                <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16 }}>
-                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>
-                    Submitted: {formatDate(selectedFeedback.created_at)}
-                  </Text>
-                  {selectedFeedback.updated_at !== selectedFeedback.created_at && (
-                    <Text style={{ fontSize: 12, color: '#6b7280' }}>
-                      Last Updated: {formatDate(selectedFeedback.updated_at)}
-                    </Text>
-                  )}
-                </View>
-              </Card>
-            </ScrollView>
-          </SafeAreaView>
-        )}
-      </Modal>
-
-      {/* Type Selector Modal */}
-      <Modal
-        visible={showTypeModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowTypeModal(false)}
-      >
-        <View style={{ 
-          flex: 1, 
-          backgroundColor: 'rgba(0,0,0,0.5)', 
-          justifyContent: 'center',
-          alignItems: 'center'
-        }}>
-          <View style={{ 
-            backgroundColor: 'white', 
-            borderRadius: 12,
-            padding: 24,
-            width: '90%',
-            maxWidth: 400,
-            maxHeight: '80%'
-          }}>
-            <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827', marginBottom: 16 }}>
-              Select Feedback Type
-            </Text>
-            <ScrollView>
-              {FEEDBACK_TYPES.map((type) => (
+              {/* Actions */}
+              <View className="flex-row space-x-2">
                 <TouchableOpacity
-                  key={type.value}
-                  style={{
-                    paddingVertical: 12,
-                    paddingHorizontal: 16,
-                    borderRadius: 8,
-                    marginBottom: 8,
-                    backgroundColor: formData.type === type.value ? '#8b5cf6' + '20' : 'transparent'
-                  }}
-                  onPress={() => {
-                    setFormData({...formData, type: type.value});
-                    setShowTypeModal(false);
-                  }}
+                  onPress={handleSubmitFeedback}
+                  disabled={!feedbackTitle.trim() || !feedbackMessage.trim() || submitFeedbackMutation.isPending}
+                  className="flex-1 bg-blue-600 px-4 py-2 rounded-lg flex-row items-center justify-center"
                 >
-                  <Text style={{ 
-                    fontSize: 16, 
-                    color: formData.type === type.value ? '#8b5cf6' : '#111827',
-                    fontWeight: formData.type === type.value ? '600' : '400',
-                    marginBottom: 4
-                  }}>
-                    {type.label}
-                  </Text>
-                  <Text style={{ fontSize: 12, color: '#6b7280' }}>
-                    {type.description}
+                  <Send size={16} color="white" />
+                  <Text className="text-white ml-2 font-medium">
+                    {submitFeedbackMutation.isPending ? 'Submitting...' : 'Submit'}
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowFeedbackForm(false);
+                    setFeedbackTitle('');
+                    setFeedbackMessage('');
+                    setFeedbackCategory('general');
+                    setFeedbackPriority('medium');
+                  }}
+                  className="bg-gray-300 px-4 py-2 rounded-lg items-center justify-center"
+                >
+                  <Text className="text-gray-700 font-medium">Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </CardContent>
+          </Card>
+        )}
 
-      {/* Status Filter Modal */}
-      <Modal
-        visible={showStatusModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowStatusModal(false)}
-      >
-        <View style={{ 
-          flex: 1, 
-          backgroundColor: 'rgba(0,0,0,0.5)', 
-          justifyContent: 'center',
-          alignItems: 'center'
-        }}>
-          <View style={{ 
-            backgroundColor: 'white', 
-            borderRadius: 12,
-            padding: 24,
-            width: '80%',
-            maxWidth: 300
-          }}>
-            <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827', marginBottom: 16 }}>
-              Filter by Status
-            </Text>
-            {STATUS_OPTIONS.map((status) => (
-              <TouchableOpacity
-                key={status.value}
-                style={{
-                  paddingVertical: 12,
-                  paddingHorizontal: 16,
-                  borderRadius: 8,
-                  marginBottom: 8,
-                  backgroundColor: selectedStatus === status.value ? '#8b5cf6' + '20' : 'transparent'
-                }}
-                onPress={() => {
-                  setSelectedStatus(status.value);
-                  setShowStatusModal(false);
-                }}
-              >
-                <Text style={{ 
-                  fontSize: 16, 
-                  color: selectedStatus === status.value ? '#8b5cf6' : '#111827',
-                  fontWeight: selectedStatus === status.value ? '600' : '400'
-                }}>
-                  {status.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        {/* Feedback List */}
+        <View className="py-4">
+          {filteredFeedbacks.length === 0 ? (
+            <View className="flex-1 justify-center items-center py-20">
+              <MessageSquare size={48} color="#9ca3af" />
+              <Text className="text-gray-500 text-center mt-4">
+                {statusFilter === 'all' 
+                  ? 'No feedback submitted yet. Tap "New Feedback" to get started!'
+                  : `No ${statusFilter} feedback found`
+                }
+              </Text>
+            </View>
+          ) : (
+            filteredFeedbacks.map(renderFeedbackItem)
+          )}
         </View>
-      </Modal>
+      </ScrollView>
     </SafeAreaView>
   );
-};
-
-export default ParentFeedbackScreen; 
+}; 

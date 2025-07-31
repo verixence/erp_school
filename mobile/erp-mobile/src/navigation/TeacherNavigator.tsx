@@ -14,6 +14,8 @@ import {
   GraduationCap,
   Camera,
   Mail,
+  Video,
+  FileText
 } from 'lucide-react-native';
 
 // Teacher Screens
@@ -21,7 +23,7 @@ import { TeacherDashboardScreen } from '../screens/teacher/TeacherDashboardScree
 import { TeacherAttendanceScreen } from '../screens/teacher/TeacherAttendanceScreen';
 import TeacherTimetableScreen from '../screens/teacher/TeacherTimetableScreen';
 import { TeacherHomeworkScreen } from '../screens/teacher/TeacherHomeworkScreen';
-import { TeacherMarksScreen } from '../screens/teacher/TeacherMarksScreen';
+
 import TeacherExamsScreen from '../screens/teacher/TeacherExamsScreen';
 import { TeacherAnnouncementsScreen } from '../screens/teacher/TeacherAnnouncementsScreen';
 import TeacherCommunityScreen from '../screens/teacher/TeacherCommunityScreen';
@@ -29,6 +31,9 @@ import { TeacherGalleryScreen } from '../screens/teacher/TeacherGalleryScreen';
 import TeacherCalendarScreen from '../screens/teacher/TeacherCalendarScreen';
 import TeacherFeedbackScreen from '../screens/teacher/TeacherFeedbackScreen';
 import { TeacherCoScholasticScreen } from '../screens/teacher/TeacherCoScholasticScreen';
+import { TeacherLeaveRequestsScreen } from '../screens/teacher/TeacherLeaveRequestsScreen';
+import { TeacherOnlineClassesScreen } from '../screens/teacher/TeacherOnlineClassesScreen';
+import { TeacherMarksEntryScreen } from '../screens/teacher/TeacherMarksEntryScreen';
 import { SettingsScreen } from '../screens/shared/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
@@ -68,8 +73,8 @@ const AcademicsStack = () => (
     />
     <Stack.Screen 
       name="Marks" 
-      component={TeacherMarksScreen}
-      options={{ title: 'Marks Entry' }}
+      component={TeacherMarksEntryScreen}
+      options={{ headerShown: false }}
     />
     <Stack.Screen 
       name="Exams" 
@@ -85,6 +90,16 @@ const AcademicsStack = () => (
       name="CoScholastic" 
       component={TeacherCoScholasticScreen}
       options={{ title: 'Co-Scholastic Assessments' }}
+    />
+    <Stack.Screen 
+      name="OnlineClasses" 
+      component={TeacherOnlineClassesScreen}
+      options={{ title: 'Online Classes' }}
+    />
+    <Stack.Screen 
+      name="LeaveRequests" 
+      component={TeacherLeaveRequestsScreen}
+      options={{ title: 'Leave Requests' }}
     />
   </Stack.Navigator>
 );
