@@ -10,12 +10,14 @@ import {
   FlatList,
   Modal,
   TextInput,
-  Dimensions
+  Dimensions,
+  Linking
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
+import * as DocumentPicker from 'expo-document-picker';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { 
@@ -37,7 +39,11 @@ import {
   Save,
   X,
   Search,
-  Filter
+  Filter,
+  Paperclip,
+  ExternalLink,
+  Upload,
+  File
 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
@@ -57,7 +63,10 @@ interface Homework {
   due_date: string;
   assigned_date: string;
   section_id: string;
+  section: string;
   teacher_id: string;
+  created_by: string;
+  file_url?: string;
   attachments?: string[];
   is_published: boolean;
   created_at: string;
@@ -85,8 +94,10 @@ export const TeacherHomeworkScreen: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingHomework, setEditingHomework] = useState<Homework | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'published' | 'draft'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all'>('all');
   const [selectedSection, setSelectedSection] = useState<string>('all');
+  const [selectedFile, setSelectedFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
 
   const [formData, setFormData] = useState<HomeworkFormData>({
     title: '',
@@ -103,26 +114,21 @@ export const TeacherHomeworkScreen: React.FC = () => {
       if (!user?.id) return [];
 
       const { data, error } = await supabase
-        .from('section_teachers')
+        .from('sections')
         .select(`
-          sections!inner(
-            id,
-            grade,
-            section,
-            school_id,
-            class_teacher
-          )
+          id,
+          grade,
+          section,
+          school_id
         `)
-        .eq('teacher_id', user.id)
-        .eq('sections.school_id', user.school_id);
+        .eq('school_id', user.school_id);
 
       if (error) throw error;
       
       return (data || []).map((item: any) => ({
-          id: item.sections.id,
-          grade: item.sections.grade,
-          section: item.sections.section,
-        class_teacher: item.sections.class_teacher
+          id: item.id,
+          grade: item.grade,
+          section: item.section
       }));
     },
     enabled: !!user?.id,
@@ -135,21 +141,24 @@ export const TeacherHomeworkScreen: React.FC = () => {
       if (!user?.id) return [];
 
       let query = supabase
-        .from('homework')
+        .from('homeworks')
         .select(`
-          *,
-          sections!inner(grade, section)
+          id,
+          title,
+          description,
+          subject,
+          due_date,
+          section,
+          created_by,
+          created_at,
+          file_url
         `)
-        .eq('teacher_id', user.id)
+        .eq('created_by', user.id)
         .eq('school_id', user.school_id)
         .order('created_at', { ascending: false });
 
       if (selectedSection !== 'all') {
-        query = query.eq('section_id', selectedSection);
-      }
-
-      if (filterStatus !== 'all') {
-        query = query.eq('is_published', filterStatus === 'published');
+        query = query.eq('section', selectedSection);
       }
 
       const { data, error } = await query;
@@ -167,10 +176,18 @@ export const TeacherHomeworkScreen: React.FC = () => {
           const { data: students, error: studentError } = await supabase
             .from('students')
             .select('id', { count: 'exact' })
-            .eq('section_id', homework.section_id);
+            .eq('section', homework.section);
 
           return {
             ...homework,
+            assigned_date: homework.created_at,
+            section_id: homework.section,
+            teacher_id: homework.created_by,
+            is_published: true,
+            sections: { 
+              grade: parseInt(homework.section.split(' ')[1] || '1'), 
+              section: homework.section.split(' ')[2] || 'A' 
+            },
             submissions_count: submissions?.length || 0,
             total_students: students?.length || 0
           };
@@ -195,20 +212,53 @@ export const TeacherHomeworkScreen: React.FC = () => {
   // Create homework mutation
   const createHomeworkMutation = useMutation({
     mutationFn: async (data: HomeworkFormData & { is_published: boolean }) => {
-             const payload = {
-         title: data.title,
-         description: data.description,
-         subject: data.subject,
-         section: data.section_id,
-         due_date: data.due_date,
-         school_id: user?.school_id,
-         created_by: user?.id,
-         file_url: data.file_url || null
-       };
+      let fileUrl = data.file_url || null;
+      
+      // Upload file if selected
+      if (selectedFile) {
+        setUploadingFile(true);
+        try {
+          const fileExt = selectedFile.name.split('.').pop();
+          const fileName = `${Date.now()}.${fileExt}`;
+          const filePath = `homework/${user?.school_id}/${fileName}`;
+          
+          // Convert file to blob for upload
+          const response = await fetch(selectedFile.uri);
+          const blob = await response.blob();
+          
+          const { error: uploadError } = await supabase.storage
+            .from('media')
+            .upload(filePath, blob, {
+              contentType: selectedFile.mimeType || 'application/octet-stream'
+            });
+            
+          if (uploadError) throw uploadError;
+          
+          const { data: { publicUrl } } = supabase.storage
+            .from('media')
+            .getPublicUrl(filePath);
+            
+          fileUrl = publicUrl;
+        } catch (uploadError) {
+          Alert.alert('Upload Error', 'Failed to upload file. Please try again.');
+          throw uploadError;
+        } finally {
+          setUploadingFile(false);
+        }
+      }
 
       const { error } = await supabase
         .from('homeworks')
-        .insert(payload);
+        .insert({
+          title: data.title,
+          description: data.description,
+          subject: data.subject,
+          section: data.section_id,
+          due_date: data.due_date,
+          school_id: user?.school_id,
+          created_by: user?.id,
+          file_url: fileUrl
+        });
 
       if (error) throw error;
     },
@@ -250,7 +300,7 @@ export const TeacherHomeworkScreen: React.FC = () => {
   const deleteHomeworkMutation = useMutation({
     mutationFn: async (homeworkId: string) => {
       const { error } = await supabase
-        .from('homework')
+        .from('homeworks')
         .delete()
         .eq('id', homeworkId);
 
@@ -271,8 +321,30 @@ export const TeacherHomeworkScreen: React.FC = () => {
       description: '',
       subject: '',
       due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      section_id: sections.length > 0 ? sections[0].id : ''
+      section_id: sections.length > 0 ? `Grade ${sections[0].grade} ${sections[0].section}` : ''
     });
+    setSelectedFile(null);
+  };
+
+  const handleFileSelection = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setSelectedFile(result.assets[0]);
+        // Clear file_url when file is selected
+        setFormData(prev => ({ ...prev, file_url: undefined }));
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to select file. Please try again.');
+    }
+  };
+
+  const removeSelectedFile = () => {
+    setSelectedFile(null);
   };
 
   const handleCreateHomework = (isDraft: boolean = false) => {
@@ -312,7 +384,8 @@ export const TeacherHomeworkScreen: React.FC = () => {
       description: homework.description,
       subject: homework.subject,
       due_date: homework.due_date,
-      section_id: homework.section_id
+      section_id: homework.section_id,
+      file_url: homework.file_url || undefined
       });
     setShowCreateModal(true);
   };
@@ -347,7 +420,7 @@ export const TeacherHomeworkScreen: React.FC = () => {
 
   useEffect(() => {
     if (sections.length > 0 && !formData.section_id) {
-      setFormData(prev => ({ ...prev, section_id: sections[0].id }));
+      setFormData(prev => ({ ...prev, section_id: `Grade ${sections[0].grade} ${sections[0].section}` }));
     }
   }, [sections]);
 
@@ -376,33 +449,7 @@ export const TeacherHomeworkScreen: React.FC = () => {
             </View>
             
             <View style={{ alignItems: 'flex-end' }}>
-              {homework.is_published ? (
-                <View style={{ 
-                  backgroundColor: '#10b981',
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  borderRadius: 12,
-                  marginBottom: 8
-                }}>
-                  <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>
-                    Published
-                  </Text>
-                </View>
-              ) : (
-                <View style={{ 
-                  backgroundColor: '#f59e0b',
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  borderRadius: 12,
-                  marginBottom: 8
-                }}>
-                  <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>
-                    Draft
-                  </Text>
-                </View>
-              )}
-              
-              {isOverdue && homework.is_published && (
+              {isOverdue && (
                 <View style={{ 
                   backgroundColor: '#ef4444',
                   paddingHorizontal: 8,
@@ -450,6 +497,29 @@ export const TeacherHomeworkScreen: React.FC = () => {
             }} />
           </View>
           
+          {/* Attachment */}
+          {homework.file_url && (
+            <TouchableOpacity
+              onPress={() => Linking.openURL(homework.file_url)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#f8fafc',
+                padding: 12,
+                borderRadius: 8,
+                marginBottom: 16,
+                borderWidth: 1,
+                borderColor: '#e2e8f0'
+              }}
+            >
+              <Paperclip size={16} color="#64748b" />
+              <Text style={{ fontSize: 14, color: '#475569', marginLeft: 8, flex: 1 }}>
+                View Attachment
+              </Text>
+              <ExternalLink size={16} color="#64748b" />
+            </TouchableOpacity>
+          )}
+          
           {/* Action Buttons */}
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity
@@ -470,27 +540,6 @@ export const TeacherHomeworkScreen: React.FC = () => {
                 Edit
               </Text>
             </TouchableOpacity>
-            
-            {!homework.is_published && (
-              <TouchableOpacity
-                onPress={() => handlePublishHomework(homework)}
-                style={{
-                  flex: 1,
-                  backgroundColor: '#10b981',
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  borderRadius: 6,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                <Send size={14} color="white" />
-                <Text style={{ color: 'white', fontSize: 12, fontWeight: '500', marginLeft: 4 }}>
-                  Publish
-                </Text>
-              </TouchableOpacity>
-            )}
             
             <TouchableOpacity
               onPress={() => handleDeleteHomework(homework)}
@@ -584,30 +633,6 @@ export const TeacherHomeworkScreen: React.FC = () => {
               />
                             </View>
             
-            {/* Filters */}
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-              {(['all', 'published', 'draft'] as const).map((status) => (
-                <TouchableOpacity
-                  key={status}
-                  onPress={() => setFilterStatus(status)}
-                  style={{
-                    paddingVertical: 8,
-                    paddingHorizontal: 12,
-                              borderRadius: 6,
-                    backgroundColor: filterStatus === status ? '#3b82f6' : '#f3f4f6'
-                  }}
-                >
-                  <Text style={{
-                    fontSize: 12,
-                    fontWeight: '500',
-                    color: filterStatus === status ? 'white' : '#6b7280',
-                    textTransform: 'capitalize'
-                  }}>
-                    {status}
-                              </Text>
-                </TouchableOpacity>
-              ))}
-                      </View>
                       
             {/* Section Filter */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -634,12 +659,12 @@ export const TeacherHomeworkScreen: React.FC = () => {
                 {sections.map((section) => (
                           <TouchableOpacity
                     key={section.id}
-                    onPress={() => setSelectedSection(section.id)}
+                    onPress={() => setSelectedSection(`Grade ${section.grade} ${section.section}`)}
                             style={{
                       paddingVertical: 8,
                       paddingHorizontal: 12,
                       borderRadius: 6,
-                      backgroundColor: selectedSection === section.id ? '#3b82f6' : '#f3f4f6',
+                      backgroundColor: selectedSection === `Grade ${section.grade} ${section.section}` ? '#3b82f6' : '#f3f4f6',
                       minWidth: 100,
                       alignItems: 'center'
                             }}
@@ -647,7 +672,7 @@ export const TeacherHomeworkScreen: React.FC = () => {
                     <Text style={{
                       fontSize: 12,
                       fontWeight: '500',
-                      color: selectedSection === section.id ? 'white' : '#6b7280'
+                      color: selectedSection === `Grade ${section.grade} ${section.section}` ? 'white' : '#6b7280'
                     }}>
                       Grade {section.grade} {section.section}
                     </Text>
@@ -803,22 +828,22 @@ export const TeacherHomeworkScreen: React.FC = () => {
                     {sections.map((section) => (
                       <TouchableOpacity
                         key={section.id}
-                        onPress={() => setFormData(prev => ({ ...prev, section_id: section.id }))}
+                        onPress={() => setFormData(prev => ({ ...prev, section_id: `Grade ${section.grade} ${section.section}` }))}
                         style={{
                           paddingVertical: 12,
                           paddingHorizontal: 16,
                           borderRadius: 8,
-                          backgroundColor: formData.section_id === section.id ? '#3b82f6' : '#f3f4f6',
+                          backgroundColor: formData.section_id === `Grade ${section.grade} ${section.section}` ? '#3b82f6' : '#f3f4f6',
                           minWidth: 120,
                           alignItems: 'center',
                           borderWidth: 1,
-                          borderColor: formData.section_id === section.id ? '#3b82f6' : '#d1d5db'
+                          borderColor: formData.section_id === `Grade ${section.grade} ${section.section}` ? '#3b82f6' : '#d1d5db'
                         }}
                       >
                         <Text style={{
                           fontSize: 14,
                           fontWeight: '500',
-                          color: formData.section_id === section.id ? 'white' : '#6b7280'
+                          color: formData.section_id === `Grade ${section.grade} ${section.section}` ? 'white' : '#6b7280'
                         }}>
                           Grade {section.grade} {section.section}
                         </Text>
@@ -875,6 +900,114 @@ export const TeacherHomeworkScreen: React.FC = () => {
                   }}
                 />
               </View>
+
+              {/* File Attachment */}
+              <View>
+                <Text style={{ fontSize: 16, fontWeight: '500', color: '#111827', marginBottom: 8 }}>
+                  Attachment (Optional)
+                </Text>
+                
+                {/* File Upload Section */}
+                {!selectedFile && !formData.file_url && (
+                  <TouchableOpacity
+                    onPress={handleFileSelection}
+                    style={{
+                      backgroundColor: '#f8fafc',
+                      borderWidth: 2,
+                      borderColor: '#e2e8f0',
+                      borderStyle: 'dashed',
+                      borderRadius: 8,
+                      padding: 20,
+                      alignItems: 'center',
+                      marginBottom: 12
+                    }}
+                  >
+                    <Upload size={24} color="#64748b" />
+                    <Text style={{ fontSize: 14, color: '#475569', marginTop: 8, textAlign: 'center' }}>
+                      Tap to upload a file
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 4, textAlign: 'center' }}>
+                      PDF, DOC, DOCX, or Images
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                
+                {/* Selected File Display */}
+                {selectedFile && (
+                  <View style={{
+                    backgroundColor: '#f0f9ff',
+                    borderWidth: 1,
+                    borderColor: '#bae6fd',
+                    borderRadius: 8,
+                    padding: 12,
+                    marginBottom: 12
+                  }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <File size={20} color="#0284c7" />
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '500', color: '#0c4a6e' }}>
+                          {selectedFile.name}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#0369a1' }}>
+                          {Math.round(selectedFile.size! / 1024)} KB
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={removeSelectedFile}
+                        style={{
+                          backgroundColor: '#ef4444',
+                          padding: 6,
+                          borderRadius: 4
+                        }}
+                      >
+                        <X size={14} color="white" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+                
+                {/* URL Input as Alternative */}
+                <View>
+                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#6b7280', marginBottom: 8 }}>
+                    Or add a URL
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TextInput
+                      value={formData.file_url || ''}
+                      onChangeText={(text) => {
+                        setFormData(prev => ({ ...prev, file_url: text }));
+                        if (text) setSelectedFile(null); // Clear file if URL is entered
+                      }}
+                      placeholder="https://example.com/file.pdf"
+                      style={{
+                        flex: 1,
+                        backgroundColor: 'white',
+                        borderWidth: 1,
+                        borderColor: '#d1d5db',
+                        borderRadius: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 12,
+                        fontSize: 16,
+                        color: '#111827'
+                      }}
+                    />
+                    {formData.file_url && (
+                      <TouchableOpacity
+                        onPress={() => Linking.openURL(formData.file_url!)}
+                        style={{
+                          backgroundColor: '#3b82f6',
+                          padding: 12,
+                          borderRadius: 8,
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <ExternalLink size={20} color="white" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              </View>
             </View>
           </ScrollView>
 
@@ -888,17 +1021,10 @@ export const TeacherHomeworkScreen: React.FC = () => {
             gap: 12
           }}>
             <Button
-              title={editingHomework ? 'Update & Publish' : 'Create & Publish'}
+              title={uploadingFile ? 'Uploading...' : editingHomework ? 'Update Homework' : 'Create Homework'}
               onPress={() => editingHomework ? handleUpdateHomework(false) : handleCreateHomework(false)}
               size="lg"
-              loading={createHomeworkMutation.isPending || updateHomeworkMutation.isPending}
-            />
-            <Button
-              title={editingHomework ? 'Save as Draft' : 'Save as Draft'}
-              onPress={() => editingHomework ? handleUpdateHomework(true) : handleCreateHomework(true)}
-              variant="outline"
-              size="lg"
-              loading={createHomeworkMutation.isPending || updateHomeworkMutation.isPending}
+              loading={createHomeworkMutation.isPending || updateHomeworkMutation.isPending || uploadingFile}
             />
           </View>
         </SafeAreaView>

@@ -122,36 +122,112 @@ export const TeacherCoScholasticScreen: React.FC = () => {
     queryFn: async (): Promise<Section[]> => {
       if (!user?.id) return [];
 
-      const { data, error } = await supabase
+      console.log('Fetching sections for teacher:', user.id, 'school:', user.school_id);
+      
+      // Try direct class teacher query first
+      const { data: directSections, error: directError } = await supabase
         .from('sections')
-        .select('id, grade, section')
+        .select('id, grade, section, class_teacher, school_id')
         .eq('class_teacher', user.id)
         .eq('school_id', user?.school_id)
         .order('grade, section');
 
-      if (error) throw error;
-      return data || [];
+      console.log('Direct sections query result:', { data: directSections, error: directError });
+      
+      if (directError) throw directError;
+      
+      // If we found sections directly, return them
+      if (directSections && directSections.length > 0) {
+        return directSections;
+      }
+      
+      // Otherwise, try the junction table approach for any sections where teacher teaches
+      console.log('No direct class teacher sections found, trying junction table...');
+      const { data: junctionSections, error: junctionError } = await supabase
+        .from('section_teachers')
+        .select(`
+          sections!inner(
+            id, grade, section, class_teacher, school_id
+          )
+        `)
+        .eq('teacher_id', user.id)
+        .eq('sections.school_id', user?.school_id);
+
+      console.log('Junction table query result:', { data: junctionSections, error: junctionError });
+      
+      if (junctionError) throw junctionError;
+      
+      // Transform junction table results
+      return (junctionSections || []).map((item: any) => ({
+        id: item.sections.id,
+        grade: item.sections.grade,
+        section: item.sections.section,
+        class_teacher: item.sections.class_teacher,
+        school_id: item.sections.school_id
+      }));
     },
     enabled: !!user?.id,
   });
 
   // Fetch students from class teacher sections
   const { data: students = [], isLoading: studentsLoading } = useQuery({
-    queryKey: ['class-teacher-students', user?.id],
+    queryKey: ['class-teacher-students', user?.id, classTeacherSections],
     queryFn: async (): Promise<Student[]> => {
       if (!user?.id || classTeacherSections.length === 0) return [];
 
+      console.log('Class teacher sections:', classTeacherSections);
       const sectionIds = classTeacherSections.map(s => s.id);
       
-      const { data, error } = await supabase
+      // Try UUID-based section_id query first
+      const { data: uuidStudents, error: uuidError } = await supabase
         .from('students')
-        .select('id, full_name, admission_no, grade, section')
+        .select('id, full_name, admission_no, grade, section, section_id')
         .in('section_id', sectionIds)
         .eq('school_id', user?.school_id)
         .order('full_name');
 
-      if (error) throw error;
-      return data || [];
+      console.log('UUID-based students query result:', { data: uuidStudents, error: uuidError, sectionIds });
+      
+      if (uuidError) {
+        console.error('UUID query error:', uuidError);
+      }
+      
+      // If UUID query returns students, use them
+      if (uuidStudents && uuidStudents.length > 0) {
+        return uuidStudents;
+      }
+      
+      // Fallback: Try text-based matching for backward compatibility
+      console.log('UUID query returned no students, trying text-based fallback...');
+      
+      const textBasedQueries = classTeacherSections.map(async (section) => {
+        const { data: textStudents, error: textError } = await supabase
+          .from('students')
+          .select('id, full_name, admission_no, grade, section, section_id')
+          .eq('school_id', user?.school_id)
+          .eq('section', section.section)
+          .eq('grade', section.grade.toString())
+          .order('full_name');
+        
+        if (textError) {
+          console.error(`Text-based query error for section ${section.grade}${section.section}:`, textError);
+          return [];
+        }
+        
+        console.log(`Text-based students for section ${section.grade}${section.section}:`, textStudents);
+        return textStudents || [];
+      });
+      
+      const allResults = await Promise.all(textBasedQueries);
+      const allStudents = allResults.flat();
+      
+      // Remove duplicates by student ID
+      const uniqueStudents = allStudents.filter((student, index, arr) => 
+        arr.findIndex(s => s.id === student.id) === index
+      );
+      
+      console.log('Final combined students result:', uniqueStudents);
+      return uniqueStudents;
     },
     enabled: !!user?.id && classTeacherSections.length > 0,
   });
@@ -165,7 +241,7 @@ export const TeacherCoScholasticScreen: React.FC = () => {
       const { data, error } = await supabase
         .from('co_scholastic_assessments')
         .select('*')
-        .eq('teacher_id', user.id)
+        .eq('assessed_by', user.id)
         .eq('term', selectedTerm)
         .eq('academic_year', '2024-25');
 
@@ -181,27 +257,19 @@ export const TeacherCoScholasticScreen: React.FC = () => {
       const payload = {
         ...data,
         school_id: user?.school_id,
-        teacher_id: user?.id,
+        assessed_by: user?.id,
         updated_at: new Date().toISOString(),
         updated_by: user?.id
       };
 
-      if (data.id) {
-        // Update existing
-        const { error } = await supabase
-          .from('co_scholastic_assessments')
-          .update(payload)
-          .eq('id', data.id);
-        
-        if (error) throw error;
-      } else {
-        // Create new
-        const { error } = await supabase
-          .from('co_scholastic_assessments')
-          .insert(payload);
-        
-        if (error) throw error;
-      }
+      // Use upsert to handle both create and update cases
+      const { error } = await supabase
+        .from('co_scholastic_assessments')
+        .upsert(payload, {
+          onConflict: 'student_id,term,academic_year'
+        });
+      
+      if (error) throw error;
     },
     onSuccess: () => {
       Alert.alert('Success', 'Assessment saved successfully!');
@@ -325,6 +393,9 @@ export const TeacherCoScholasticScreen: React.FC = () => {
           </Text>
           <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 8, textAlign: 'center' }}>
             You need to be assigned as a class teacher to access co-scholastic assessments.
+          </Text>
+          <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4, textAlign: 'center' }}>
+            Teacher ID: {user?.id}
           </Text>
         </View>
       </SafeAreaView>
@@ -490,6 +561,12 @@ export const TeacherCoScholasticScreen: React.FC = () => {
                   </Text>
                   <Text style={{ fontSize: 14, color: '#9ca3af', textAlign: 'center', marginTop: 4 }}>
                     Students will appear here when you're assigned as a class teacher
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#d1d5db', textAlign: 'center', marginTop: 8 }}>
+                    Sections: {classTeacherSections.map(s => `${s.grade}${s.section}`).join(', ')}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#d1d5db', textAlign: 'center', marginTop: 2 }}>
+                    Check console for debugging details
                   </Text>
                 </View>
               )}
