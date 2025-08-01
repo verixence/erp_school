@@ -1,67 +1,68 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  ScrollView, 
-  SafeAreaView, 
-  RefreshControl, 
-  TouchableOpacity, 
-  Image, 
-  Dimensions,
-  FlatList
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  SafeAreaView,
+  Modal,
+  Image,
+  Dimensions
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
-import { Card, CardContent, CardHeader } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { 
-  Camera, 
-  Calendar, 
-  Download, 
-  Eye, 
-  Heart,
-  Share,
-  ImageIcon,
-  Grid,
-  List,
-  Search
+import { useQuery } from '@tanstack/react-query';
+import { Card } from '../../components/ui/Card';
+import {
+  Camera,
+  Image as ImageIcon,
+  Calendar,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Download
 } from 'lucide-react-native';
+import { formatDistanceToNow } from 'date-fns';
 
-const { width } = Dimensions.get('window');
-const imageWidth = (width - 60) / 2; // 2 columns with padding
+const { width: screenWidth } = Dimensions.get('window');
 
 interface Album {
   id: string;
   title: string;
-  description?: string;
+  description: string | null;
+  event_date: string | null;
+  event_name: string | null;
+  images_count: number;
   created_at: string;
-  cover_image?: string;
-  image_count: number;
+  cover_image: string | null;
 }
 
 interface GalleryImage {
   id: string;
   album_id: string;
-  title: string;
-  description?: string;
   image_url: string;
-  uploaded_at: string;
-  album_title?: string;
+  caption: string | null;
+  file_name: string;
+  created_at: string;
 }
 
-export const ParentGalleryScreen: React.FC = () => {
+const ParentGalleryScreen = () => {
   const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'albums' | 'images'>('albums');
+  const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
+  const [showImages, setShowImages] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [images, setImages] = useState<GalleryImage[]>([]);
 
-  // Fetch school albums
-  const { data: albums = [], isLoading: albumsLoading, refetch: refetchAlbums } = useQuery({
-    queryKey: ['school-albums', user?.school_id],
+  // Fetch albums
+  const { data: albums = [], isLoading, refetch } = useQuery({
+    queryKey: ['gallery-albums', user?.school_id],
     queryFn: async (): Promise<Album[]> => {
       if (!user?.school_id) return [];
+
+      console.log('Fetching gallery albums for school:', user.school_id);
 
       const { data, error } = await supabase
         .from('gallery_albums')
@@ -69,242 +70,388 @@ export const ParentGalleryScreen: React.FC = () => {
           id,
           title,
           description,
-          created_at,
-          cover_image,
-          gallery_images(count)
+          event_date,
+          event_name,
+          created_at
         `)
         .eq('school_id', user.school_id)
-        .order('created_at', { ascending: false });
+        .eq('is_published', true)
+        .order('event_date', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching albums:', error);
+        throw error;
+      }
 
-      return (data || []).map((album: any) => ({
-        id: album.id,
-        title: album.title,
-        description: album.description,
-        created_at: album.created_at,
-        cover_image: album.cover_image,
-        image_count: album.gallery_images?.[0]?.count || 0
-      }));
+      console.log('Raw gallery albums data:', data);
+
+      // Get images count and cover image for each album
+      const albumsWithMeta = await Promise.all(
+        (data || []).map(async (album) => {
+          const { data: images, error: imagesError } = await supabase
+            .from('gallery_images')
+            .select('image_url')
+            .eq('album_id', album.id)
+            .order('upload_order', { ascending: true });
+
+          return {
+            ...album,
+            images_count: images?.length || 0,
+            cover_image: images?.[0]?.image_url || null
+          };
+        })
+      );
+
+      return albumsWithMeta;
     },
     enabled: !!user?.school_id,
+    staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
   });
 
-  // Fetch images for selected album
-  const { data: albumImages = [], isLoading: imagesLoading } = useQuery({
-    queryKey: ['album-images', selectedAlbum],
-    queryFn: async (): Promise<GalleryImage[]> => {
-      if (!selectedAlbum) return [];
-
-      const { data, error } = await supabase
-        .from('gallery_images')
-        .select(`
-          id,
-          album_id,
-          title,
-          description,
-          image_url,
-          uploaded_at,
-          gallery_albums!inner(title)
-        `)
-        .eq('album_id', selectedAlbum)
-        .order('uploaded_at', { ascending: false });
-
-      if (error) throw error;
-
-      return (data || []).map((image: any) => ({
-        id: image.id,
-        album_id: image.album_id,
-        title: image.title,
-        description: image.description,
-        image_url: image.image_url,
-        uploaded_at: image.uploaded_at,
-        album_title: image.gallery_albums?.title
-      }));
-    },
-    enabled: !!selectedAlbum,
-  });
-
-  const onRefresh = async () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    await refetchAlbums();
+    await refetch();
     setRefreshing(false);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
+  const openAlbum = async (album: Album) => {
+    setSelectedAlbum(album);
+    
+    console.log('Fetching images for album:', album.id);
+
+    // Fetch images for this album
+    const { data, error } = await supabase
+      .from('gallery_images')
+      .select('*')
+      .eq('album_id', album.id)
+      .order('upload_order', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching images:', error);
+      return;
+    }
+
+    console.log('Raw gallery images data:', data);
+    setImages(data || []);
+    setShowImages(true);
   };
 
-  const renderAlbumItem = ({ item }: { item: Album }) => (
-    <TouchableOpacity
-      onPress={() => {
-        setSelectedAlbum(item.id);
-        setViewMode('images');
-      }}
-      className="mb-4"
-    >
-      <Card>
-        <CardContent className="p-0">
-          <View className="relative">
-            {item.cover_image ? (
-              <Image
-                source={{ uri: item.cover_image }}
-                className="w-full h-48 rounded-t-lg"
-                resizeMode="cover"
-              />
-            ) : (
-              <View className="w-full h-48 bg-gray-200 rounded-t-lg flex items-center justify-center">
-                <Camera size={48} color="#9ca3af" />
-              </View>
-            )}
-            <View className="absolute bottom-2 right-2 bg-black/50 px-2 py-1 rounded">
-              <Text className="text-white text-xs">{item.image_count} photos</Text>
-            </View>
-          </View>
-          <View className="p-4">
-            <Text className="text-lg font-semibold text-gray-900 mb-1">
-              {item.title}
-            </Text>
-            {item.description && (
-              <Text className="text-sm text-gray-600 mb-2" numberOfLines={2}>
-                {item.description}
-              </Text>
-            )}
-            <View className="flex-row items-center">
-              <Calendar size={14} color="#6b7280" />
-              <Text className="text-xs text-gray-500 ml-1">
-                {formatDate(item.created_at)}
-              </Text>
-            </View>
-          </View>
-        </CardContent>
-      </Card>
-    </TouchableOpacity>
-  );
+  const closeImageViewer = () => {
+    setShowImages(false);
+    setSelectedImageIndex(null);
+    setSelectedAlbum(null);
+    setImages([]);
+  };
 
-  const renderImageItem = ({ item }: { item: GalleryImage }) => (
-    <TouchableOpacity className="mb-2 mx-1" style={{ width: imageWidth }}>
-      <Card>
-        <CardContent className="p-0">
-          <Image
-            source={{ uri: item.image_url }}
-            style={{ width: imageWidth, height: imageWidth }}
-            className="rounded-lg"
-            resizeMode="cover"
-          />
-          {item.title && (
-            <View className="p-2">
-              <Text className="text-sm font-medium text-gray-900" numberOfLines={1}>
-                {item.title}
-              </Text>
-              <Text className="text-xs text-gray-500">
-                {formatDate(item.uploaded_at)}
-              </Text>
-            </View>
-          )}
-        </CardContent>
-      </Card>
-    </TouchableOpacity>
-  );
+  const formatEventDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
 
-  if (albumsLoading) {
+  if (isLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50">
-        <StatusBar style="dark" />
-        <View className="flex-1 justify-center items-center">
-          <Text className="text-gray-500">Loading gallery...</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: '#6b7280' }}>Loading gallery...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <StatusBar style="dark" />
       
       {/* Header */}
-      <View className="bg-white px-4 py-3 border-b border-gray-200">
-        <View className="flex-row items-center justify-between">
-          {viewMode === 'images' && selectedAlbum ? (
-            <TouchableOpacity
-              onPress={() => {
-                setViewMode('albums');
-                setSelectedAlbum(null);
-              }}
-              className="flex-row items-center"
-            >
-              <Text className="text-blue-600 text-lg font-semibold">← Albums</Text>
-            </TouchableOpacity>
-          ) : (
-            <Text className="text-xl font-bold text-gray-900">School Gallery</Text>
-          )}
+      <View style={{ 
+        backgroundColor: 'white', 
+        paddingHorizontal: 24, 
+        paddingTop: 16,
+        paddingBottom: 20,
+        borderBottomWidth: 1, 
+        borderBottomColor: '#e5e7eb',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={{ 
+              backgroundColor: '#8b5cf6', 
+              padding: 10, 
+              borderRadius: 12, 
+              marginRight: 12 
+            }}>
+              <Camera size={24} color="white" />
+            </View>
+            <View>
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111827' }}>
+                Gallery
+              </Text>
+              <Text style={{ fontSize: 14, color: '#6b7280' }}>
+                Explore memories from school events and activities
+              </Text>
+            </View>
+          </View>
           
-          <View className="flex-row items-center space-x-2">
-            <TouchableOpacity className="p-2">
-              <Search size={20} color="#6b7280" />
-            </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <ImageIcon size={16} color="#6b7280" />
+            <Text style={{ fontSize: 14, color: '#6b7280', marginLeft: 4 }}>
+              {albums.length} albums
+            </Text>
           </View>
         </View>
-        
-        {viewMode === 'images' && selectedAlbum && (
-          <Text className="text-sm text-gray-600 mt-1">
-            {albumImages.length} photos
-          </Text>
-        )}
       </View>
 
-      {/* Content */}
+      {/* Albums Grid */}
       <ScrollView
-        className="flex-1 px-4"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        showsVerticalScrollIndicator={false}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 24 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
       >
-        {viewMode === 'albums' ? (
-          <View className="py-4">
-            {albums.length === 0 ? (
-              <View className="flex-1 justify-center items-center py-20">
-                <Camera size={48} color="#9ca3af" />
-                <Text className="text-gray-500 text-center mt-4">
-                  No photo albums available yet
-                </Text>
-              </View>
-            ) : (
-              <FlatList
-                data={albums}
-                renderItem={renderAlbumItem}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-                showsVerticalScrollIndicator={false}
-              />
-            )}
-          </View>
+        {albums.length === 0 ? (
+          <Card style={{ padding: 32, alignItems: 'center' }}>
+            <Camera size={48} color="#6b7280" style={{ marginBottom: 16 }} />
+            <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827', marginBottom: 8 }}>
+              No Albums Available
+            </Text>
+            <Text style={{ fontSize: 14, color: '#6b7280', textAlign: 'center' }}>
+              No photo albums have been published yet. Check back later for school event photos and memories.
+            </Text>
+          </Card>
         ) : (
-          <View className="py-4">
-            {imagesLoading ? (
-              <View className="flex-1 justify-center items-center py-20">
-                <Text className="text-gray-500">Loading photos...</Text>
-              </View>
-            ) : albumImages.length === 0 ? (
-              <View className="flex-1 justify-center items-center py-20">
-                <ImageIcon size={48} color="#9ca3af" />
-                <Text className="text-gray-500 text-center mt-4">
-                  No photos in this album yet
-                </Text>
-              </View>
-            ) : (
-              <FlatList
-                data={albumImages}
-                renderItem={renderImageItem}
-                keyExtractor={(item) => item.id}
-                numColumns={2}
-                scrollEnabled={false}
-                showsVerticalScrollIndicator={false}
-                columnWrapperStyle={{ justifyContent: 'space-between' }}
-              />
-            )}
+          <View style={{ 
+            flexDirection: 'row', 
+            flexWrap: 'wrap', 
+            justifyContent: 'space-between',
+            gap: 16 
+          }}>
+            {albums.map((album) => (
+              <TouchableOpacity
+                key={album.id}
+                style={{
+                  width: (screenWidth - 64) / 2, // 2 columns with padding
+                  marginBottom: 16
+                }}
+                onPress={() => openAlbum(album)}
+              >
+                <Card style={{ overflow: 'hidden' }}>
+                  {/* Album Cover */}
+                  <View style={{ 
+                    height: 120, 
+                    backgroundColor: '#f3f4f6',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    {album.cover_image ? (
+                      <Image
+                        source={{ uri: album.cover_image }}
+                        style={{ width: '100%', height: '100%' }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <ImageIcon size={32} color="#6b7280" />
+                    )}
+                  </View>
+
+                  {/* Album Info */}
+                  <View style={{ padding: 12 }}>
+                    <Text style={{ 
+                      fontSize: 16, 
+                      fontWeight: '600', 
+                      color: '#111827',
+                      marginBottom: 4
+                    }} numberOfLines={2}>
+                      {album.title}
+                    </Text>
+                    
+                    {album.event_name && (
+                      <Text style={{ 
+                        fontSize: 12, 
+                        color: '#8b5cf6',
+                        marginBottom: 4,
+                        fontWeight: '500'
+                      }}>
+                        {album.event_name}
+                      </Text>
+                    )}
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                      <ImageIcon size={12} color="#6b7280" />
+                      <Text style={{ fontSize: 12, color: '#6b7280', marginLeft: 4 }}>
+                        {album.images_count} photos
+                      </Text>
+                    </View>
+
+                    {album.event_date && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Calendar size={12} color="#6b7280" />
+                        <Text style={{ fontSize: 12, color: '#6b7280', marginLeft: 4 }}>
+                          {formatEventDate(album.event_date)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </Card>
+              </TouchableOpacity>
+            ))}
           </View>
         )}
       </ScrollView>
+
+      {/* Image Viewer Modal */}
+      <Modal
+        visible={showImages}
+        animationType="fade"
+        presentationStyle="fullScreen"
+        onRequestClose={closeImageViewer}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: 'black' }}>
+          {/* Header */}
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 20,
+            paddingVertical: 16,
+            backgroundColor: 'rgba(0,0,0,0.8)'
+          }}>
+            <TouchableOpacity onPress={closeImageViewer}>
+              <X size={24} color="white" />
+            </TouchableOpacity>
+            <Text style={{ color: 'white', fontSize: 18, fontWeight: '600' }}>
+              {selectedAlbum?.title}
+            </Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          {/* Image Grid */}
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ 
+              padding: 20,
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              justifyContent: 'space-between'
+            }}
+          >
+            {images.map((image, index) => (
+              <TouchableOpacity
+                key={image.id}
+                style={{
+                  width: (screenWidth - 60) / 3, // 3 columns
+                  height: (screenWidth - 60) / 3,
+                  marginBottom: 10,
+                  borderRadius: 8,
+                  overflow: 'hidden'
+                }}
+                onPress={() => setSelectedImageIndex(index)}
+              >
+                <Image
+                  source={{ uri: image.image_url }}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Full Image Viewer */}
+          {selectedImageIndex !== null && (
+            <Modal
+              visible={true}
+              animationType="fade"
+              presentationStyle="fullScreen"
+              onRequestClose={() => setSelectedImageIndex(null)}
+            >
+              <SafeAreaView style={{ flex: 1, backgroundColor: 'black' }}>
+                {/* Header */}
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingHorizontal: 20,
+                  paddingVertical: 16,
+                  backgroundColor: 'rgba(0,0,0,0.8)'
+                }}>
+                  <TouchableOpacity onPress={() => setSelectedImageIndex(null)}>
+                    <X size={24} color="white" />
+                  </TouchableOpacity>
+                  <Text style={{ color: 'white', fontSize: 16 }}>
+                    {selectedImageIndex + 1} of {images.length}
+                  </Text>
+                  <TouchableOpacity>
+                    <Download size={24} color="white" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Image */}
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                  <Image
+                    source={{ uri: images[selectedImageIndex].image_url }}
+                    style={{ 
+                      width: screenWidth, 
+                      height: screenWidth,
+                      maxHeight: '80%'
+                    }}
+                    resizeMode="contain"
+                  />
+                </View>
+
+                {/* Navigation */}
+                <View style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  paddingHorizontal: 20,
+                  paddingVertical: 16,
+                  backgroundColor: 'rgba(0,0,0,0.8)'
+                }}>
+                  <TouchableOpacity
+                    onPress={() => setSelectedImageIndex(Math.max(0, selectedImageIndex - 1))}
+                    disabled={selectedImageIndex === 0}
+                    style={{ opacity: selectedImageIndex === 0 ? 0.5 : 1 }}
+                  >
+                    <ChevronLeft size={32} color="white" />
+                  </TouchableOpacity>
+
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    {images[selectedImageIndex].caption && (
+                      <Text style={{ 
+                        color: 'white', 
+                        fontSize: 16, 
+                        textAlign: 'center',
+                        marginHorizontal: 20
+                      }}>
+                        {images[selectedImageIndex].caption}
+                      </Text>
+                    )}
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => setSelectedImageIndex(Math.min(images.length - 1, selectedImageIndex + 1))}
+                    disabled={selectedImageIndex === images.length - 1}
+                    style={{ opacity: selectedImageIndex === images.length - 1 ? 0.5 : 1 }}
+                  >
+                    <ChevronRight size={32} color="white" />
+                  </TouchableOpacity>
+                </View>
+              </SafeAreaView>
+            </Modal>
+          )}
+        </SafeAreaView>
+      </Modal>
+
     </SafeAreaView>
   );
-}; 
+};
+
+export { ParentGalleryScreen };
+export default ParentGalleryScreen;

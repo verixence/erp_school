@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import { supabase } from './supabase';
 
 // Configure how notifications should be handled when the app is running
 Notifications.setNotificationHandler({
@@ -118,18 +119,126 @@ export function addNotificationResponseReceivedListener(
 }
 
 // Store the push token in the database (to be called after login)
-export async function storePushToken(userId: string, token: string, role: 'teacher' | 'parent') {
-  // This would typically make an API call to store the token
-  // For now, we'll just log it
-  console.log('Storing push token for user:', userId, 'Role:', role, 'Token:', token);
-  
-  // TODO: Implement API call to store token
-  // Example:
-  // await supabase.from('push_tokens').upsert({
-  //   user_id: userId,
-  //   token,
-  //   platform: Platform.OS,
-  //   role,
-  //   updated_at: new Date().toISOString()
-  // });
+export async function storePushToken(userId: string, token: string, schoolId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('push_tokens')
+      .upsert({
+        user_id: userId,
+        school_id: schoolId,
+        token,
+        platform: Platform.OS,
+        device_name: Device.deviceName || `${Platform.OS} Device`,
+        is_active: true,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id,token'
+      });
+
+    if (error) {
+      console.error('Error storing push token:', error);
+      throw error;
+    }
+
+    console.log('Push token stored successfully for user:', userId);
+    return data;
+  } catch (error) {
+    console.error('Failed to store push token:', error);
+    throw error;
+  }
+}
+
+// Remove push token when user logs out
+export async function removePushToken(userId: string, token?: string) {
+  try {
+    let query = supabase
+      .from('push_tokens')
+      .update({ is_active: false })
+      .eq('user_id', userId);
+
+    if (token) {
+      query = query.eq('token', token);
+    }
+
+    const { error } = await query;
+
+    if (error) {
+      console.error('Error removing push token:', error);
+      throw error;
+    }
+
+    console.log('Push token removed successfully for user:', userId);
+  } catch (error) {
+    console.error('Failed to remove push token:', error);
+    throw error;
+  }
+}
+
+// Get user's notification preferences
+export async function getNotificationPreferences(userId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('notification_preferences')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+      console.error('Error fetching notification preferences:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Failed to get notification preferences:', error);
+    return null;
+  }
+}
+
+// Update user's notification preferences
+export async function updateNotificationPreferences(userId: string, preferences: Partial<{
+  announcements: boolean;
+  assignments: boolean;
+  grades: boolean;
+  attendance: boolean;
+  events: boolean;
+  messages: boolean;
+  reminders: boolean;
+  emergencies: boolean;
+}>) {
+  try {
+    const { data, error } = await supabase
+      .from('notification_preferences')
+      .upsert({
+        user_id: userId,
+        ...preferences,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id'
+      });
+
+    if (error) {
+      console.error('Error updating notification preferences:', error);
+      throw error;
+    }
+
+    console.log('Notification preferences updated successfully for user:', userId);
+    return data;
+  } catch (error) {
+    console.error('Failed to update notification preferences:', error);
+    throw error;
+  }
+}
+
+// Check if notifications are enabled for a specific type
+export async function isNotificationTypeEnabled(userId: string, type: string): Promise<boolean> {
+  try {
+    const preferences = await getNotificationPreferences(userId);
+    if (!preferences) return true; // Default to enabled if no preferences found
+    
+    return preferences[type as keyof typeof preferences] !== false;
+  } catch (error) {
+    console.error('Error checking notification type:', error);
+    return true; // Default to enabled on error
+  }
 } 

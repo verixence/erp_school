@@ -114,6 +114,11 @@ const MediaStack = () => (
       component={ParentGalleryScreen}
       options={{ title: 'School Gallery' }}
     />
+  </Stack.Navigator>
+);
+
+const CalendarStack = () => (
+  <Stack.Navigator>
     <Stack.Screen 
       name="Calendar" 
       component={ParentCalendarScreen}
@@ -152,6 +157,9 @@ export const ParentNavigator: React.FC = () => {
             case 'MediaTab':
               IconComponent = Camera;
               break;
+            case 'CalendarTab':
+              IconComponent = CalendarDays;
+              break;
             case 'SettingsTab':
               IconComponent = Settings;
               break;
@@ -161,7 +169,7 @@ export const ParentNavigator: React.FC = () => {
 
           return <IconComponent size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#3b82f6',
+        tabBarActiveTintColor: '#8b5cf6',
         tabBarInactiveTintColor: '#6b7280',
         tabBarStyle: {
           backgroundColor: 'white',
@@ -197,7 +205,12 @@ export const ParentNavigator: React.FC = () => {
       <Tab.Screen 
         name="MediaTab" 
         component={MediaStack}
-        options={{ title: 'Media' }}
+        options={{ title: 'Gallery' }}
+      />
+      <Tab.Screen 
+        name="CalendarTab" 
+        component={CalendarStack}
+        options={{ title: 'Calendar' }}
       />
       <Tab.Screen 
         name="SettingsTab" 

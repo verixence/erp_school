@@ -29,7 +29,6 @@ import { TeacherAnnouncementsScreen } from '../screens/teacher/TeacherAnnounceme
 import TeacherCommunityScreen from '../screens/teacher/TeacherCommunityScreen';
 import { TeacherGalleryScreen } from '../screens/teacher/TeacherGalleryScreen';
 import TeacherCalendarScreen from '../screens/teacher/TeacherCalendarScreen';
-import TeacherFeedbackScreen from '../screens/teacher/TeacherFeedbackScreen';
 import { TeacherCoScholasticScreen } from '../screens/teacher/TeacherCoScholasticScreen';
 import { TeacherLeaveRequestsScreen } from '../screens/teacher/TeacherLeaveRequestsScreen';
 import { TeacherOnlineClassesScreen } from '../screens/teacher/TeacherOnlineClassesScreen';
@@ -115,11 +114,6 @@ const CommunicationStack = () => (
       name="Community" 
       component={TeacherCommunityScreen}
       options={{ title: 'Community' }}
-    />
-    <Stack.Screen 
-      name="Feedback" 
-      component={TeacherFeedbackScreen}
-      options={{ title: 'Feedback' }}
     />
   </Stack.Navigator>
 );

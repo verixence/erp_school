@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Image
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
@@ -33,6 +34,7 @@ import {
   Upload
 } from 'lucide-react-native';
 import { formatDistanceToNow } from 'date-fns';
+import { uploadMediaFromRN, MediaObject, ImagePickerResult } from '../../utils/mediaUpload';
 
 interface Post {
   id: string;
@@ -41,6 +43,7 @@ interface Post {
   title: string;
   body?: string;
   audience: 'all' | 'teachers' | 'parents' | 'students';
+  media_urls?: string[];
   created_at: string;
   updated_at: string;
   author?: {
@@ -49,6 +52,21 @@ interface Post {
     last_name: string;
     role: string;
   };
+  reactions?: Array<{
+    emoji: string;
+    user_id: string;
+    created_at: string;
+  }>;
+  comments?: Array<{
+    id: string;
+    body: string;
+    created_at: string;
+    user_id: string;
+    user: {
+      first_name: string;
+      last_name: string;
+    };
+  }>;
 }
 
 const TeacherCommunityScreen = () => {
@@ -62,8 +80,13 @@ const TeacherCommunityScreen = () => {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [audience, setAudience] = useState<'all' | 'teachers' | 'parents' | 'students'>('all');
-  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [selectedImages, setSelectedImages] = useState<ImagePickerResult[]>([]);
   const [uploadingImages, setUploadingImages] = useState(false);
+  
+  // Comment state
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState('');
 
   // Fetch posts
   const { data: posts = [], isLoading, refetch } = useQuery({
@@ -74,12 +97,32 @@ const TeacherCommunityScreen = () => {
       let query = supabase
         .from('posts')
         .select(`
-          *,
+          id,
+          school_id,
+          author_id,
+          title,
+          body,
+          audience,
+          media_urls,
+          created_at,
+          updated_at,
           author:users!author_id(
             id,
             first_name,
             last_name,
             role
+          ),
+          reactions:post_reactions(
+            emoji,
+            user_id,
+            created_at
+          ),
+          comments:post_comments(
+            id,
+            body,
+            created_at,
+            user_id,
+            user:users(first_name, last_name)
           )
         `)
         .eq('school_id', user.school_id)
@@ -137,6 +180,85 @@ const TeacherCommunityScreen = () => {
     }
   });
 
+  // React to post mutation
+  const reactToPostMutation = useMutation({
+    mutationFn: async ({ postId, emoji }: { postId: string; emoji: string }) => {
+      // Check if user already reacted
+      const { data: existingReaction } = await supabase
+        .from('post_reactions')
+        .select('*')
+        .eq('post_id', postId)
+        .eq('user_id', user?.id)
+        .maybeSingle();
+
+      if (existingReaction) {
+        // Remove existing reaction if same emoji, or update if different
+        if (existingReaction.emoji === emoji) {
+          const { error } = await supabase
+            .from('post_reactions')
+            .delete()
+            .eq('post_id', postId)
+            .eq('user_id', user?.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('post_reactions')
+            .update({ emoji })
+            .eq('post_id', postId)
+            .eq('user_id', user?.id);
+          if (error) throw error;
+        }
+      } else {
+        // Add new reaction
+        const { error } = await supabase
+          .from('post_reactions')
+          .insert({
+            post_id: postId,
+            user_id: user?.id,
+            emoji
+          });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['community-posts'] });
+    }
+  });
+
+  // Add comment mutation
+  const addCommentMutation = useMutation({
+    mutationFn: async ({ postId, body }: { postId: string; body: string }) => {
+      const { data, error } = await supabase
+        .from('post_comments')
+        .insert({
+          post_id: postId,
+          body,
+          user_id: user?.id,
+        })
+        .select(`
+          id,
+          body,
+          created_at,
+          user_id,
+          user:users(first_name, last_name)
+        `)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['community-posts'] });
+      setCommentText('');
+      setShowCommentModal(false);
+      Alert.alert('Success', 'Comment added successfully!');
+    },
+    onError: (error) => {
+      Alert.alert('Error', 'Failed to add comment. Please try again.');
+      console.error('Add comment error:', error);
+    }
+  });
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await refetch();
@@ -152,49 +274,43 @@ const TeacherCommunityScreen = () => {
   };
 
   const handleImageSelection = () => {
-    Alert.alert(
-      'Add Images',
-      'Choose how you want to add images to your post:',
-      [
-        {
-          text: 'Camera',
-          onPress: () => Alert.alert('Info', 'Camera functionality requires expo-image-picker package')
-        },
-        {
-          text: 'Gallery',
-          onPress: () => Alert.alert('Info', 'Gallery selection requires expo-image-picker package')
-        },
-        {
-          text: 'URL',
-          onPress: () => {
-            Alert.prompt(
-              'Add Image URL',
-              'Enter the URL of the image you want to add:',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Add',
-                  onPress: (url) => {
-                    if (url && url.trim()) {
-                      setSelectedImages(prev => [...prev, url.trim()]);
-                    }
-                  }
-                }
-              ],
-              'plain-text'
-            );
-          }
-        },
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    );
+    openImagePicker('library');
+  };
+
+  const openImagePicker = async (source: 'library') => {
+    try {
+      // Request photo library permissions
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Photo library permission is required to select images.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsMultipleSelection: true
+      });
+
+      if (!result.canceled && result.assets) {
+        const newImages: ImagePickerResult[] = result.assets.map(asset => ({
+          uri: asset.uri,
+          type: asset.type || 'image',
+          name: asset.fileName || `image_${Date.now()}.jpg`,
+          size: asset.fileSize
+        }));
+        
+        setSelectedImages(prev => [...prev, ...newImages]);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to select image. Please try again.');
+    }
   };
 
   const removeImage = (index: number) => {
     setSelectedImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleCreatePost = () => {
+  const handleCreatePost = async () => {
     if (!title.trim()) {
       Alert.alert('Error', 'Please enter a title for your post');
       return;
@@ -205,12 +321,28 @@ const TeacherCommunityScreen = () => {
       return;
     }
 
-    createPostMutation.mutate({
-      title: title.trim(),
-      body: body.trim(),
-      audience,
-      media: selectedImages
-    });
+    setUploadingImages(true);
+    try {
+      let mediaUrls: string[] = [];
+      
+      // Upload images if any selected
+      if (selectedImages.length > 0) {
+        const uploadedMedia = await uploadMediaFromRN(selectedImages, user?.school_id || '');
+        mediaUrls = uploadedMedia.map(m => m.url);
+      }
+
+      createPostMutation.mutate({
+        title: title.trim(),
+        body: body.trim(),
+        audience,
+        media: mediaUrls
+      });
+    } catch (error) {
+      console.error('Error uploading images:', error);
+      Alert.alert('Error', 'Failed to upload images. Please try again.');
+    } finally {
+      setUploadingImages(false);
+    }
   };
 
   const getAudienceIcon = (audience: string) => {
@@ -233,6 +365,37 @@ const TeacherCommunityScreen = () => {
 
   const formatDate = (dateString: string) => {
     return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+  };
+
+  const handleReactToPost = (postId: string, emoji: string = '❤️') => {
+    reactToPostMutation.mutate({ postId, emoji });
+  };
+
+  const getUserReaction = (post: Post): string | null => {
+    const userReaction = post.reactions?.find(r => r.user_id === user?.id);
+    return userReaction?.emoji || null;
+  };
+
+  const getReactionCount = (post: Post): number => {
+    return post.reactions?.length || 0;
+  };
+
+  const getCommentCount = (post: Post): number => {
+    return post.comments?.length || 0;
+  };
+
+  const handleCommentPress = (postId: string) => {
+    setSelectedPostId(postId);
+    setShowCommentModal(true);
+  };
+
+  const handleAddComment = () => {
+    if (!commentText.trim() || !selectedPostId) return;
+    
+    addCommentMutation.mutate({
+      postId: selectedPostId,
+      body: commentText.trim(),
+    });
   };
 
   if (isLoading) {
@@ -424,23 +587,95 @@ const TeacherCommunityScreen = () => {
                   </Text>
                 )}
 
+                {/* Post Media */}
+                {post.media_urls && post.media_urls.length > 0 && (
+                  <View style={{ marginTop: 12 }}>
+                    {post.media_urls.length === 1 ? (
+                      <Image
+                        source={{ uri: post.media_urls[0] }}
+                        style={{ 
+                          width: '100%', 
+                          height: 200, 
+                          borderRadius: 12,
+                          marginBottom: 8
+                        }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          {post.media_urls.map((imageUrl: string, index: number) => (
+                            <Image
+                              key={index}
+                              source={{ uri: imageUrl }}
+                              style={{ 
+                                width: 150, 
+                                height: 150, 
+                                borderRadius: 12,
+                              }}
+                              resizeMode="cover"
+                            />
+                          ))}
+                        </View>
+                      </ScrollView>
+                    )}
+                  </View>
+                )}
+
                 {/* Post Actions */}
                 <View style={{ 
                   flexDirection: 'row', 
                   alignItems: 'center', 
-                  justifyContent: 'space-between',
+                  justifyContent: 'space-around',
                   marginTop: 16,
                   paddingTop: 16,
                   borderTopWidth: 1,
                   borderTopColor: '#f3f4f6'
                 }}>
-                  <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Heart size={16} color="#6b7280" />
-                    <Text style={{ fontSize: 14, color: '#6b7280', marginLeft: 6 }}>Like</Text>
+                  <TouchableOpacity 
+                    style={{ 
+                      flexDirection: 'row', 
+                      alignItems: 'center',
+                      paddingHorizontal: 20,
+                      paddingVertical: 12,
+                      borderRadius: 8,
+                      backgroundColor: getUserReaction(post) === '❤️' ? '#fef2f2' : 'transparent'
+                    }}
+                    onPress={() => handleReactToPost(post.id, '❤️')}
+                  >
+                    <Heart 
+                      size={20} 
+                      color={getUserReaction(post) === '❤️' ? '#ef4444' : '#6b7280'} 
+                      fill={getUserReaction(post) === '❤️' ? '#ef4444' : 'none'}
+                    />
+                    <Text style={{ 
+                      fontSize: 15, 
+                      color: getUserReaction(post) === '❤️' ? '#ef4444' : '#6b7280', 
+                      marginLeft: 8,
+                      fontWeight: '500'
+                    }}>
+                      {getReactionCount(post) > 0 ? getReactionCount(post) : 'Like'}
+                    </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <MessageSquare size={16} color="#6b7280" />
-                    <Text style={{ fontSize: 14, color: '#6b7280', marginLeft: 6 }}>Comment</Text>
+                  <TouchableOpacity 
+                    style={{ 
+                      flexDirection: 'row', 
+                      alignItems: 'center',
+                      paddingHorizontal: 20,
+                      paddingVertical: 12,
+                      borderRadius: 8
+                    }}
+                    onPress={() => handleCommentPress(post.id)}
+                  >
+                    <MessageSquare size={20} color="#6b7280" />
+                    <Text style={{ 
+                      fontSize: 15, 
+                      color: '#6b7280', 
+                      marginLeft: 8,
+                      fontWeight: '500'
+                    }}>
+                      {getCommentCount(post) > 0 ? getCommentCount(post) : 'Comment'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </Card>
@@ -475,17 +710,17 @@ const TeacherCommunityScreen = () => {
             </Text>
             <TouchableOpacity
               onPress={handleCreatePost}
-              disabled={createPostMutation.isPending}
+              disabled={createPostMutation.isPending || uploadingImages}
               style={{
                 backgroundColor: '#dc2626',
                 paddingHorizontal: 16,
                 paddingVertical: 8,
                 borderRadius: 8,
-                opacity: createPostMutation.isPending ? 0.6 : 1
+                opacity: (createPostMutation.isPending || uploadingImages) ? 0.6 : 1
               }}
             >
               <Text style={{ color: 'white', fontWeight: '600' }}>
-                {createPostMutation.isPending ? 'Posting...' : 'Post'}
+                {uploadingImages ? 'Uploading...' : createPostMutation.isPending ? 'Posting...' : 'Post'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -565,10 +800,10 @@ const TeacherCommunityScreen = () => {
                 {selectedImages.length > 0 && (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
-                      {selectedImages.map((imageUrl, index) => (
+                      {selectedImages.map((image, index) => (
                         <View key={index} style={{ position: 'relative' }}>
                           <Image
-                            source={{ uri: imageUrl }}
+                            source={{ uri: image.uri }}
                             style={{ 
                               width: 80, 
                               height: 80, 
@@ -684,6 +919,95 @@ const TeacherCommunityScreen = () => {
               </View>
             </View>
           </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Comment Modal */}
+      <Modal
+        visible={showCommentModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setShowCommentModal(false);
+          setSelectedPostId(null);
+          setCommentText('');
+        }}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+          <View style={{ 
+            backgroundColor: 'white',
+            paddingHorizontal: 24,
+            paddingVertical: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: '#e5e7eb',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <TouchableOpacity onPress={() => {
+              setShowCommentModal(false);
+              setSelectedPostId(null);
+              setCommentText('');
+            }}>
+              <X size={24} color="#6b7280" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827' }}>
+              Add Comment
+            </Text>
+            <TouchableOpacity
+              onPress={handleAddComment}
+              disabled={!commentText.trim() || addCommentMutation.isPending}
+              style={{
+                backgroundColor: commentText.trim() ? '#dc2626' : '#d1d5db',
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 8,
+                opacity: addCommentMutation.isPending ? 0.6 : 1
+              }}
+            >
+              <Text style={{ 
+                color: commentText.trim() ? 'white' : '#6b7280', 
+                fontWeight: '600',
+                fontSize: 14
+              }}>
+                {addCommentMutation.isPending ? 'Posting...' : 'Post'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={{ flex: 1, padding: 24 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 12 }}>
+                Write your comment
+              </Text>
+              <TextInput
+                value={commentText}
+                onChangeText={setCommentText}
+                placeholder="Share your thoughts..."
+                multiline
+                textAlignVertical="top"
+                style={{
+                  backgroundColor: 'white',
+                  borderWidth: 1,
+                  borderColor: '#d1d5db',
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  fontSize: 16,
+                  minHeight: 120,
+                  maxHeight: 200
+                }}
+              />
+            </View>
+            
+            {selectedPostId && (
+              <View style={{ marginTop: 16 }}>
+                <Text style={{ fontSize: 14, color: '#6b7280', textAlign: 'center' }}>
+                  Your comment will be visible to all members who can see this post
+                </Text>
+              </View>
+            )}
+          </View>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>

@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, SafeAreaView, RefreshControl, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, ScrollView, SafeAreaView, RefreshControl, TouchableOpacity, Dimensions, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { useNavigation } from '@react-navigation/native';
-import { Card, CardContent, CardHeader } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { ParentQuickActions } from '../../components/dashboard/ParentQuickActions';
 import { 
   Users, 
   BookOpen, 
@@ -30,7 +28,15 @@ import {
   Eye,
   Target,
   Zap,
-  Heart
+  Heart,
+  ChevronRight,
+  Video,
+  Send,
+  Search,
+  Home,
+  PenTool,
+  UserX,
+  Camera
 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
@@ -243,50 +249,12 @@ export const ParentDashboardScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  const quickActions = [
-    {
-      title: 'Attendance',
-      description: 'Daily attendance records',
-      icon: Calendar,
-      color: '#3b82f6',
-      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Attendance' })
-    },
-    {
-      title: 'Homework',
-      description: 'Assignments & submissions',
-      icon: BookOpen,
-      color: '#10b981',
-      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Homework' })
-    },
-    {
-      title: 'Exam Results',
-      description: 'Scores & performance',
-      icon: Award,
-      color: '#8b5cf6',
-      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Exams' })
-    },
-    {
-      title: 'Timetable',
-      description: 'Class schedule',
-      icon: Clock,
-      color: '#f59e0b',
-      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Timetable' })
-    },
-    {
-      title: 'Announcements',
-      description: 'School updates',
-      icon: Bell,
-      color: '#ef4444',
-      onPress: () => (navigation as any).navigate('MessagesTab', { screen: 'Announcements' })
-    },
-    {
-      title: 'Reports',
-      description: 'Download report cards',
-      icon: Download,
-      color: '#06b6d4',
-      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Reports' })
-    },
-  ];
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  };
 
   const statsData = stats || {
     childrenCount: children.length,
@@ -297,355 +265,577 @@ export const ParentDashboardScreen: React.FC = () => {
     averageGrade: 'N/A'
   };
 
+  // Quick Actions with better organization
+  const primaryActions = [
+    {
+      title: "View Attendance",
+      subtitle: "Daily attendance records",
+      icon: Users,
+      color: "#3b82f6",
+      gradient: ["#3b82f6", "#1d4ed8"],
+      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Attendance' })
+    },
+    {
+      title: "Check Homework",
+      subtitle: "Assignments & submissions",
+      icon: BookOpen,
+      color: "#10b981",
+      gradient: ["#10b981", "#059669"],
+      badge: statsData.upcomingHomework > 0 ? statsData.upcomingHomework : null,
+      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Homework' })
+    },
+    {
+      title: "Class Timetable",
+      subtitle: "View class schedule",
+      icon: Calendar,
+      color: "#f59e0b",
+      gradient: ["#f59e0b", "#d97706"],
+      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Timetable' })
+    },
+    {
+      title: "Community",
+      subtitle: "Connect & share",
+      icon: MessageSquare,
+      color: "#8b5cf6",
+      gradient: ["#8b5cf6", "#7c3aed"],
+      onPress: () => (navigation as any).navigate('MessagesTab', { screen: 'Community' })
+    }
+  ];
+
+  const secondaryActions = [
+    {
+      title: "Exam Results",
+      icon: Award,
+      color: "#ef4444",
+      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Exams' })
+    },
+    {
+      title: "Reports",
+      icon: FileText,
+      color: "#06b6d4",
+      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Reports' })
+    },
+    {
+      title: "Online Classes",
+      icon: Video,
+      color: "#84cc16",
+      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'OnlineClasses' })
+    },
+    {
+      title: "Announcements",
+      icon: Send,
+      color: "#f97316",
+      onPress: () => (navigation as any).navigate('MessagesTab', { screen: 'Announcements' })
+    },
+    {
+      title: "Gallery",
+      icon: Camera,
+      color: "#84cc16",
+      onPress: () => (navigation as any).navigate('MediaTab', { screen: 'Gallery' })
+    },
+    {
+      title: "Calendar",
+      icon: Calendar,
+      color: "#06b6d4",
+      onPress: () => (navigation as any).navigate('MediaTab', { screen: 'Calendar' })
+    }
+  ];
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-      <StatusBar style="dark" />
+    <SafeAreaView style={styles.container}>
+      <StatusBar style="light" />
       
-      {/* Enhanced Header */}
-      <View style={{ 
-        backgroundColor: 'white', 
-        paddingHorizontal: 24, 
-        paddingTop: 16,
-        paddingBottom: 20,
-        borderBottomWidth: 1, 
-        borderBottomColor: '#e5e7eb',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3
-      }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <View style={{ 
-                width: 40, 
-                height: 40, 
-                borderRadius: 20, 
-                backgroundColor: '#10b981',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginRight: 12
-              }}>
-                <Heart size={20} color="white" />
-              </View>
-              <View>
-                <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#111827' }}>
-                  Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening'}!
-                </Text>
-                <Text style={{ fontSize: 14, color: '#6b7280' }}>
-                  {user?.first_name} {user?.last_name}
-                </Text>
-              </View>
+      {/* Enhanced Header with Gradient */}
+      <LinearGradient
+        colors={['#8b5cf6', '#a855f7']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
+        <View style={styles.headerTop}>
+          <View style={styles.headerLeft}>
+            <View style={styles.avatarContainer}>
+              <Text style={styles.avatarText}>
+                {user?.first_name?.charAt(0) || 'P'}
+              </Text>
             </View>
-            <Text style={{ fontSize: 16, color: '#374151', fontWeight: '500' }}>
-              {children.length === 0 ? 'No children linked' : 
-               children.length === 1 ? `Monitoring ${children[0].full_name}'s progress` :
-               `Tracking ${children.length} children's academic journey`}
-            </Text>
+            <View style={styles.greetingContainer}>
+              <Text style={styles.greeting}>
+                {getGreeting()}
+              </Text>
+              <Text style={styles.userName}>
+                {user?.first_name}!
+              </Text>
+            </View>
           </View>
-          <Button
-            title="Sign Out"
-            onPress={signOut}
-            variant="outline"
-            size="sm"
-          />
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={styles.headerButton}>
+              <Bell size={20} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerButton}>
+              <Search size={20} color="white" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Child Selector */}
         {children.length > 1 && (
-          <View style={{ marginTop: 16 }}>
-            <Text style={{ fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 8 }}>
+          <View style={styles.childSelector}>
+            <Text style={styles.childSelectorLabel}>
               Select Child
             </Text>
             <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                backgroundColor: '#f3f4f6',
-                paddingHorizontal: 16,
-                paddingVertical: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: '#d1d5db'
-              }}
+              style={styles.childSelectorButton}
               onPress={() => console.log('Open child selector')}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <GraduationCap size={20} color="#6b7280" />
-                <Text style={{ fontSize: 16, color: '#111827', marginLeft: 8 }}>
+                <GraduationCap size={20} color="white" />
+                <Text style={styles.childSelectorText}>
                   {currentChild ? `${currentChild.full_name} - Grade ${currentChild.sections?.grade}` : 'Select a child'}
                 </Text>
               </View>
-              <ChevronDown size={20} color="#6b7280" />
+              <ChevronDown size={20} color="rgba(255,255,255,0.8)" />
             </TouchableOpacity>
           </View>
         )}
-      </View>
 
-      <ScrollView 
-        style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 20 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
-      >
-        {/* Enhanced Stats Grid with Graphics */}
-        <View style={{ marginBottom: 32 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-            <BarChart3 size={20} color="#111827" />
-            <Text style={{ fontSize: 20, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-              Performance Overview
-            </Text>
+        {/* Stats Cards in Header */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{statsData.childrenCount}</Text>
+            <Text style={styles.statLabel}>Children</Text>
           </View>
-          
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -8 }}>
-            {/* Attendance with Progress Circle */}
-            <View style={{ width: '50%', paddingHorizontal: 8, marginBottom: 16 }}>
-              <Card>
-                <CardContent style={{ padding: 20, alignItems: 'center' }}>
-                  <ProgressCircle 
-                    percentage={statsData.attendancePercentage} 
-                    size={60} 
-                    color="#10b981" 
-                  />
-                  <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 8, textAlign: 'center' }}>
-                    Attendance
-                  </Text>
-                  <Text style={{ fontSize: 12, color: '#10b981', marginTop: 4 }}>
-                    This month
-                  </Text>
-                </CardContent>
-              </Card>
-            </View>
-
-            {/* Children Count */}
-            <View style={{ width: '50%', paddingHorizontal: 8, marginBottom: 16 }}>
-              <Card>
-                <CardContent style={{ padding: 20 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <View>
-                      <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#111827' }}>
-                        {statsData.childrenCount}
-                      </Text>
-                      <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 2 }}>
-                        Children
-                      </Text>
-                      <Text style={{ fontSize: 12, color: '#10b981', marginTop: 4 }}>
-                        Enrolled
-                      </Text>
-                    </View>
-                    <Users size={24} color="#3b82f6" />
-                  </View>
-                </CardContent>
-              </Card>
-            </View>
-
-            {/* Homework with Visual Indicator */}
-            <View style={{ width: '50%', paddingHorizontal: 8, marginBottom: 16 }}>
-              <Card>
-                <CardContent style={{ padding: 20 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <View>
-                      <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#111827' }}>
-                        {statsData.upcomingHomework}
-                      </Text>
-                      <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 2 }}>
-                        Homework
-                      </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                        <View style={{ 
-                          width: 8, 
-                          height: 8, 
-                          borderRadius: 4, 
-                          backgroundColor: statsData.upcomingHomework > 0 ? '#f59e0b' : '#10b981',
-                          marginRight: 4 
-                        }} />
-                        <Text style={{ fontSize: 12, color: statsData.upcomingHomework > 0 ? '#f59e0b' : '#10b981' }}>
-                          {statsData.upcomingHomework > 0 ? 'Due soon' : 'Up to date'}
-                        </Text>
-                      </View>
-                    </View>
-                    <BookOpen size={24} color="#f59e0b" />
-                  </View>
-                </CardContent>
-              </Card>
-            </View>
-
-            {/* Average Grade */}
-            <View style={{ width: '50%', paddingHorizontal: 8, marginBottom: 16 }}>
-              <Card>
-                <CardContent style={{ padding: 20 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <View>
-                      <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#111827' }}>
-                        {statsData.averageGrade}
-                      </Text>
-                      <Text style={{ fontSize: 14, color: '#6b7280', marginTop: 2 }}>
-                        Avg Grade
-                      </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                        <Star size={12} color="#f59e0b" />
-                        <Text style={{ fontSize: 12, color: '#f59e0b', marginLeft: 4 }}>
-                          {statsData.totalExams} exams
-                        </Text>
-                      </View>
-                    </View>
-                    <Target size={24} color="#8b5cf6" />
-                  </View>
-                </CardContent>
-              </Card>
-            </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{statsData.attendancePercentage}%</Text>
+            <Text style={styles.statLabel}>Attendance</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{statsData.upcomingHomework}</Text>
+            <Text style={styles.statLabel}>Homework</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{statsData.averageGrade}</Text>
+            <Text style={styles.statLabel}>Avg Grade</Text>
           </View>
         </View>
+      </LinearGradient>
 
-        {/* Quick Actions Grid */}
-        <ParentQuickActions />
-
-        {/* Current Child Info Enhanced */}
-        {currentChild && (
-          <View style={{ marginBottom: 32 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-              <Activity size={20} color="#111827" />
-              <Text style={{ fontSize: 20, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-                {children.length > 1 ? 'Selected Child' : 'Child Profile'}
-              </Text>
-            </View>
-            <Card>
-              <CardContent style={{ padding: 20 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                  <View style={{ 
-                    width: 50, 
-                    height: 50, 
-                    borderRadius: 25,
-                    backgroundColor: '#3b82f6',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 16
-                  }}>
-                    <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>
-                      {currentChild.full_name.charAt(0)}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827' }}>
-                      {currentChild.full_name}
-                    </Text>
-                    <Text style={{ fontSize: 14, color: '#6b7280' }}>
-                      Grade {currentChild.sections?.grade} - Section {currentChild.sections?.section}
-                    </Text>
-                  </View>
-                  <View style={{ 
-                    backgroundColor: '#10b981',
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 12
-                  }}>
-                    <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>
-                      Active
-                    </Text>
-                  </View>
-                </View>
-                
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>
-                      Admission No.
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#111827' }}>
-                      {currentChild.admission_no || 'N/A'}
-                    </Text>
-                  </View>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>
-                      Gender
-                    </Text>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#111827' }}>
-                      {currentChild.gender || 'N/A'}
-                    </Text>
-                  </View>
-                  <View style={{ alignItems: 'center' }}>
-                    <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>
-                      Status
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <View style={{ 
-                        width: 8, 
-                        height: 8, 
-                        borderRadius: 4, 
-                        backgroundColor: '#10b981',
-                        marginRight: 4 
-                      }} />
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: '#10b981' }}>
-                        Active
-                      </Text>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Primary Actions Grid */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+            <TouchableOpacity>
+              <Text style={styles.sectionLink}>See All</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.primaryGrid}>
+            {primaryActions.map((action, index) => (
+              <TouchableOpacity 
+                key={index} 
+                style={styles.primaryCard}
+                onPress={action.onPress}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={action.gradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.primaryCardGradient}
+                >
+                  <View style={styles.primaryCardContent}>
+                    <View style={styles.primaryIconContainer}>
+                      <action.icon size={24} color="white" />
                     </View>
-                  </View>
-                </View>
-              </CardContent>
-            </Card>
-          </View>
-        )}
-
-        {/* Enhanced Quick Actions */}
-        <View style={{ marginBottom: 32 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-            <Zap size={20} color="#111827" />
-            <Text style={{ fontSize: 20, fontWeight: '600', color: '#111827', marginLeft: 8 }}>
-              Quick Actions
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -8 }}>
-            {quickActions.map((action, index) => (
-              <View key={index} style={{ width: '50%', paddingHorizontal: 8, marginBottom: 16 }}>
-                <TouchableOpacity onPress={action.onPress}>
-                  <Card>
-                    <CardContent style={{ padding: 20, alignItems: 'center' }}>
-                      <View style={{ 
-                        width: 56, 
-                        height: 56, 
-                        borderRadius: 28, 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        marginBottom: 12,
-                        backgroundColor: action.color + '20'
-                      }}>
-                        <action.icon size={28} color={action.color} />
+                    <Text style={styles.primaryCardTitle}>{action.title}</Text>
+                    <Text style={styles.primaryCardSubtitle}>{action.subtitle}</Text>
+                    {action.badge && (
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{action.badge}</Text>
                       </View>
-                      <Text style={{ fontSize: 16, fontWeight: '600', color: '#111827', textAlign: 'center', marginBottom: 4 }}>
-                        {action.title}
-                      </Text>
-                      <Text style={{ fontSize: 12, color: '#6b7280', textAlign: 'center' }}>
-                        {action.description}
-                      </Text>
-                    </CardContent>
-                  </Card>
-                </TouchableOpacity>
-              </View>
+                    )}
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
             ))}
           </View>
         </View>
 
+        {/* Secondary Actions */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>More Features</Text>
+          <View style={styles.secondaryGrid}>
+            {secondaryActions.map((action, index) => (
+              <TouchableOpacity 
+                key={index} 
+                style={styles.secondaryCard}
+                onPress={action.onPress}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.secondaryIconContainer, { backgroundColor: action.color + '15' }]}>
+                  <action.icon size={20} color={action.color} />
+                </View>
+                <Text style={styles.secondaryCardTitle}>{action.title}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Current Child Info Enhanced - Only if children exist */}
+        {currentChild && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              {children.length > 1 ? 'Selected Child' : 'Child Profile'}
+            </Text>
+            <View style={styles.childCard}>
+              <View style={styles.childCardHeader}>
+                <Text style={styles.childGrade}>Grade {currentChild.sections?.grade}{currentChild.sections?.section}</Text>
+                <View style={styles.activeBadge}>
+                  <Star size={10} color="#fbbf24" />
+                </View>
+              </View>
+              <Text style={styles.childName}>{currentChild.full_name}</Text>
+              <Text style={styles.childDetails}>
+                Admission: {currentChild.admission_no || 'N/A'}
+              </Text>
+              <View style={styles.childActions}>
+                <TouchableOpacity 
+                  style={[styles.childActionBtn, { backgroundColor: '#3b82f6' }]}
+                  onPress={() => (navigation as any).navigate('AcademicsTab', { screen: 'Attendance' })}
+                >
+                  <Users size={12} color="white" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.childActionBtn, { backgroundColor: '#10b981' }]}
+                  onPress={() => (navigation as any).navigate('AcademicsTab', { screen: 'Timetable' })}
+                >
+                  <Calendar size={12} color="white" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.childActionBtn, { backgroundColor: '#f59e0b' }]}
+                  onPress={() => (navigation as any).navigate('AcademicsTab', { screen: 'Homework' })}
+                >
+                  <BookOpen size={12} color="white" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* No Children State */}
         {!childrenLoading && children.length === 0 && (
-          <Card>
-            <CardContent style={{ padding: 32, alignItems: 'center' }}>
+          <View style={styles.section}>
+            <View style={styles.emptyStateCard}>
               <AlertCircle size={48} color="#ef4444" style={{ marginBottom: 16 }} />
-              <Text style={{ fontSize: 20, fontWeight: '600', color: '#111827', marginBottom: 8, textAlign: 'center' }}>
-                No Children Found
-              </Text>
-              <Text style={{ fontSize: 16, color: '#6b7280', textAlign: 'center', lineHeight: 24, marginBottom: 20 }}>
+              <Text style={styles.emptyStateTitle}>No Children Found</Text>
+              <Text style={styles.emptyStateText}>
                 No children are currently linked to your account. Please contact the school administration to link your children's records.
               </Text>
-              <Button
-                title="Contact Support"
-                onPress={() => console.log('Contact support')}
-                style={{ backgroundColor: '#3b82f6' }}
-              />
-            </CardContent>
-          </Card>
+            </View>
+          </View>
         )}
+
+        {/* Bottom Spacing */}
+        <View style={{ height: 20 }} />
       </ScrollView>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  header: {
+    paddingTop: 10,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  avatarContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 15,
+  },
+  avatarText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  greetingContainer: {
+    flex: 1,
+  },
+  greeting: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+  },
+  userName: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  statCard: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  statNumber: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  statLabel: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  childSelector: {
+    marginTop: 16,
+  },
+  childSelectorLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: 8,
+  },
+  childSelectorButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  childSelectorText: {
+    fontSize: 16,
+    color: 'white',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingTop: 20,
+  },
+  section: {
+    marginBottom: 30,
+    paddingHorizontal: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  sectionLink: {
+    color: '#8b5cf6',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  primaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  primaryCard: {
+    width: (width - 52) / 2,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  primaryCardGradient: {
+    padding: 20,
+    height: 140,
+    justifyContent: 'space-between',
+  },
+  primaryCardContent: {
+    flex: 1,
+  },
+  primaryIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  primaryCardTitle: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  primaryCardSubtitle: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+  },
+  badge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  secondaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  secondaryCard: {
+    width: (width - 64) / 3,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  secondaryIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  secondaryCardTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+    textAlign: 'center',
+  },
+  childCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  childCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  childGrade: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  activeBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  childName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  childDetails: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 12,
+  },
+  childActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  childActionBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyStateCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+});

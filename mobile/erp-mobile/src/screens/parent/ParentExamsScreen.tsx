@@ -21,6 +21,7 @@ interface Child {
   id: string;
   full_name: string;
   admission_no: string;
+  school_id: string;
   sections: {
     id: string;
     grade: number;
@@ -88,19 +89,36 @@ const ParentExamsScreen: React.FC = () => {
       if (!profile.user) throw new Error('Not authenticated');
 
              const { data, error } = await supabase
-         .from('students')
+         .from('student_parents')
          .select(`
-           id,
-           full_name,
-           admission_no,
-           sections(id, grade, section)
+           student_id,
+           students!inner(
+             id,
+             full_name,
+             admission_no,
+             section_id,
+             school_id,
+             sections!inner(
+               id,
+               grade,
+               section
+             )
+           )
          `)
          .eq('parent_id', profile.user.id);
 
-       if (error) throw error;
-       return data?.map((student: any) => ({
-         ...student,
-         sections: student.sections[0] || student.sections
+       if (error) {
+         console.error('Error fetching children:', error);
+         throw error;
+       }
+
+       console.log('Fetched children:', data?.length || 0);
+       return (data || []).map((item: any) => ({
+         id: item.students.id,
+         full_name: item.students.full_name,
+         admission_no: item.students.admission_no,
+         school_id: item.students.school_id,
+         sections: item.students.sections
        })) as Child[];
     }
   });
@@ -124,7 +142,7 @@ const ParentExamsScreen: React.FC = () => {
       const { data, error } = await supabase
         .from('exam_groups')
         .select('*')
-        .eq('school_id', child.sections.id)
+        .eq('school_id', child.school_id)
         .eq('is_published', true)
         .order('created_at', { ascending: false });
 
@@ -138,29 +156,61 @@ const ParentExamsScreen: React.FC = () => {
   const { data: examPapers = [] } = useQuery({
     queryKey: ['child-exam-papers', selectedChild, selectedExamGroup],
     queryFn: async () => {
-      if (!selectedChild) return [];
+      if (!selectedChild) {
+        console.log('No selected child for exam papers');
+        return [];
+      }
 
       const child = children.find(c => c.id === selectedChild);
-      if (!child) return [];
+      if (!child) {
+        console.log('Child not found for exam papers:', selectedChild);
+        return [];
+      }
+
+      console.log('Fetching exam papers for child:', child.full_name, 'Section ID:', child.sections.id);
+
+      // Construct section format to match exam papers (e.g., "Grade 1 A")
+      const examSection = `Grade ${child.sections.grade} ${child.sections.section}`;
+      console.log('Using exam section format:', examSection);
 
       let query = supabase
         .from('exam_papers')
         .select(`
           *,
-          exam_groups(id, name, exam_type),
-          marks(id, marks_obtained, grade, remarks)
+          exam_groups(
+            id,
+            name,
+            exam_type,
+            start_date,
+            end_date,
+            is_published
+          )
         `)
-        .eq('section', child.sections.section)
+        .eq('section', examSection)
+        .eq('school_id', child.school_id)
         .order('exam_date', { ascending: true });
 
       if (selectedExamGroup) {
+        console.log('Filtering by exam group:', selectedExamGroup);
         query = query.eq('exam_group_id', selectedExamGroup);
       }
 
       const { data, error } = await query;
 
-      if (error) throw error;
-      return data as ExamPaper[];
+      if (error) {
+        console.error('Exam papers fetch error:', error);
+        throw error;
+      }
+      
+      console.log('Exam papers data:', data?.length || 0, 'papers found');
+      
+      // Filter for published exams only (parents should only see published ones)
+      const publishedExams = (data || []).filter((exam: any) => 
+        exam.exam_groups && exam.exam_groups.is_published === true
+      );
+      
+      console.log('Published exam papers:', publishedExams.length, 'papers found');
+      return publishedExams as ExamPaper[];
     },
     enabled: !!selectedChild && children.length > 0
   });
@@ -436,26 +486,24 @@ const ParentExamsScreen: React.FC = () => {
         )}
 
         {(activeTab === 'schedule' || activeTab === 'results') && (
-          <>
-            {renderExamGroupFilter()}
-            <FlatList
-              data={examPapers}
-              renderItem={renderExamPaper}
-              keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={false}
-              refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-              }
-              ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>No exam papers found</Text>
-                  <Text style={styles.emptySubtext}>
-                    Exam schedules will appear here when published by the school
-                  </Text>
-                </View>
-              }
-            />
-          </>
+          <FlatList
+            data={examPapers}
+            renderItem={renderExamPaper}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={renderExamGroupFilter}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No exam papers found</Text>
+                <Text style={styles.emptySubtext}>
+                  Exam schedules will appear here when published by the school
+                </Text>
+              </View>
+            }
+          />
         )}
 
         {activeTab === 'reports' && (

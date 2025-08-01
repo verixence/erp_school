@@ -3,6 +3,7 @@ import { supabase, getCurrentUser } from '../services/supabase';
 import { 
   registerForPushNotificationsAsync, 
   storePushToken,
+  removePushToken,
   addNotificationReceivedListener,
   addNotificationResponseReceivedListener
 } from '../services/notifications';
@@ -65,12 +66,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const setupPushNotifications = async (user: User) => {
     try {
-      // Temporarily disabled to isolate login issues
-      console.log('Push notifications setup disabled for debugging');
-      // const token = await registerForPushNotificationsAsync();
-      // if (token && user.id) {
-      //   await storePushToken(user.id, token, user.role);
-      // }
+      console.log('Setting up push notifications for user:', user.id);
+      const token = await registerForPushNotificationsAsync();
+      if (token && user.id && user.school_id) {
+        await storePushToken(user.id, token, user.school_id);
+      }
     } catch (error) {
       console.error('Error setting up push notifications:', error);
     }
@@ -103,22 +103,37 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signOut = async () => {
+    try {
+      // Remove push token before signing out
+      if (user?.id) {
+        await removePushToken(user.id);
+      }
+    } catch (error) {
+      console.error('Error removing push token during signout:', error);
+    }
+    
     await supabase.auth.signOut();
     setUser(null);
   };
 
   useEffect(() => {
-    // Set up notification listeners - temporarily disabled
-    // const notificationListener = addNotificationReceivedListener(notification => {
-    //   console.log('Notification received:', notification);
-    //   // Handle foreground notifications here
-    // });
+    // Set up notification listeners
+    const notificationListener = addNotificationReceivedListener(notification => {
+      console.log('Notification received:', notification);
+      // Handle foreground notifications here
+      // Could show a custom banner or alert
+    });
 
-    // const responseListener = addNotificationResponseReceivedListener(response => {
-    //   console.log('Notification response:', response);
-    //   // Handle notification taps here
-    //   // You can navigate to specific screens based on notification data
-    // });
+    const responseListener = addNotificationResponseReceivedListener(response => {
+      console.log('Notification response:', response);
+      // Handle notification taps here
+      // Navigate to specific screens based on notification data
+      const data = response.notification.request.content.data;
+      if (data?.screen) {
+        // Navigation logic can be added here
+        console.log('Navigate to screen:', data.screen);
+      }
+    });
 
     // Get initial session
     const getInitialSession = async () => {
@@ -167,8 +182,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     return () => {
       subscription.unsubscribe();
-      // notificationListener.remove();
-      // responseListener.remove();
+      notificationListener.remove();
+      responseListener.remove();
     };
   }, []);
 

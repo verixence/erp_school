@@ -139,11 +139,6 @@ export default function TeacherLayout({
       label: 'Leave Requests',
       icon: UserX,
     },
-    {
-      href: '/teacher/feedback',
-      label: 'Feedback',
-      icon: Mail,
-    },
   ];
 
   return (

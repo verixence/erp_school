@@ -20,12 +20,24 @@ import {
   BookOpen, 
   Calendar, 
   Award, 
+  CheckCircle, 
+  Clock, 
+  GraduationCap,
   PenTool,
   MessageSquare,
+  ClipboardList,
+  TrendingUp,
+  FileText,
+  UserCheck,
+  Target,
+  Zap,
+  BarChart3,
   Bell,
   Search,
+  Settings,
   ChevronRight,
   Star,
+  Activity,
   Video,
   Camera,
   UserX,
@@ -60,7 +72,7 @@ interface ExamPaper {
   max_marks: number;
 }
 
-export const TeacherDashboardScreen: React.FC = () => {
+export const TeacherDashboardScreenUpgraded: React.FC = () => {
   const { user, signOut } = useAuth();
   const navigation = useNavigation();
   const [refreshing, setRefreshing] = useState(false);
@@ -98,7 +110,7 @@ export const TeacherDashboardScreen: React.FC = () => {
     enabled: !!user?.id,
   });
 
-  // Get total students count across all sections
+  // Get total students count
   const { data: totalStudents = 0, isLoading: studentsLoading } = useQuery({
     queryKey: ['teacher-total-students', user?.id, teacherSections],
     queryFn: async (): Promise<number> => {
@@ -116,7 +128,7 @@ export const TeacherDashboardScreen: React.FC = () => {
     enabled: !!user?.id && teacherSections.length > 0,
   });
 
-  // Get class teacher sections (sections where this teacher is the class teacher)
+  // Get class teacher sections
   const { data: classTeacherSections = [], isLoading: classTeacherLoading } = useQuery({
     queryKey: ['class-teacher-sections', user?.id],
     queryFn: async (): Promise<Section[]> => {
@@ -134,16 +146,11 @@ export const TeacherDashboardScreen: React.FC = () => {
     enabled: !!user?.id,
   });
 
-  // Get exam groups and papers
+  // Get exam papers
   const { data: examPapers = [], isLoading: examsLoading } = useQuery({
     queryKey: ['teacher-exam-papers', user?.id],
     queryFn: async (): Promise<ExamPaper[]> => {
-      if (!user?.id) {
-        console.log('❌ Dashboard: No user ID for exam papers query');
-        return [];
-      }
-
-      console.log('🔍 Dashboard: Fetching exam papers for teacher:', user.id);
+      if (!user?.id) return [];
 
       const { data, error } = await supabase
         .from('exam_papers')
@@ -162,20 +169,12 @@ export const TeacherDashboardScreen: React.FC = () => {
         .eq('teachers.user_id', user.id)
         .order('exam_date', { ascending: true });
 
-      console.log('📊 Dashboard: Exam papers query result:', { data, error });
-
-      if (error) {
-        console.error('❌ Dashboard: Exam papers query error:', error);
-        throw error;
-      }
-      
-      console.log('✅ Dashboard: Fetched exam papers:', data?.length || 0, 'papers');
+      if (error) throw error;
       return data || [];
     },
     enabled: !!user?.id,
   });
 
-  // Calculate statistics
   const completedExams = examPapers.filter(paper => 
     paper.exam_date && new Date(paper.exam_date) <= new Date()
   ).length;
@@ -183,29 +182,20 @@ export const TeacherDashboardScreen: React.FC = () => {
   const pendingMarksPapers = examPapers.filter(paper => {
     const isPastExam = paper.exam_date && new Date(paper.exam_date) <= new Date();
     return isPastExam;
-  }).slice(0, 5);
-
-  console.log('📊 Dashboard: Pending marks calculation:', {
-    totalExamPapers: examPapers.length,
-    completedExams,
-    pendingMarksPapers: pendingMarksPapers.length,
-    pendingPapers: pendingMarksPapers.map(p => ({ id: p.id, subject: p.subject, date: p.exam_date }))
-  });
+  }).slice(0, 3);
 
   const stats: TeacherStats = {
     totalStudents,
     assignedSections: teacherSections.length,
     classTeacherSections: classTeacherSections.length,
     completedExams,
-    pendingReports: 0, // Will be calculated from reports data
-    upcomingHomework: 0, // Will be calculated from homework data
+    pendingReports: 0,
+    upcomingHomework: 0,
   };
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([
-      refetchSections(),
-    ]);
+    await refetchSections();
     setRefreshing(false);
   };
 
@@ -215,7 +205,6 @@ export const TeacherDashboardScreen: React.FC = () => {
     if (hour < 17) return 'Good Afternoon';
     return 'Good Evening';
   };
-
 
   // Quick Actions with better organization
   const primaryActions = [
@@ -798,4 +787,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-}); 
+});

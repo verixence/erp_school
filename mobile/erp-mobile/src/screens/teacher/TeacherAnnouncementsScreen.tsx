@@ -59,6 +59,10 @@ export const TeacherAnnouncementsScreen: React.FC = () => {
   const [targetAudience, setTargetAudience] = useState<'all' | 'teachers' | 'parents' | 'students'>('all');
   const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>('normal');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Edit state
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   // Fetch announcements
   const { data: announcements = [], isLoading, refetch } = useQuery({
@@ -121,6 +125,54 @@ export const TeacherAnnouncementsScreen: React.FC = () => {
     }
   });
 
+  // Update announcement mutation
+  const updateAnnouncementMutation = useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<Announcement> & { id: string }) => {
+      const { data, error } = await supabase
+        .from('announcements')
+        .update(updates)
+        .eq('id', id)
+        .eq('created_by', user?.id) // Ensure user owns the announcement
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['teacher-announcements'] });
+      setShowEditModal(false);
+      setEditingAnnouncement(null);
+      resetForm();
+      Alert.alert('Success', 'Announcement updated successfully!');
+    },
+    onError: (error) => {
+      Alert.alert('Error', 'Failed to update announcement. Please try again.');
+      console.error('Update announcement error:', error);
+    }
+  });
+
+  // Delete announcement mutation
+  const deleteAnnouncementMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('announcements')
+        .delete()
+        .eq('id', id)
+        .eq('created_by', user?.id); // Ensure user owns the announcement
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['teacher-announcements'] });
+      Alert.alert('Success', 'Announcement deleted successfully!');
+    },
+    onError: (error) => {
+      Alert.alert('Error', 'Failed to delete announcement. Please try again.');
+      console.error('Delete announcement error:', error);
+    }
+  });
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await refetch();
@@ -154,6 +206,50 @@ export const TeacherAnnouncementsScreen: React.FC = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleEditAnnouncement = (announcement: Announcement) => {
+    setEditingAnnouncement(announcement);
+    setTitle(announcement.title);
+    setContent(announcement.content);
+    setTargetAudience(announcement.target_audience);
+    setPriority(announcement.priority);
+    setShowEditModal(true);
+  };
+
+  const handleUpdateAnnouncement = async () => {
+    if (!editingAnnouncement || !title.trim() || !content.trim()) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await updateAnnouncementMutation.mutateAsync({
+        id: editingAnnouncement.id,
+        title: title.trim(),
+        content: content.trim(),
+        target_audience: targetAudience,
+        priority
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteAnnouncement = (announcement: Announcement) => {
+    Alert.alert(
+      'Delete Announcement',
+      'Are you sure you want to delete this announcement? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive', 
+          onPress: () => deleteAnnouncementMutation.mutate(announcement.id) 
+        },
+      ]
+    );
   };
 
   const getAudienceBadge = (audience: string) => {
@@ -328,6 +424,7 @@ export const TeacherAnnouncementsScreen: React.FC = () => {
                                 paddingVertical: 4,
                                 borderRadius: 4
                               }}
+                              onPress={() => handleEditAnnouncement(announcement)}
                             >
                               <Edit size={14} color="#6b7280" />
                             </TouchableOpacity>
@@ -338,6 +435,7 @@ export const TeacherAnnouncementsScreen: React.FC = () => {
                                 paddingVertical: 4,
                                 borderRadius: 4
                               }}
+                              onPress={() => handleDeleteAnnouncement(announcement)}
                             >
                               <Trash2 size={14} color="#ef4444" />
                             </TouchableOpacity>
@@ -381,12 +479,17 @@ export const TeacherAnnouncementsScreen: React.FC = () => {
         </View>
       </ScrollView>
 
-      {/* Create Announcement Modal */}
+      {/* Create/Edit Announcement Modal */}
       <Modal
-        visible={showCreateModal}
+        visible={showCreateModal || showEditModal}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => setShowCreateModal(false)}
+        onRequestClose={() => {
+          setShowCreateModal(false);
+          setShowEditModal(false);
+          resetForm();
+          setEditingAnnouncement(null);
+        }}
       >
         <View style={{ 
           flex: 1, 
@@ -410,9 +513,14 @@ export const TeacherAnnouncementsScreen: React.FC = () => {
               alignItems: 'center'
             }}>
               <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827' }}>
-                Create Announcement
+                {showEditModal ? 'Edit Announcement' : 'Create Announcement'}
               </Text>
-              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+              <TouchableOpacity onPress={() => {
+                setShowCreateModal(false);
+                setShowEditModal(false);
+                resetForm();
+                setEditingAnnouncement(null);
+              }}>
                 <X size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
@@ -522,13 +630,18 @@ export const TeacherAnnouncementsScreen: React.FC = () => {
               <View style={{ flexDirection: 'row', gap: 12 }}>
                 <Button
                   title="Cancel"
-                  onPress={() => setShowCreateModal(false)}
+                  onPress={() => {
+                    setShowCreateModal(false);
+                    setShowEditModal(false);
+                    resetForm();
+                    setEditingAnnouncement(null);
+                  }}
                   variant="outline"
                   style={{ flex: 1 }}
                 />
                 <Button
-                  title={isSubmitting ? "Creating..." : "Create Announcement"}
-                  onPress={handleSubmit}
+                  title={isSubmitting ? (showEditModal ? "Updating..." : "Creating...") : (showEditModal ? "Update Announcement" : "Create Announcement")}
+                  onPress={showEditModal ? handleUpdateAnnouncement : handleSubmit}
                   loading={isSubmitting}
                   disabled={!title.trim() || !content.trim()}
                   style={{ flex: 1, backgroundColor: '#ef4444' }}

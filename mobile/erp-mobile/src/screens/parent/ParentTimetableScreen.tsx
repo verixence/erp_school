@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,32 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
-  FlatList
+  FlatList,
+  Dimensions,
+  Modal,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { 
+  Card, 
+  Button, 
+  Chip, 
+  Portal, 
+  Modal as PaperModal,
+  Provider as PaperProvider,
+  Surface,
+  Divider,
+  ActivityIndicator,
+  Badge,
+} from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '../../services/supabase';
-import { Card } from '../../components/ui/Card';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '../../contexts/AuthContext';
+
+const { width, height } = Dimensions.get('window');
 
 interface Child {
   id: string;
@@ -32,10 +52,21 @@ interface Period {
   start_time: string;
   end_time: string;
   venue: string;
-  teachers: {
+  users: {
     first_name: string;
     last_name: string;
   };
+  sections?: {
+    grade: number;
+    section: string;
+  };
+}
+
+interface TimetableStats {
+  totalPeriods: number;
+  subjects: string[];
+  teachers: string[];
+  dailyAverage: number;
 }
 
 const WEEKDAYS = [
@@ -47,11 +78,40 @@ const WEEKDAYS = [
   { id: 6, name: 'Saturday', short: 'SAT' },
 ];
 
+const SUBJECT_COLORS = {
+  Mathematics: '#FF6B6B',
+  English: '#4ECDC4',
+  Science: '#45B7D1',
+  Physics: '#96CEB4',
+  Chemistry: '#FFEAA7',
+  Biology: '#DDA0DD',
+  History: '#F4A261',
+  Geography: '#2A9D8F',
+  Hindi: '#E76F51',
+  default: '#8b5cf6'
+};
+
+const PERIOD_TIMES = [
+  { period: 1, start: '09:00', end: '09:45' },
+  { period: 2, start: '09:45', end: '10:30' },
+  { period: 3, start: '10:50', end: '11:35' },
+  { period: 4, start: '11:35', end: '12:20' },
+  { period: 5, start: '13:00', end: '13:45' },
+  { period: 6, start: '13:45', end: '14:30' },
+  { period: 7, start: '14:30', end: '15:15' },
+  { period: 8, start: '15:15', end: '16:00' },
+];
+
 const ParentTimetableScreen: React.FC = () => {
+  const { user } = useAuth();
   const [selectedChild, setSelectedChild] = useState<string>('');
   const [selectedDay, setSelectedDay] = useState<number>(getCurrentDay());
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
+  const [selectedWeek, setSelectedWeek] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedPeriod, setSelectedPeriod] = useState<Period | null>(null);
+  const [showPeriodModal, setShowPeriodModal] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -60,29 +120,45 @@ const ParentTimetableScreen: React.FC = () => {
     return today === 0 ? 6 : today; // Convert Sunday (0) to Saturday (6)
   }
 
-  // Fetch children
-  const { data: children = [], isLoading: childrenLoading } = useQuery({
-    queryKey: ['parent-children'],
-    queryFn: async () => {
-      const { data: profile } = await supabase.auth.getUser();
-      if (!profile.user) throw new Error('Not authenticated');
+  // Fetch children using the correct student_parents table relationship
+  const { data: children = [], isLoading: childrenLoading, refetch: refetchChildren } = useQuery({
+    queryKey: ['parent-children', user?.id],
+    queryFn: async (): Promise<Child[]> => {
+      if (!user?.id) return [];
 
       const { data, error } = await supabase
-        .from('students')
+        .from('student_parents')
         .select(`
-          id,
-          full_name,
-          admission_no,
-          sections(id, grade, section)
+          student_id,
+          students!inner(
+            id,
+            full_name,
+            admission_no,
+            section_id,
+            sections!inner(
+              id,
+              grade,
+              section
+            )
+          )
         `)
-        .eq('parent_id', profile.user.id);
+        .eq('parent_id', user.id)
+        .eq('students.school_id', user.school_id);
 
-      if (error) throw error;
-      return data?.map((student: any) => ({
-        ...student,
-        sections: student.sections[0] || student.sections
-      })) as Child[];
-    }
+      if (error) {
+        console.error('Error fetching children:', error);
+        return [];
+      }
+
+      return (data || []).map((item: any) => ({
+        id: item.students.id,
+        full_name: item.students.full_name,
+        admission_no: item.students.admission_no,
+        sections: item.students.sections
+      }));
+    },
+    enabled: !!user?.id,
+    staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
   });
 
   // Auto-select first child
@@ -93,26 +169,50 @@ const ParentTimetableScreen: React.FC = () => {
   }, [children, selectedChild]);
 
   // Fetch timetable for selected child
-  const { data: periods = [] } = useQuery({
+  const { data: periods = [], isLoading: periodsLoading, error: periodsError } = useQuery({
     queryKey: ['child-timetable', selectedChild],
     queryFn: async () => {
-      if (!selectedChild) return [];
+      if (!selectedChild) {
+        console.log('No selected child');
+        return [];
+      }
 
       const child = children.find(c => c.id === selectedChild);
-      if (!child) return [];
+      if (!child) {
+        console.log('Child not found:', selectedChild);
+        return [];
+      }
+
+      console.log('Fetching timetable for child:', child.full_name, 'Section ID:', child.sections?.id);
 
       const { data, error } = await supabase
         .from('periods')
         .select(`
           *,
-          teachers(first_name, last_name)
+          teacher:users!periods_teacher_id_fkey(
+            first_name,
+            last_name
+          )
         `)
-        .eq('section_id', child.sections.id)
+        .eq('section_id', child.sections?.id)
         .order('weekday', { ascending: true })
         .order('period_no', { ascending: true });
 
-      if (error) throw error;
-      return data as Period[];
+      if (error) {
+        console.error('Timetable fetch error:', error);
+        throw error;
+      }
+      
+      console.log('Periods data:', data?.length || 0, 'periods found');
+      
+      // Transform data to match expected format (same as web app)
+      return (data || []).map((period: any) => ({
+        ...period,
+        users: period.teacher ? {
+          first_name: period.teacher.first_name,
+          last_name: period.teacher.last_name
+        } : null
+      })) as Period[];
     },
     enabled: !!selectedChild && children.length > 0
   });
@@ -121,8 +221,9 @@ const ParentTimetableScreen: React.FC = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ['parent-children'] });
-    await queryClient.invalidateQueries({ queryKey: ['child-timetable'] });
+    await Promise.all([
+      refetchChildren(),
+    ]);
     setRefreshing(false);
   };
 
@@ -167,6 +268,41 @@ const ParentTimetableScreen: React.FC = () => {
            period.start_time <= currentTime &&
            period.end_time >= currentTime;
   };
+
+  const getSubjectColor = (subject: string) => {
+    return SUBJECT_COLORS[subject as keyof typeof SUBJECT_COLORS] || SUBJECT_COLORS.default;
+  };
+
+  const getPeriodTime = (periodNo: number) => {
+    const periodTime = PERIOD_TIMES.find(p => p.period === periodNo);
+    return periodTime ? `${periodTime.start} - ${periodTime.end}` : '';
+  };
+
+  const getWeekDates = (date: Date) => {
+    const startOfWeek = new Date(date);
+    const day = startOfWeek.getDay();
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+    startOfWeek.setDate(diff);
+    
+    return WEEKDAYS.map((_, index) => {
+      const weekDate = new Date(startOfWeek);
+      weekDate.setDate(startOfWeek.getDate() + index);
+      return weekDate;
+    });
+  };
+
+  const navigateWeek = (direction: 'prev' | 'next') => {
+    const newDate = new Date(selectedWeek);
+    newDate.setDate(selectedWeek.getDate() + (direction === 'next' ? 7 : -7));
+    setSelectedWeek(newDate);
+  };
+
+  const isToday = (date: Date) => {
+    const today = new Date();
+    return date.toDateString() === today.toDateString();
+  };
+
+  const weekDates = useMemo(() => getWeekDates(selectedWeek), [selectedWeek]);
 
   const renderChildSelector = () => (
     <View style={styles.selectorContainer}>
@@ -239,7 +375,7 @@ const ParentTimetableScreen: React.FC = () => {
                           {period.subject}
                         </Text>
                         <Text style={[styles.teacherText, isCurrent && styles.currentPeriodText]}>
-                          {period.teachers?.first_name} {period.teachers?.last_name}
+                          {period.users?.first_name} {period.users?.last_name}
                         </Text>
                         <Text style={[styles.timeText, isCurrent && styles.currentPeriodText]}>
                           {formatTime(period.start_time)}
@@ -258,12 +394,11 @@ const ParentTimetableScreen: React.FC = () => {
     );
   };
 
-  const renderDayView = () => {
-    const dayPeriods = getPeriodsForDay(selectedDay);
+  const renderDayViewHeader = () => {
     const selectedDayName = WEEKDAYS.find(d => d.id === selectedDay)?.name || '';
-
+    
     return (
-      <View style={styles.dayViewContainer}>
+      <View>
         {/* Day selector */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.daySelector}>
           {WEEKDAYS.map(day => (
@@ -280,73 +415,89 @@ const ParentTimetableScreen: React.FC = () => {
         </ScrollView>
 
         <Text style={styles.dayTitle}>{selectedDayName} Schedule</Text>
+      </View>
+    );
+  };
 
-        {dayPeriods.length > 0 ? (
-          <FlatList
-            data={dayPeriods}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => {
-              const isCurrent = isCurrentPeriod(item);
-              return (
-                <Card style={StyleSheet.flatten([styles.periodCard, isCurrent && styles.currentPeriodCard])}>
-                  <View style={styles.periodCardHeader}>
-                    <View style={styles.periodInfo}>
-                      <Text style={[styles.periodCardSubject, isCurrent && styles.currentCardText]}>
-                        {item.subject}
-                      </Text>
-                      <Text style={[styles.periodCardTeacher, isCurrent && styles.currentCardText]}>
-                        {item.teachers?.first_name} {item.teachers?.last_name}
-                      </Text>
-                    </View>
-                    <View style={styles.periodTime}>
-                      <Text style={[styles.periodTimeText, isCurrent && styles.currentCardText]}>
-                        Period {item.period_no}
-                      </Text>
-                      <Text style={[styles.periodDuration, isCurrent && styles.currentCardText]}>
-                        {formatTime(item.start_time)} - {formatTime(item.end_time)}
-                      </Text>
-                    </View>
-                  </View>
-                  
-                  {item.venue && (
-                    <View style={styles.venueContainer}>
-                      <Text style={[styles.venueText, isCurrent && styles.currentCardText]}>
-                        📍 {item.venue}
-                      </Text>
-                    </View>
-                  )}
+  const renderDayView = () => {
+    const dayPeriods = getPeriodsForDay(selectedDay);
+    const selectedDayName = WEEKDAYS.find(d => d.id === selectedDay)?.name || '';
 
-                  {isCurrent && (
-                    <View style={styles.currentIndicator}>
-                      <Text style={styles.currentIndicatorText}>CURRENT PERIOD</Text>
-                    </View>
-                  )}
-                </Card>
-              );
-            }}
-            showsVerticalScrollIndicator={false}
-          />
-        ) : (
+    if (dayPeriods.length === 0) {
+      return (
+        <View style={styles.dayViewContainer}>
+          {renderDayViewHeader()}
           <View style={styles.emptyDay}>
             <Text style={styles.emptyDayText}>No classes scheduled for {selectedDayName}</Text>
           </View>
-        )}
-      </View>
+        </View>
+      );
+    }
+
+    return (
+      <FlatList
+        style={styles.dayViewContainer}
+        data={dayPeriods}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={renderDayViewHeader}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        renderItem={({ item }) => {
+          const isCurrent = isCurrentPeriod(item);
+          return (
+            <Card style={StyleSheet.flatten([styles.periodCard, isCurrent && styles.currentPeriodCard])}>
+              <View style={styles.periodCardHeader}>
+                <View style={styles.periodInfo}>
+                  <Text style={[styles.periodCardSubject, isCurrent && styles.currentCardText]}>
+                    {item.subject}
+                  </Text>
+                  <Text style={[styles.periodCardTeacher, isCurrent && styles.currentCardText]}>
+                    {item.users?.first_name} {item.users?.last_name}
+                  </Text>
+                </View>
+                <View style={styles.periodTime}>
+                  <Text style={[styles.periodTimeText, isCurrent && styles.currentCardText]}>
+                    Period {item.period_no}
+                  </Text>
+                  <Text style={[styles.periodDuration, isCurrent && styles.currentCardText]}>
+                    {formatTime(item.start_time)} - {formatTime(item.end_time)}
+                  </Text>
+                </View>
+              </View>
+              
+              {item.venue && (
+                <View style={styles.venueContainer}>
+                  <Text style={[styles.venueText, isCurrent && styles.currentCardText]}>
+                    📍 {item.venue}
+                  </Text>
+                </View>
+              )}
+
+              {isCurrent && (
+                <View style={styles.currentIndicator}>
+                  <Text style={styles.currentIndicatorText}>CURRENT PERIOD</Text>
+                </View>
+              )}
+            </Card>
+          );
+        }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 20 }}
+      />
     );
   };
 
   const currentPeriod = getCurrentPeriod();
 
   // Calculate stats
-  const getStats = () => {
+  const getStats = (): TimetableStats => {
     const subjects = [...new Set(periods.map(p => p.subject))];
-    const teachers = [...new Set(periods.map(p => `${p.teachers?.first_name} ${p.teachers?.last_name}`))];
+    const teachers = [...new Set(periods.map(p => `${p.users?.first_name} ${p.users?.last_name}`))];
     const dailyAverage = periods.length / WEEKDAYS.length;
 
     return {
       totalPeriods: periods.length,
-      subjects: subjects.length,
-      teachers: teachers.length,
+      subjects,
+      teachers,
       dailyAverage: Math.round(dailyAverage * 10) / 10
     };
   };
@@ -354,95 +505,375 @@ const ParentTimetableScreen: React.FC = () => {
   const stats = getStats();
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Class Timetable</Text>
-        <Text style={styles.headerSubtitle}>View your child's weekly schedule</Text>
-      </View>
-
-      {/* Child Selector */}
-      {children.length > 0 && renderChildSelector()}
-
-      {currentChild && (
-        <Card style={styles.childInfoCard}>
-          <Text style={styles.childInfoName}>{currentChild.full_name}</Text>
-          <Text style={styles.childInfoDetails}>
-            Grade {currentChild.sections.grade}{currentChild.sections.section} • {currentChild.admission_no}
+    <PaperProvider>
+      <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+        <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+        {/* Enhanced Header with Gradient */}
+        <LinearGradient
+          colors={['#8b5cf6', '#a855f7']}
+          style={{ paddingHorizontal: 20, paddingVertical: 16 }}
+        >
+          <Text style={{ 
+            fontSize: 28, 
+            fontWeight: 'bold', 
+            color: 'white',
+            marginBottom: 4
+          }}>
+            Class Timetable
           </Text>
-        </Card>
-      )}
+          <Text style={{ 
+            fontSize: 16, 
+            color: 'rgba(255,255,255,0.8)'
+          }}>
+            Your child's class schedule at a glance
+          </Text>
+        </LinearGradient>
 
-      {/* Current Period Alert */}
-      {currentPeriod && (
-        <Card style={styles.currentPeriodAlert}>
-          <View style={styles.alertContent}>
-            <Text style={styles.alertTitle}>Current Period</Text>
-            <Text style={styles.alertSubject}>
-              {currentPeriod.subject}
+        {/* Child Selector - Enhanced */}
+        {children.length > 1 && (
+          <View style={{ 
+            backgroundColor: 'rgba(139,92,246,0.1)', 
+            marginHorizontal: 20, 
+            marginTop: 16,
+            borderRadius: 12,
+            padding: 16,
+            borderWidth: 1,
+            borderColor: 'rgba(139,92,246,0.2)',
+          }}>
+            <Text style={{ 
+              fontSize: 14, 
+              fontWeight: '500', 
+              color: '#8b5cf6', 
+              marginBottom: 8 
+            }}>
+              Select Child
             </Text>
-            <Text style={styles.alertTeacher}>
-              Teacher: {currentPeriod.teachers?.first_name} {currentPeriod.teachers?.last_name}
-            </Text>
-            <Text style={styles.alertTime}>
-              {formatTime(currentPeriod.start_time)} - {formatTime(currentPeriod.end_time)}
-            </Text>
-            {currentPeriod.venue && (
-              <Text style={styles.alertVenue}>📍 {currentPeriod.venue}</Text>
-            )}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {children.map((child) => (
+                <TouchableOpacity
+                  key={child.id}
+                  style={{
+                    marginRight: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    backgroundColor: selectedChild === child.id ? '#8b5cf6' : 'rgba(139,92,246,0.1)',
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: selectedChild === child.id ? '#8b5cf6' : 'rgba(139,92,246,0.3)',
+                  }}
+                  onPress={() => setSelectedChild(child.id)}
+                >
+                  <Text style={{ 
+                    fontSize: 14, 
+                    fontWeight: '600', 
+                    color: selectedChild === child.id ? 'white' : '#8b5cf6'
+                  }}>
+                    {child.full_name}
+                  </Text>
+                  <Text style={{ 
+                    fontSize: 12, 
+                    color: selectedChild === child.id ? 'rgba(255,255,255,0.8)' : 'rgba(139,92,246,0.7)', 
+                    marginTop: 2 
+                  }}>
+                    Grade {child.sections.grade}{child.sections.section}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
-        </Card>
-      )}
+        )}
 
-      {/* Stats Cards */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsContainer}>
-        <Card style={styles.statCard}>
-          <Text style={styles.statValue}>{stats.totalPeriods}</Text>
-          <Text style={styles.statLabel}>Total Periods</Text>
-        </Card>
-        <Card style={styles.statCard}>
-          <Text style={styles.statValue}>{stats.subjects}</Text>
-          <Text style={styles.statLabel}>Subjects</Text>
-        </Card>
-        <Card style={styles.statCard}>
-          <Text style={styles.statValue}>{stats.teachers}</Text>
-          <Text style={styles.statLabel}>Teachers</Text>
-        </Card>
-        <Card style={styles.statCard}>
-          <Text style={styles.statValue}>{stats.dailyAverage}</Text>
-          <Text style={styles.statLabel}>Daily Average</Text>
-        </Card>
-      </ScrollView>
+        {/* Current Period Alert */}
+        {currentPeriod && (
+          <Card style={{ 
+            marginHorizontal: 16, 
+            marginTop: 12,
+            marginBottom: 8,
+            backgroundColor: getSubjectColor(currentPeriod.subject),
+            elevation: 8
+          }}>
+            <View style={{ padding: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <MaterialCommunityIcons name="play-circle" size={24} color="white" />
+                <Text style={{ 
+                  fontSize: 16, 
+                  fontWeight: 'bold', 
+                  color: 'white',
+                  marginLeft: 8
+                }}>
+                  Current Period
+                </Text>
+              </View>
+              <Text style={{ 
+                fontSize: 20, 
+                fontWeight: 'bold', 
+                color: 'white',
+                marginBottom: 4
+              }}>
+                {currentPeriod.subject} - Grade {currentPeriod.sections?.grade}{currentPeriod.sections?.section}
+              </Text>
+              <Text style={{ 
+                fontSize: 14, 
+                color: 'rgba(255,255,255,0.9)',
+                marginBottom: 4
+              }}>
+                Teacher: {currentPeriod.users?.first_name} {currentPeriod.users?.last_name}
+              </Text>
+              <Text style={{ 
+                fontSize: 14, 
+                color: 'rgba(255,255,255,0.9)',
+                marginBottom: 4
+              }}>
+                {formatTime(currentPeriod.start_time)} - {formatTime(currentPeriod.end_time)}
+              </Text>
+              {currentPeriod.venue && (
+                <Text style={{ 
+                  fontSize: 14, 
+                  color: 'rgba(255,255,255,0.9)'
+                }}>
+                  📍 {currentPeriod.venue}
+                </Text>
+              )}
+            </View>
+          </Card>
+        )}
 
-      {/* View Mode Toggle */}
-      <View style={styles.viewToggle}>
-        <TouchableOpacity
-          style={[styles.toggleButton, viewMode === 'week' && styles.activeToggle]}
-          onPress={() => setViewMode('week')}
-        >
-          <Text style={[styles.toggleText, viewMode === 'week' && styles.activeToggleText]}>
-            Week View
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toggleButton, viewMode === 'day' && styles.activeToggle]}
-          onPress={() => setViewMode('day')}
-        >
-          <Text style={[styles.toggleText, viewMode === 'day' && styles.activeToggleText]}>
-            Day View
-          </Text>
-        </TouchableOpacity>
+        {/* Stats Cards - 2x2 Grid */}
+        <View style={{ 
+          paddingHorizontal: 16, 
+          marginBottom: 12,
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between'
+        }}>
+          <Card style={{ 
+            width: (width - 48) / 2, 
+            marginBottom: 8, 
+            alignItems: 'center', 
+            paddingVertical: 12,
+            height: 90
+          }}>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#8b5cf6' }}>
+              {stats.totalPeriods}
+            </Text>
+            <Text style={{ fontSize: 11, color: '#718096', textAlign: 'center' }}>
+              Total Periods
+            </Text>
+          </Card>
+          <Card style={{ 
+            width: (width - 48) / 2, 
+            marginBottom: 8, 
+            alignItems: 'center', 
+            paddingVertical: 12,
+            height: 90
+          }}>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#48BB78' }}>
+              {stats.subjects.length}
+            </Text>
+            <Text style={{ fontSize: 11, color: '#718096', textAlign: 'center' }}>
+              Subjects
+            </Text>
+          </Card>
+          <Card style={{ 
+            width: (width - 48) / 2, 
+            alignItems: 'center', 
+            paddingVertical: 12,
+            height: 90
+          }}>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#ED8936' }}>
+              {stats.teachers.length}
+            </Text>
+            <Text style={{ fontSize: 11, color: '#718096', textAlign: 'center' }}>
+              Teachers
+            </Text>
+          </Card>
+          <Card style={{ 
+            width: (width - 48) / 2, 
+            alignItems: 'center', 
+            paddingVertical: 12,
+            height: 90
+          }}>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#38B2AC' }}>
+              {stats.dailyAverage}
+            </Text>
+            <Text style={{ fontSize: 11, color: '#718096', textAlign: 'center' }}>
+              Daily Average
+            </Text>
+          </Card>
+        </View>
+
+        {/* View Mode Toggle */}
+        <View style={{ 
+          flexDirection: 'row', 
+          marginHorizontal: 16, 
+          marginBottom: 12,
+          backgroundColor: '#EDF2F7',
+          borderRadius: 12,
+          padding: 3
+        }}>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              paddingVertical: 10,
+              alignItems: 'center',
+              borderRadius: 8,
+              backgroundColor: viewMode === 'week' ? '#8b5cf6' : 'transparent'
+            }}
+            onPress={() => setViewMode('week')}
+          >
+            <Text style={{
+              fontSize: 16,
+              fontWeight: '600',
+              color: viewMode === 'week' ? 'white' : '#4A5568'
+            }}>
+              Week View
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              paddingVertical: 10,
+              alignItems: 'center',
+              borderRadius: 8,
+              backgroundColor: viewMode === 'day' ? '#8b5cf6' : 'transparent'
+            }}
+            onPress={() => setViewMode('day')}
+          >
+            <Text style={{
+              fontSize: 16,
+              fontWeight: '600',
+              color: viewMode === 'day' ? 'white' : '#4A5568'
+            }}>
+              Day View
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Timetable Content */}
+        {childrenLoading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#8b5cf6" />
+            <Text style={{ marginTop: 16, color: '#718096' }}>Loading timetable...</Text>
+          </View>
+        ) : viewMode === 'week' ? (
+          <ScrollView
+            style={{ flex: 1 }}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          >
+            {renderWeekView()}
+          </ScrollView>
+        ) : (
+          renderDayView()
+        )}
+
+        {/* Date Picker */}
+        {showDatePicker && (
+          <DateTimePicker
+            value={selectedWeek}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={(event, selectedDate) => {
+              setShowDatePicker(false);
+              if (selectedDate) {
+                setSelectedWeek(selectedDate);
+              }
+            }}
+          />
+        )}
+
+        {/* Period Details Modal */}
+        <Portal>
+          <PaperModal
+            visible={showPeriodModal}
+            onDismiss={() => setShowPeriodModal(false)}
+            contentContainerStyle={{
+              backgroundColor: 'white',
+              margin: 20,
+              borderRadius: 20,
+              padding: 0,
+              maxHeight: height * 0.6
+            }}
+          >
+            {selectedPeriod && (
+              <View>
+                <LinearGradient
+                  colors={[getSubjectColor(selectedPeriod.subject), `${getSubjectColor(selectedPeriod.subject)}CC`]}
+                  style={{ padding: 24, borderTopLeftRadius: 20, borderTopRightRadius: 20 }}
+                >
+                  <Text style={{ 
+                    fontSize: 24, 
+                    fontWeight: 'bold', 
+                    color: 'white',
+                    marginBottom: 8
+                  }}>
+                    {selectedPeriod.subject}
+                  </Text>
+                  <Text style={{ 
+                    fontSize: 16, 
+                    color: 'rgba(255,255,255,0.9)'
+                  }}>
+                    Grade {selectedPeriod.sections?.grade}{selectedPeriod.sections?.section}
+                  </Text>
+                </LinearGradient>
+                
+                <View style={{ padding: 20 }}>
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontSize: 14, color: '#718096', marginBottom: 4 }}>Period</Text>
+                    <Text style={{ fontSize: 18, fontWeight: '600', color: '#2D3748' }}>
+                      Period {selectedPeriod.period_no}
+                    </Text>
+                  </View>
+                  
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontSize: 14, color: '#718096', marginBottom: 4 }}>Time</Text>
+                    <Text style={{ fontSize: 18, fontWeight: '600', color: '#2D3748' }}>
+                      {formatTime(selectedPeriod.start_time)} - {formatTime(selectedPeriod.end_time)}
+                    </Text>
+                  </View>
+                  
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontSize: 14, color: '#718096', marginBottom: 4 }}>Teacher</Text>
+                    <Text style={{ fontSize: 18, fontWeight: '600', color: '#2D3748' }}>
+                      {selectedPeriod.users?.first_name} {selectedPeriod.users?.last_name}
+                    </Text>
+                  </View>
+                  
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={{ fontSize: 14, color: '#718096', marginBottom: 4 }}>Day</Text>
+                    <Text style={{ fontSize: 18, fontWeight: '600', color: '#2D3748' }}>
+                      {WEEKDAYS.find(d => d.id === selectedPeriod.weekday)?.name}
+                    </Text>
+                  </View>
+                  
+                  {selectedPeriod.venue && (
+                    <View style={{ marginBottom: 16 }}>
+                      <Text style={{ fontSize: 14, color: '#718096', marginBottom: 4 }}>Venue</Text>
+                      <Text style={{ fontSize: 18, fontWeight: '600', color: '#2D3748' }}>
+                        {selectedPeriod.venue}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  <Button
+                    mode="contained"
+                    onPress={() => setShowPeriodModal(false)}
+                    style={{ 
+                      backgroundColor: getSubjectColor(selectedPeriod.subject),
+                      borderRadius: 12
+                    }}
+                  >
+                    Close
+                  </Button>
+                </View>
+              </View>
+            )}
+          </PaperModal>
+        </Portal>
+        </SafeAreaView>
       </View>
-
-      {/* Timetable Content */}
-      <ScrollView
-        style={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {viewMode === 'week' ? renderWeekView() : renderDayView()}
-      </ScrollView>
-    </SafeAreaView>
+    </PaperProvider>
   );
 };
 
