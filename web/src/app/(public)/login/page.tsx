@@ -2,16 +2,43 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase-client';
-import { Mail, Lock, Loader2, GraduationCap, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Loader2, GraduationCap, Eye, EyeOff, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
+  const [loginId, setLoginId] = useState(''); // Can be email or username
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [loginMode, setLoginMode] = useState<'username' | 'email'>('username'); // Default to username
   const router = useRouter();
+
+  // Helper function to sign in with username
+  const signInWithUsername = async (username: string, password: string) => {
+    // First, find the user by username to get their email
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('email, id, username, first_name, last_name, role, school_id')
+      .eq('username', username)
+      .single();
+
+    if (userError || !userData) {
+      throw new Error('Invalid username or password');
+    }
+
+    // Use the found email to sign in with Supabase Auth
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: userData.email,
+      password,
+    });
+
+    if (error) {
+      throw new Error('Invalid username or password');
+    }
+
+    return { data, userData };
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,26 +46,42 @@ export default function LoginPage() {
     setMessage('');
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      let data, userData;
 
-      if (error) {
-        setMessage(error.message);
-      } else if (data.user) {
-        // Check if user exists in our database
-        const { data: userData, error: userError } = await supabase
+      if (loginMode === 'username') {
+        const result = await signInWithUsername(loginId, password);
+        data = result.data;
+        userData = result.userData;
+      } else {
+        // Email login
+        const authResult = await supabase.auth.signInWithPassword({
+          email: loginId,
+          password,
+        });
+
+        if (authResult.error) {
+          setMessage(authResult.error.message);
+          return;
+        }
+
+        data = authResult.data;
+
+        // Get user data from database
+        const { data: dbUserData, error: userError } = await supabase
           .from('users')
-          .select('id, role, email')
-          .eq('id', data.user.id)
+          .select('id, role, email, username, first_name, last_name')
+          .eq('id', data.user?.id)
           .single();
 
-        if (userError || !userData) {
+        if (userError || !dbUserData) {
           setMessage('User not found in the system. Please contact an administrator.');
           return;
         }
 
+        userData = dbUserData;
+      }
+
+      if (data.user && userData) {
         // Redirect based on role with force refresh
         switch (userData.role) {
           case 'super_admin':
@@ -57,8 +100,8 @@ export default function LoginPage() {
             window.location.href = '/dashboard';
         }
       }
-    } catch (error) {
-      setMessage('An error occurred. Please try again.');
+    } catch (error: any) {
+      setMessage(error.message || 'An error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -84,44 +127,84 @@ export default function LoginPage() {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
+          <form onSubmit={handleLogin} className="space-y-6">
+            {/* Login Mode Toggle */}
+            <div className="flex bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-1 border border-blue-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginMode('username');
+                  setLoginId('');
+                  setMessage('');
+                }}
+                className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
+                  loginMode === 'username'
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg transform scale-105'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-white/50'
+                }`}
+              >
+                <User className="w-4 h-4" />
+                Username
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginMode('email');
+                  setLoginId('');
+                  setMessage('');
+                }}
+                className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
+                  loginMode === 'email'
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg transform scale-105'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-white/50'
+                }`}
+              >
+                <Mail className="w-4 h-4" />
+                Email
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="loginId" className="block text-sm font-semibold text-gray-700">
+                {loginMode === 'email' ? 'Email Address' : 'Username'}
               </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <div className="relative group">
+                {loginMode === 'email' ? (
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                ) : (
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                )}
                 <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  id="loginId"
+                  type={loginMode === 'email' ? 'email' : 'text'}
+                  value={loginId}
+                  onChange={(e) => setLoginId(e.target.value)}
+                  placeholder={loginMode === 'email' ? 'Enter your email address' : 'Enter your username'}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-gray-50 focus:bg-white text-gray-900 placeholder-gray-500"
                   required
                 />
               </div>
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="space-y-2">
+              <label htmlFor="password" className="block text-sm font-semibold text-gray-700">
                 Password
               </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <div className="relative group">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-gray-50 focus:bg-white text-gray-900 placeholder-gray-500"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-blue-500 focus:outline-none transition-colors"
                 >
                   {showPassword ? (
                     <EyeOff className="w-5 h-5" />
@@ -135,7 +218,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-4 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center transform hover:scale-105 shadow-lg hover:shadow-xl"
             >
               {isLoading ? (
                 <>
@@ -143,77 +226,133 @@ export default function LoginPage() {
                   Signing In...
                 </>
               ) : (
-                'Sign In'
+                <>
+                  <Lock className="w-5 h-5 mr-2" />
+                  Sign In
+                </>
               )}
             </button>
           </form>
 
           {/* Message */}
           {message && (
-            <div className={`p-4 rounded-lg text-sm ${
+            <div className={`p-4 rounded-lg text-sm border ${
               message.includes('Check your email') 
-                ? 'bg-green-50 text-green-800 border border-green-200' 
-                : 'bg-red-50 text-red-800 border border-red-200'
-            }`}>
-              {message}
+                ? 'bg-green-50 text-green-800 border-green-200' 
+                : 'bg-red-50 text-red-800 border-red-200'
+            } shadow-sm`}>
+              <div className="flex items-center gap-2">
+                {message.includes('Check your email') ? (
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                ) : (
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                )}
+                {message}
+              </div>
             </div>
           )}
 
           {/* Demo Account */}
           <div className="border-t pt-6">
-            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-              <h3 className="font-medium text-blue-800 mb-3">🚀 Demo Credentials</h3>
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-5 border border-blue-200">
+              <h3 className="font-semibold text-blue-800 mb-4 flex items-center gap-2">
+                🚀 Demo Credentials
+                <span className="text-xs bg-blue-200 text-blue-700 px-2 py-1 rounded-full">
+                  Try Now
+                </span>
+              </h3>
               <div className="space-y-3">
-                                  <div className="bg-white px-3 py-2 rounded border border-blue-300">
-                  <p className="text-xs text-blue-600 font-medium mb-1">School Admin:</p>
-                  <div className="flex items-center justify-between">
-                    <code className="text-sm font-mono text-blue-800">admin@campus.cx</code>
+                <div className="bg-white p-4 rounded-lg border border-blue-100 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                      <span className="text-sm font-semibold text-gray-700">School Admin</span>
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
-                        setEmail('admin@campus.cx');
+                        setLoginId(loginMode === 'username' ? 'admin0004' : 'admin@campus.cx');
                         setPassword('Welcome!23');
                       }}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded-full hover:bg-blue-700 transition-colors"
                     >
-                      Use
+                      Use This
                     </button>
                   </div>
-                  <code className="text-sm font-mono text-blue-800">Password: Welcome!23</code>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <User className="w-3 h-3 text-gray-400" />
+                      <code className="text-sm font-mono text-blue-800 bg-blue-50 px-2 py-1 rounded">
+                        {loginMode === 'username' ? 'admin0004' : 'admin@campus.cx'}
+                      </code>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-3 h-3 text-gray-400" />
+                      <code className="text-sm font-mono text-gray-600">Welcome!23</code>
+                    </div>
+                  </div>
                 </div>
-                                  <div className="bg-white px-3 py-2 rounded border border-blue-300">
-                  <p className="text-xs text-blue-600 font-medium mb-1">Teacher:</p>
-                  <div className="flex items-center justify-between">
-                    <code className="text-sm font-mono text-blue-800">sai.kapoor22@yopmail.com</code>
+                
+                <div className="bg-white p-4 rounded-lg border border-blue-100 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span className="text-sm font-semibold text-gray-700">Teacher</span>
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
-                        setEmail('sai.kapoor22@yopmail.com');
+                        setLoginId(loginMode === 'username' ? 'TCHR1022' : 'sai.kapoor22@yopmail.com');
                         setPassword('Welcome!23');
                       }}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded-full hover:bg-blue-700 transition-colors"
                     >
-                      Use
+                      Use This
                     </button>
                   </div>
-                  <code className="text-sm font-mono text-blue-800">Password: Welcome!23</code>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      {loginMode === 'username' ? <User className="w-3 h-3 text-gray-400" /> : <Mail className="w-3 h-3 text-gray-400" />}
+                      <code className="text-sm font-mono text-blue-800 bg-blue-50 px-2 py-1 rounded">
+                        {loginMode === 'username' ? 'TCHR1022' : 'sai.kapoor22@yopmail.com'}
+                      </code>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-3 h-3 text-gray-400" />
+                      <code className="text-sm font-mono text-gray-600">Welcome!23</code>
+                    </div>
+                  </div>
                 </div>
-                                  <div className="bg-white px-3 py-2 rounded border border-blue-300">
-                  <p className="text-xs text-blue-600 font-medium mb-1">Parent:</p>
-                  <div className="flex items-center justify-between">
-                    <code className="text-sm font-mono text-blue-800">aarav.gupta0@yopmail.com</code>
+
+                <div className="bg-white p-4 rounded-lg border border-blue-100 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-sm font-semibold text-gray-700">Parent</span>
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
-                        setEmail('aarav.gupta0@yopmail.com');
+                        setLoginId(loginMode === 'username' ? 'P0025' : 'aarav.gupta0@yopmail.com');
                         setPassword('Welcome!23');
                       }}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded-full hover:bg-blue-700 transition-colors"
                     >
-                      Use
+                      Use This
                     </button>
                   </div>
-                  <code className="text-sm font-mono text-blue-800">Password: Welcome!23</code>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      {loginMode === 'username' ? <User className="w-3 h-3 text-gray-400" /> : <Mail className="w-3 h-3 text-gray-400" />}
+                      <code className="text-sm font-mono text-blue-800 bg-blue-50 px-2 py-1 rounded">
+                        {loginMode === 'username' ? 'P0025' : 'aarav.gupta0@yopmail.com'}
+                      </code>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-3 h-3 text-gray-400" />
+                      <code className="text-sm font-mono text-gray-600">Welcome!23</code>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

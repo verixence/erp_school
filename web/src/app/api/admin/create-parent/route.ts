@@ -18,6 +18,33 @@ const supabaseAdmin = createClient(
   }
 );
 
+// Helper function to generate username for parents
+async function generateParentUsername(schoolId: string): Promise<string> {
+  const { data: users } = await supabaseAdmin
+    .from('users')
+    .select('username')
+    .eq('school_id', schoolId)
+    .like('username', 'P%');
+
+  let maxNumber = 0;
+  if (users) {
+    users.forEach(user => {
+      if (user.username) {
+        const match = user.username.match(/^P(\d+)$/);
+        if (match) {
+          const num = parseInt(match[1]);
+          if (num > maxNumber) {
+            maxNumber = num;
+          }
+        }
+      }
+    });
+  }
+
+  const nextNumber = maxNumber + 1;
+  return `P${nextNumber.toString().padStart(4, '0')}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const {
@@ -27,30 +54,47 @@ export async function POST(request: NextRequest) {
       phone,
       relation,
       school_id,
-      children = []
+      children = [],
+      password, // Allow custom password or generate temp
+      useUsername = true // New flag to enable username mode
     } = await request.json();
 
     // Validate required fields
-    if (!first_name || !last_name || !email || !relation || !school_id) {
+    if (!first_name || !last_name || !relation || !school_id) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
-    // Generate a temporary password for the parent
-    const tempPassword = `Parent${Math.random().toString(36).slice(-8)}!`;
+    let finalEmail = email;
+    let username = null;
+    
+    // Generate username and dummy email if useUsername is true
+    if (useUsername) {
+      username = await generateParentUsername(school_id);
+      finalEmail = `${username}@${school_id}.local`;
+    } else if (!email) {
+      return NextResponse.json(
+        { error: 'Email is required when not using username mode' },
+        { status: 400 }
+      );
+    }
+
+    // Generate a temporary password for the parent if not provided
+    const finalPassword = password || `Parent${Math.random().toString(36).slice(-8)}!`;
 
     // 1. Create auth user using service role
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password: tempPassword,
+      email: finalEmail,
+      password: finalPassword,
       email_confirm: true,
       user_metadata: {
         role: 'parent',
         school_id,
         first_name,
         last_name,
+        username
       },
     });
 
@@ -67,7 +111,8 @@ export async function POST(request: NextRequest) {
       .from('users')
       .insert({
         id: authData.user.id,
-        email,
+        email: finalEmail,
+        username,
         role: 'parent',
         school_id,
         first_name,
@@ -115,8 +160,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       parent: parentData,
-      tempPassword, // Return temp password so it can be communicated to the parent
-      childrenAssigned: children.length
+      username: username,
+      email: finalEmail,
+      tempPassword: finalPassword, // Return temp password so it can be communicated to the parent
+      childrenAssigned: children.length,
+      loginCredentials: username ? {
+        username: username,
+        password: finalPassword
+      } : {
+        email: finalEmail,
+        password: finalPassword
+      }
     });
 
   } catch (error) {

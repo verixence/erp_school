@@ -13,22 +13,96 @@ const supabaseAdmin = createClient(
   }
 );
 
+// Helper function to generate username
+async function generateUsername(role: string, schoolId: string): Promise<string> {
+  let prefix = '';
+  switch (role) {
+    case 'school_admin':
+      prefix = 'admin';
+      break;
+    case 'teacher':
+      prefix = 'T';
+      break;
+    case 'parent':
+      prefix = 'P';
+      break;
+    case 'student':
+      prefix = 'S';
+      break;
+    default:
+      prefix = 'U';
+  }
+
+  // Find next available number
+  const { data: users } = await supabaseAdmin
+    .from('users')
+    .select('username')
+    .eq('school_id', schoolId)
+    .like('username', `${prefix}%`);
+
+  let maxNumber = 0;
+  if (users) {
+    users.forEach(user => {
+      if (user.username) {
+        const match = user.username.match(new RegExp(`^${prefix}(\\d+)$`));
+        if (match) {
+          const num = parseInt(match[1]);
+          if (num > maxNumber) {
+            maxNumber = num;
+          }
+        }
+      }
+    });
+  }
+
+  const nextNumber = maxNumber + 1;
+  return `${prefix}${nextNumber.toString().padStart(4, '0')}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, role, permissions, schoolId } = await request.json();
+    const { 
+      email, 
+      password, 
+      role, 
+      permissions, 
+      schoolId,
+      first_name,
+      last_name,
+      useUsername = true // New flag to enable username mode
+    } = await request.json();
 
-    if (!email || !password || !role || !permissions || !schoolId) {
+    if (!password || !role || !permissions || !schoolId) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
+    let finalEmail = email;
+    let username = null;
+
+    // Generate username and dummy email if useUsername is true
+    if (useUsername) {
+      username = await generateUsername('school_admin', schoolId);
+      finalEmail = `${username}@${schoolId}.local`;
+    } else if (!email) {
+      return NextResponse.json(
+        { error: 'Email is required when not using username mode' },
+        { status: 400 }
+      );
+    }
+
     // Create auth user with service role
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
+      email: finalEmail,
       password,
       email_confirm: true,
+      user_metadata: {
+        username: username,
+        first_name: first_name || null,
+        last_name: last_name || null
+      }
     });
 
     if (authError) {
@@ -44,11 +118,14 @@ export async function POST(request: NextRequest) {
       .from('users')
       .insert({
         id: authUser.user.id,
-        email: email,
+        email: finalEmail,
+        username: username,
+        first_name: first_name || null,
+        last_name: last_name || null,
         role: 'school_admin',
         school_id: schoolId,
       })
-      .select('id')
+      .select('id, username, email')
       .single();
 
     if (createUserError) {
@@ -86,7 +163,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ 
       success: true, 
       message: 'Administrator created successfully',
-      userId: newUser.id 
+      userId: newUser.id,
+      username: username,
+      email: finalEmail,
+      loginCredentials: username ? {
+        username: username,
+        password: password
+      } : {
+        email: finalEmail,
+        password: password
+      }
     });
 
   } catch (error) {

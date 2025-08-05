@@ -18,10 +18,69 @@ const supabase = createClient(
   }
 );
 
+// Helper function to generate username by role
+async function generateUsername(role: string, schoolId: string, employeeId?: string): Promise<string> {
+  let prefix = '';
+  switch (role) {
+    case 'school_admin':
+      prefix = 'admin';
+      break;
+    case 'teacher':
+      // Use employee_id if available
+      if (employeeId) {
+        const { data: existing } = await supabase
+          .from('users')
+          .select('username')
+          .eq('username', employeeId)
+          .eq('school_id', schoolId)
+          .single();
+        
+        if (!existing) {
+          return employeeId;
+        }
+      }
+      prefix = 'T';
+      break;
+    case 'parent':
+      prefix = 'P';
+      break;
+    case 'student':
+      prefix = 'S';
+      break;
+    default:
+      prefix = 'U';
+  }
+
+  // Find next available number for this school and prefix
+  const { data: users } = await supabase
+    .from('users')
+    .select('username')
+    .eq('school_id', schoolId)
+    .like('username', `${prefix}%`);
+
+  let maxNumber = 0;
+  if (users) {
+    users.forEach(user => {
+      if (user.username) {
+        const match = user.username.match(new RegExp(`^${prefix}(\\d+)$`));
+        if (match) {
+          const num = parseInt(match[1]);
+          if (num > maxNumber) {
+            maxNumber = num;
+          }
+        }
+      }
+    });
+  }
+
+  const nextNumber = maxNumber + 1;
+  return `${prefix}${nextNumber.toString().padStart(4, '0')}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { entity, data, school_id } = body;
+    const { entity, data, school_id, useUsername = true } = body;
 
     if (!entity || !data || !Array.isArray(data) || !school_id) {
       return NextResponse.json(
@@ -30,7 +89,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`Starting bulk import for ${entity}:`, { count: data.length, school_id });
+    console.log(`Starting bulk import for ${entity}:`, { count: data.length, school_id, useUsername });
 
     let results;
     const errors = [];
@@ -40,13 +99,13 @@ export async function POST(request: NextRequest) {
         results = await bulkImportSections(data, school_id);
         break;
       case 'students':
-        results = await bulkImportStudents(data, school_id);
+        results = await bulkImportStudents(data, school_id, useUsername);
         break;
       case 'teachers':
-        results = await bulkImportTeachers(data, school_id);
+        results = await bulkImportTeachers(data, school_id, useUsername);
         break;
       case 'parents':
-        results = await bulkImportParents(data, school_id);
+        results = await bulkImportParents(data, school_id, useUsername);
         break;
       default:
         return NextResponse.json(
@@ -123,7 +182,7 @@ async function bulkImportSections(data: any[], school_id: string) {
   return { successful, errors };
 }
 
-async function bulkImportStudents(data: any[], school_id: string) {
+async function bulkImportStudents(data: any[], school_id: string, useUsername: boolean = true) {
   const successful = [];
   const errors = [];
 
@@ -197,9 +256,18 @@ async function bulkImportStudents(data: any[], school_id: string) {
               // Generate temporary password
               const tempPassword = 'temp' + Math.random().toString(36).slice(-8) + '!';
               
+              // Generate username if useUsername is enabled
+              let username = null;
+              let finalEmail = email;
+              
+              if (useUsername) {
+                username = await generateUsername('parent', school_id);
+                finalEmail = `${username}@${school_id}.local`;
+              }
+
               // Create auth user
               const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
-                email,
+                email: finalEmail,
                 password: tempPassword,
                 email_confirm: true,
                 user_metadata: {
@@ -207,6 +275,7 @@ async function bulkImportStudents(data: any[], school_id: string) {
                   school_id,
                   first_name,
                   last_name,
+                  username
                 }
               });
 
@@ -218,7 +287,8 @@ async function bulkImportStudents(data: any[], school_id: string) {
               // Create user record
               const userData = {
                 id: authUser.user.id,
-                email,
+                email: finalEmail,
+                username,
                 role: 'parent',
                 school_id,
                 first_name,
@@ -243,10 +313,13 @@ async function bulkImportStudents(data: any[], school_id: string) {
               // Log successful parent creation
               successful.push({
                 type: 'parent',
-                email,
+                email: finalEmail,
+                username,
                 name: parentName,
                 temp_password: tempPassword,
-                message: `Created parent account for ${parentName} with login: ${email} | Temp password: ${tempPassword}`
+                message: username 
+                  ? `Created parent account for ${parentName} with username: ${username} | Password: ${tempPassword}`
+                  : `Created parent account for ${parentName} with email: ${finalEmail} | Password: ${tempPassword}`
               });
               
             } catch (error: any) {
@@ -280,7 +353,7 @@ async function bulkImportStudents(data: any[], school_id: string) {
   return { successful, errors };
 }
 
-async function bulkImportTeachers(data: any[], school_id: string) {
+async function bulkImportTeachers(data: any[], school_id: string, useUsername: boolean = true) {
   const successful = [];
   const errors = [];
 
@@ -289,9 +362,18 @@ async function bulkImportTeachers(data: any[], school_id: string) {
       // Generate a temporary password
       const tempPassword = 'temp' + Math.random().toString(36).slice(-8) + '!';
       
+      // Generate username if useUsername is enabled
+      let username = null;
+      let finalEmail = row.email;
+      
+      if (useUsername) {
+        username = await generateUsername('teacher', school_id, row.employee_id);
+        finalEmail = `${username}@${school_id}.local`;
+      }
+
       // Create auth user first
       const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
-        email: row.email,
+        email: finalEmail,
         password: tempPassword,
         email_confirm: true,
         user_metadata: {
@@ -299,6 +381,7 @@ async function bulkImportTeachers(data: any[], school_id: string) {
           school_id,
           first_name: row.first_name,
           last_name: row.last_name,
+          username
         }
       });
 
@@ -310,7 +393,8 @@ async function bulkImportTeachers(data: any[], school_id: string) {
       // Create user record in database
       const userData = {
         id: authUser.user.id,
-        email: row.email,
+        email: finalEmail,
+        username,
         role: 'teacher',
         school_id,
         first_name: row.first_name,
@@ -338,7 +422,7 @@ async function bulkImportTeachers(data: any[], school_id: string) {
         employee_id: row.employee_id || `EMP${Date.now()}${Math.random().toString(36).slice(-3).toUpperCase()}`,
         first_name: row.first_name,
         last_name: row.last_name,
-        email: row.email,
+        email: finalEmail,
         phone: row.phone || null,
         department: row.department || null,
         subjects: row.subjects ? row.subjects.split(';').map((s: string) => s.trim()) : [],
@@ -359,8 +443,11 @@ async function bulkImportTeachers(data: any[], school_id: string) {
 
       successful.push({ 
         ...teacherData, 
+        username,
         temp_password: tempPassword,
-        message: `Created teacher account for ${row.first_name} ${row.last_name} with login: ${row.email} | Temp password: ${tempPassword}`
+        message: username 
+          ? `Created teacher account for ${row.first_name} ${row.last_name} with username: ${username} | Password: ${tempPassword}`
+          : `Created teacher account for ${row.first_name} ${row.last_name} with email: ${finalEmail} | Password: ${tempPassword}`
       });
 
     } catch (error: any) {
@@ -371,7 +458,7 @@ async function bulkImportTeachers(data: any[], school_id: string) {
   return { successful, errors };
 }
 
-async function bulkImportParents(data: any[], school_id: string) {
+async function bulkImportParents(data: any[], school_id: string, useUsername: boolean = true) {
   const successful = [];
   const errors = [];
 
@@ -380,9 +467,18 @@ async function bulkImportParents(data: any[], school_id: string) {
       // Generate a temporary password
       const tempPassword = 'temp' + Math.random().toString(36).slice(-8) + '!';
       
+      // Generate username if useUsername is enabled
+      let username = null;
+      let finalEmail = row.email;
+      
+      if (useUsername) {
+        username = await generateUsername('parent', school_id);
+        finalEmail = `${username}@${school_id}.local`;
+      }
+
       // Create auth user first
       const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
-        email: row.email,
+        email: finalEmail,
         password: tempPassword,
         email_confirm: true,
         user_metadata: {
@@ -390,6 +486,7 @@ async function bulkImportParents(data: any[], school_id: string) {
           school_id,
           first_name: row.first_name,
           last_name: row.last_name,
+          username
         }
       });
 
@@ -401,7 +498,8 @@ async function bulkImportParents(data: any[], school_id: string) {
       // Create user record
       const userData = {
         id: authUser.user.id,
-        email: row.email,
+        email: finalEmail,
+        username,
         role: 'parent',
         school_id,
         first_name: row.first_name,
@@ -447,7 +545,9 @@ async function bulkImportParents(data: any[], school_id: string) {
       successful.push({ 
         ...userData, 
         temp_password: tempPassword,
-        message: `Created parent account for ${row.first_name} ${row.last_name} with login: ${row.email} | Temp password: ${tempPassword}`
+        message: username 
+          ? `Created parent account for ${row.first_name} ${row.last_name} with username: ${username} | Password: ${tempPassword}`
+          : `Created parent account for ${row.first_name} ${row.last_name} with email: ${finalEmail} | Password: ${tempPassword}`
       });
 
     } catch (error: any) {
