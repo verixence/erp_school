@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase, getCurrentUser } from '../services/supabase';
+import { supabase, getCurrentUser, signInWithUsername } from '../services/supabase';
 import { 
   registerForPushNotificationsAsync, 
   storePushToken,
@@ -13,6 +13,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error?: any }>;
+  signInWithUsername: (username: string, password: string) => Promise<{ error?: any }>;
   signOut: () => Promise<void>;
   isTeacher: boolean;
   isParent: boolean;
@@ -88,6 +89,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       if (data.user) {
+        const profile = await fetchUserProfile(data.user);
+        if (profile) {
+          setUser(profile);
+          // Set up push notifications after successful login
+          await setupPushNotifications(profile);
+        }
+      }
+
+      return { error: null };
+    } catch (error) {
+      return { error };
+    }
+  };
+
+  const signInWithUsernameHandler = async (username: string, password: string) => {
+    try {
+      const { data, error } = await signInWithUsername(username, password);
+
+      if (error) {
+        return { error };
+      }
+
+      if (data?.user) {
         const profile = await fetchUserProfile(data.user);
         if (profile) {
           setUser(profile);
@@ -194,6 +218,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user,
     loading,
     signIn,
+    signInWithUsername: signInWithUsernameHandler,
     signOut,
     isTeacher,
     isParent,

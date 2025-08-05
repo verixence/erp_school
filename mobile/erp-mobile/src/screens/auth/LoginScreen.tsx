@@ -29,13 +29,14 @@ import { useAuth } from '../../contexts/AuthContext';
 const { width, height } = Dimensions.get('window');
 
 export const LoginScreen: React.FC = () => {
-  const [email, setEmail] = useState('');
+  const [loginId, setLoginId] = useState(''); // Can be email or username
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [loginMode, setLoginMode] = useState<'username' | 'email'>('username'); // Default to username
+  const [errors, setErrors] = useState<{ loginId?: string; password?: string }>({});
 
-  const { signIn } = useAuth();
+  const { signIn, signInWithUsername } = useAuth();
 
   // Animation values
   const logoScale = useSharedValue(0);
@@ -60,13 +61,21 @@ export const LoginScreen: React.FC = () => {
     return emailRegex.test(email);
   };
 
-  const validateForm = (): boolean => {
-    const newErrors: { email?: string; password?: string } = {};
+  const validateUsername = (username: string): boolean => {
+    // Username should be alphanumeric, 3-20 characters
+    const usernameRegex = /^[a-zA-Z0-9]{3,20}$/;
+    return usernameRegex.test(username);
+  };
 
-    if (!email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!validateEmail(email)) {
-      newErrors.email = 'Please enter a valid email address';
+  const validateForm = (): boolean => {
+    const newErrors: { loginId?: string; password?: string } = {};
+
+    if (!loginId.trim()) {
+      newErrors.loginId = loginMode === 'email' ? 'Email is required' : 'Username is required';
+    } else if (loginMode === 'email' && !validateEmail(loginId)) {
+      newErrors.loginId = 'Please enter a valid email address';
+    } else if (loginMode === 'username' && !validateUsername(loginId)) {
+      newErrors.loginId = 'Username should be 3-20 alphanumeric characters';
     }
 
     if (!password) {
@@ -84,10 +93,15 @@ export const LoginScreen: React.FC = () => {
 
     setLoading(true);
     try {
-      const { error } = await signIn(email, password);
+      let result;
+      if (loginMode === 'email') {
+        result = await signIn(loginId, password);
+      } else {
+        result = await signInWithUsername(loginId, password);
+      }
       
-      if (error) {
-        Alert.alert('Login Failed', error.message || 'An error occurred during login');
+      if (result.error) {
+        Alert.alert('Login Failed', result.error.message || 'Invalid credentials');
       }
     } catch (error) {
       Alert.alert('Login Failed', 'An unexpected error occurred');
@@ -96,7 +110,10 @@ export const LoginScreen: React.FC = () => {
     }
   };
 
-  const isFormValid = email.trim() && password && validateEmail(email) && password.length >= 6;
+  const isFormValid = loginId.trim() && password && 
+    ((loginMode === 'email' && validateEmail(loginId)) || 
+     (loginMode === 'username' && validateUsername(loginId))) && 
+    password.length >= 6;
 
   return (
     <PaperProvider>
@@ -217,47 +234,102 @@ export const LoginScreen: React.FC = () => {
                     }}>
                       Sign in to access your account
                     </Text>
+                    
+                    {/* Login Mode Toggle */}
+                    <View style={{ 
+                      flexDirection: 'row', 
+                      justifyContent: 'center', 
+                      marginTop: 16,
+                      backgroundColor: '#F7FAFC',
+                      borderRadius: 8,
+                      padding: 4
+                    }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setLoginMode('username');
+                          setLoginId('');
+                          setErrors({});
+                        }}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 8,
+                          paddingHorizontal: 16,
+                          borderRadius: 6,
+                          backgroundColor: loginMode === 'username' ? '#6B46C1' : 'transparent',
+                        }}
+                      >
+                        <Text style={{
+                          textAlign: 'center',
+                          color: loginMode === 'username' ? 'white' : '#6B46C1',
+                          fontWeight: '600',
+                        }}>
+                          Username
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setLoginMode('email');
+                          setLoginId('');
+                          setErrors({});
+                        }}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 8,
+                          paddingHorizontal: 16,
+                          borderRadius: 6,
+                          backgroundColor: loginMode === 'email' ? '#6B46C1' : 'transparent',
+                        }}
+                      >
+                        <Text style={{
+                          textAlign: 'center',
+                          color: loginMode === 'email' ? 'white' : '#6B46C1',
+                          fontWeight: '600',
+                        }}>
+                          Email
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
-                  {/* Email Input */}
+                  {/* Login ID Input */}
                   <View style={{ marginBottom: 20 }}>
                     <TextInput
-                      label="Email"
-                      placeholder="Enter your email"
-                      value={email}
+                      label={loginMode === 'email' ? 'Email' : 'Username'}
+                      placeholder={loginMode === 'email' ? 'Enter your email' : 'Enter your username'}
+                      value={loginId}
                       onChangeText={(text) => {
-                        setEmail(text);
-                        if (errors.email) {
-                          setErrors(prev => ({ ...prev, email: undefined }));
+                        setLoginId(text);
+                        if (errors.loginId) {
+                          setErrors(prev => ({ ...prev, loginId: undefined }));
                         }
                       }}
-                      keyboardType="email-address"
+                      keyboardType={loginMode === 'email' ? 'email-address' : 'default'}
                       autoCapitalize="none"
                       autoCorrect={false}
-                      autoComplete="email"
-                      left={<TextInput.Icon icon="email" />}
+                      autoComplete={loginMode === 'email' ? 'email' : 'username'}
+                      left={<TextInput.Icon icon={loginMode === 'email' ? 'email' : 'account'} />}
                       mode="outlined"
-                      error={!!errors.email}
+                      error={!!errors.loginId}
                       style={{
                         backgroundColor: 'white',
                       }}
                       theme={{
                         colors: {
                           primary: '#6B46C1',
-                          outline: errors.email ? '#E53E3E' : '#E2E8F0',
+                          outline: errors.loginId ? '#E53E3E' : '#E2E8F0',
                         }
                       }}
-                      accessibilityLabel="Email input field"
-                      accessibilityHint="Enter your email address to log in"
+                      accessibilityLabel={`${loginMode === 'email' ? 'Email' : 'Username'} input field`}
+                      accessibilityHint={`Enter your ${loginMode === 'email' ? 'email address' : 'username'} to log in`}
                     />
-                    {errors.email && (
+                    {errors.loginId && (
                       <Text style={{
                         color: '#E53E3E',
                         fontSize: 12,
                         marginTop: 4,
                         marginLeft: 12,
                       }}>
-                        {errors.email}
+                        {errors.loginId}
                       </Text>
                     )}
                   </View>
