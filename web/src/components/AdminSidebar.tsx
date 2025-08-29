@@ -36,7 +36,9 @@ import {
   Image,
   Heart,
   Settings,
-  UserX
+  UserX,
+  DollarSign,
+  TrendingUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -197,6 +199,22 @@ export function AdminSidebar({ brand, isOpen, onClose }: AdminSidebarProps) {
           isActive={pathname.startsWith("/school-admin/reports") || pathname.startsWith("/school-admin/cbse-reports") || pathname.startsWith("/school-admin/ssc-reports") || pathname.startsWith("/school-admin/state-board-reports")}
         >
           Reports
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/fees"
+          icon={DollarSign}
+          isActive={pathname.startsWith("/school-admin/fees")}
+        >
+          Fee Management
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/promotions"
+          icon={TrendingUp}
+          isActive={pathname.startsWith("/school-admin/promotions")}
+        >
+          Student Promotions
         </SidebarLink>
 
         <SidebarLink
