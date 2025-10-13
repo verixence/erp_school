@@ -14,7 +14,6 @@ const recordPaymentSchema = z.object({
   processed_by: z.string().uuid().optional()
 });
 
-// POST /api/admin/fees/payments - Record a payment
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
