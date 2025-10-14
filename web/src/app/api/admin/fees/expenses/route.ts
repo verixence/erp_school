@@ -13,9 +13,9 @@ const expenseSchema = z.object({
   payment_reference: z.string().optional(),
   vendor_name: z.string().optional(),
   vendor_contact: z.string().optional(),
-  receipt_url: z.string().url().optional(),
+  receipt_url: z.string().optional().or(z.literal('')),
   approved_by: z.string().uuid().optional(),
-  notes: z.string().optional()
+  notes: z.string().optional().or(z.literal(''))
 });
 
 // GET /api/admin/fees/expenses - List school expenses
@@ -205,22 +205,49 @@ export async function POST(request: NextRequest) {
 
     const expenseNumber = expenseNumberData || `EXP-${Date.now()}`;
 
+    // Build insert data, filtering out undefined/null values
+    const insertData: any = {
+      school_id: schoolId,
+      expense_number: expenseNumber,
+      category: validatedData.category,
+      description: validatedData.description,
+      amount: validatedData.amount,
+      expense_date: validatedData.expense_date,
+      status: 'pending'
+    };
+
+    // Add optional fields only if provided
+    if (validatedData.subcategory) insertData.subcategory = validatedData.subcategory;
+    if (validatedData.payment_method) insertData.payment_method = validatedData.payment_method;
+    if (validatedData.payment_reference) insertData.payment_reference = validatedData.payment_reference;
+    if (validatedData.vendor_name) insertData.vendor_name = validatedData.vendor_name;
+    if (validatedData.vendor_contact) insertData.vendor_contact = validatedData.vendor_contact;
+    if (validatedData.receipt_url) insertData.receipt_url = validatedData.receipt_url;
+    if (validatedData.notes) insertData.notes = validatedData.notes;
+
+    console.log('Inserting expense:', insertData);
+
     // Create the expense record
     const { data: expense, error: expenseError } = await supabase
       .from('school_expenses')
-      .insert({
-        school_id: schoolId,
-        expense_number: expenseNumber,
-        ...validatedData,
-        status: 'pending' // Default status
-      })
+      .insert(insertData)
       .select('*')
       .single();
 
     if (expenseError) {
       console.error('Error creating expense:', expenseError);
+      console.error('Attempted data:', {
+        school_id: schoolId,
+        expense_number: expenseNumber,
+        ...validatedData
+      });
       return NextResponse.json(
-        { error: 'Failed to create expense' },
+        {
+          error: 'Failed to create expense',
+          details: expenseError.message,
+          hint: expenseError.hint,
+          code: expenseError.code
+        },
         { status: 500 }
       );
     }

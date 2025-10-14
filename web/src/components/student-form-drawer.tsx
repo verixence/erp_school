@@ -303,9 +303,9 @@ export default function StudentFormDrawer({
       const { data: studentResult, error: studentError } = await supabase
         .from('students')
         .insert(processedData)
-        .select('id')
+        .select('id, grade, school_id')
         .single();
-      
+
       if (studentError) throw studentError;
 
       // Handle parent assignment if selected
@@ -316,8 +316,55 @@ export default function StudentFormDrawer({
             student_id: studentResult.id,
             parent_id: data.parent_id
           });
-        
+
         if (parentLinkError) throw parentLinkError;
+      }
+
+      // Auto-assign existing fee structures for this student's grade
+      try {
+        // Get current academic year
+        const currentYear = new Date().getFullYear();
+        const academicYear = `${currentYear}-${currentYear + 1}`;
+
+        // Get all active fee structures for this grade
+        const { data: feeStructures, error: feeStructuresError } = await supabase
+          .from('fee_structures')
+          .select('id, fee_category_id, amount, academic_year')
+          .eq('school_id', studentResult.school_id)
+          .eq('grade', studentResult.grade)
+          .eq('is_active', true);
+
+        if (!feeStructuresError && feeStructures && feeStructures.length > 0) {
+          // Get current user for audit
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+
+          // Create student_fee_demands for all fee structures
+          const demands = feeStructures.map(structure => ({
+            school_id: studentResult.school_id,
+            student_id: studentResult.id,
+            fee_structure_id: structure.id,
+            academic_year: structure.academic_year,
+            original_amount: structure.amount,
+            discount_amount: 0,
+            discount_reason: '',
+            demand_amount: structure.amount,
+            created_by: authUser?.id || null
+          }));
+
+          const { error: demandsError } = await supabase
+            .from('student_fee_demands')
+            .insert(demands);
+
+          if (demandsError) {
+            console.error('Error auto-assigning fee structures:', demandsError);
+            // Don't fail student creation if fee assignment fails
+          } else {
+            console.log(`Auto-assigned ${feeStructures.length} fee structures to new student`);
+          }
+        }
+      } catch (autoAssignError) {
+        console.error('Error in fee auto-assignment:', autoAssignError);
+        // Don't fail student creation if fee assignment fails
       }
     },
     onSuccess: () => {

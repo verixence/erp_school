@@ -154,6 +154,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Auto-assign this fee structure to all students in the grade
+    try {
+      // Get all students in this grade for the school
+      const { data: students, error: studentsError } = await supabase
+        .from('students')
+        .select('id')
+        .eq('school_id', schoolId)
+        .eq('grade', validatedData.grade);
+
+      if (studentsError) {
+        console.error('Error fetching students for auto-assignment:', studentsError);
+        // Don't fail the request, just log the error
+      } else if (students && students.length > 0) {
+        // Get current user for audit
+        const { data: { user } } = await supabase.auth.getUser();
+
+        // Create student_fee_demands for all students
+        const demands = students.map(student => ({
+          school_id: schoolId,
+          student_id: student.id,
+          fee_structure_id: structure.id,
+          academic_year: validatedData.academic_year,
+          original_amount: validatedData.amount,
+          discount_amount: 0,
+          discount_reason: '',
+          demand_amount: validatedData.amount,
+          created_by: user?.id || null
+        }));
+
+        const { error: demandsError } = await supabase
+          .from('student_fee_demands')
+          .insert(demands);
+
+        if (demandsError) {
+          console.error('Error creating student fee demands:', demandsError);
+          // Don't fail the request, just log the error
+        } else {
+          console.log(`Auto-assigned fee structure to ${students.length} students`);
+        }
+      }
+    } catch (autoAssignError) {
+      console.error('Error in auto-assignment:', autoAssignError);
+      // Don't fail the request, just log the error
+    }
+
     return NextResponse.json({ data: structure }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {

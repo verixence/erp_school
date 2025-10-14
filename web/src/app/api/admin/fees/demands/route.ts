@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       query = query.eq('academic_year', academicYear);
     }
 
-    const { data, error } = await query.order('created_at', { ascending: false });
+    const { data, error } = await query.order('created_at', { ascending: true });
 
     if (error) {
       console.error('Error fetching fee demands:', error);
@@ -57,7 +57,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ data });
+    // Transform data to match ApplyPayment component format
+    const transformedData = (data || []).map((demand: any) => ({
+      id: demand.id,
+      fee_structure_id: demand.fee_structure_id, // Include for matching with fee structures
+      fee_type: demand.fee_structures?.fee_categories?.name || 'Unknown',
+      due_date: null, // Due date is not mandatory in fee demands
+      total_amount: demand.original_amount || 0,
+      discount: demand.discount_amount || 0,
+      demand_amount: demand.demand_amount || 0,
+      paid_amount: demand.paid_amount || 0,
+      balance_amount: demand.balance_amount || 0,
+      payment_status: demand.payment_status || 'pending'
+    }));
+
+    return NextResponse.json({ data: transformedData });
   } catch (error) {
     console.error('Unexpected error:', error);
     return NextResponse.json(
@@ -67,15 +81,16 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/admin/fees/demands - Save student fee demands
+// POST /api/admin/fees/demands - Save student fee demands (optimized for partial updates)
 const demandSchema = z.object({
+  id: z.string().uuid().optional(), // Optional ID for updates
   student_id: z.string().uuid(),
   fee_structure_id: z.string().uuid(),
   academic_year: z.string().min(1),
   original_amount: z.number().positive(),
   discount_amount: z.number().min(0),
   discount_reason: z.string().optional(),
-  demand_amount: z.number().positive()
+  demand_amount: z.number().min(0) // Allow 0 when discount equals original amount
 });
 
 export async function POST(request: NextRequest) {
@@ -105,7 +120,8 @@ export async function POST(request: NextRequest) {
     const validatedDemands = demands.map((demand) => {
       const result = demandSchema.safeParse(demand);
       if (!result.success) {
-        throw new Error(`Invalid demand data: ${result.error.message}`);
+        console.error('Validation error for demand:', demand, result.error);
+        throw new Error(`Invalid demand data: ${JSON.stringify(result.error.errors)}`);
       }
       return result.data;
     });

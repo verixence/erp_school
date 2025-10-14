@@ -30,58 +30,41 @@ export async function GET(request: NextRequest) {
 
     const totalStudents = studentsData?.length || 0;
 
-    // Calculate estimated outstanding based on fee structures and students
-    const { data: structuresData } = await supabase
-      .from('fee_structures')
-      .select('amount, grade')
-      .eq('school_id', schoolId)
-      .eq('is_active', true);
+    // Get real data from student_fee_demands
+    const { data: feeDemandsData } = await supabase
+      .from('student_fee_demands')
+      .select('demand_amount, paid_amount, balance_amount, payment_status, updated_at')
+      .eq('school_id', schoolId);
 
-    const estimatedOutstanding = (structuresData?.length || 0) * totalStudents * 1000; // Rough estimate
+    // Calculate total outstanding (sum of all balance amounts)
+    const totalOutstanding = feeDemandsData?.reduce((sum, demand) =>
+      sum + parseFloat(demand.balance_amount || 0), 0
+    ) || 0;
 
-    // Get actual fee data if tables exist, otherwise use estimates
-    let totalOutstanding = estimatedOutstanding;
-    let monthlyCollections = Math.floor(estimatedOutstanding * 0.6); // 60% collection rate
-    let overdueCount = Math.floor(totalStudents * 0.1); // 10% overdue
-    let recentPayments = Math.floor(totalStudents * 0.05); // 5% paid today
-    let pendingInvoices = Math.floor(totalStudents * 0.3); // 30% pending
+    // Calculate monthly collections (all payments this month)
+    const monthStartStr = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`;
+    const monthlyCollections = feeDemandsData
+      ?.filter(d =>
+        d.updated_at &&
+        d.updated_at >= monthStartStr &&
+        parseFloat(d.paid_amount || 0) > 0
+      )
+      .reduce((sum, demand) => sum + parseFloat(demand.paid_amount || 0), 0) || 0;
 
-    // Try to get real data from fee_invoices if table exists
-    try {
-      const { data: invoicesData } = await supabase
-        .from('fee_invoices')
-        .select('due_amount, status')
-        .eq('school_id', schoolId);
+    // Count overdue demands (pending payment status with balance)
+    const overdueCount = feeDemandsData?.filter(d =>
+      d.payment_status === 'pending' && parseFloat(d.balance_amount || 0) > 0
+    ).length || 0;
 
-      if (invoicesData && invoicesData.length > 0) {
-        totalOutstanding = invoicesData
-          .filter(i => ['pending', 'partial', 'overdue'].includes(i.status))
-          .reduce((sum, invoice) => sum + (invoice.due_amount || 0), 0);
-        
-        pendingInvoices = invoicesData.filter(i => i.status === 'pending').length;
-      }
-    } catch (error) {
-      console.log('fee_invoices table not found, using estimates');
-    }
+    // Count recent payments (paid today)
+    const recentPayments = feeDemandsData?.filter(d =>
+      d.updated_at?.startsWith(todayStr) && parseFloat(d.paid_amount || 0) > 0
+    ).length || 0;
 
-    // Try to get real payment data if table exists
-    try {
-      const { data: paymentsData } = await supabase
-        .from('fee_payments')
-        .select('amount, created_at')
-        .eq('school_id', schoolId)
-        .gte('created_at', `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`)
-        .eq('status', 'success');
-
-      if (paymentsData && paymentsData.length > 0) {
-        monthlyCollections = paymentsData.reduce((sum, payment) => sum + (payment.amount || 0), 0);
-        recentPayments = paymentsData.filter(p => 
-          p.created_at?.startsWith(todayStr)
-        ).length;
-      }
-    } catch (error) {
-      console.log('fee_payments table not found, using estimates');
-    }
+    // Count pending invoices (demands with pending status AND actual balance due)
+    const pendingInvoices = feeDemandsData?.filter(d =>
+      d.payment_status === 'pending' && parseFloat(d.balance_amount || 0) > 0
+    ).length || 0;
 
     // Get setup completion status
     const [categoriesCount, structuresCount] = await Promise.all([

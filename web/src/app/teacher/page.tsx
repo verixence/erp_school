@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  BookOpen, 
-  Users, 
+import {
+  BookOpen,
+  Users,
   Calendar,
   ClipboardList,
   MessageSquare,
@@ -18,7 +18,8 @@ import {
   GraduationCap,
   UserCheck,
   Video,
-  ExternalLink
+  ExternalLink,
+  Receipt
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -164,6 +165,13 @@ export default function TeacherDashboard() {
       icon: MessageSquare,
       href: "/teacher/announcements",
       color: "bg-gradient-to-r from-orange-600 to-orange-700"
+    },
+    {
+      title: "Expense Claims",
+      description: "Submit expense reimbursement claims",
+      icon: Receipt,
+      href: "/teacher/expense-claims",
+      color: "bg-gradient-to-r from-cyan-600 to-cyan-700"
     },
   ];
 

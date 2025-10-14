@@ -9,7 +9,7 @@ import { getBrandForSchool, injectBrandCSS } from '@erp/common';
 import { CampusHeader } from '@/components/CampusHeader';
 import { CampusFooter } from '@/components/CampusFooter';
 import { KBarProviderWrapper } from '@/components/kbar-provider';
-import { BookOpen, Calendar, Users, Home, GraduationCap, FileText, MessageSquare, CheckCircle, Award, LogOut, Camera, CalendarDays, Mail, Star, Video, UserX } from 'lucide-react';
+import { BookOpen, Calendar, Users, Home, GraduationCap, FileText, MessageSquare, CheckCircle, Award, LogOut, Camera, CalendarDays, Mail, Star, Video, UserX, Receipt } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase-client';
@@ -138,6 +138,11 @@ export default function TeacherLayout({
       href: '/teacher/leave-requests',
       label: 'Leave Requests',
       icon: UserX,
+    },
+    {
+      href: '/teacher/expense-claims',
+      label: 'Expense Claims',
+      icon: Receipt,
     },
   ];
 

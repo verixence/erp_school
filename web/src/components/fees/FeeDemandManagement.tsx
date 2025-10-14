@@ -55,6 +55,8 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
   const [students, setStudents] = useState<Student[]>([]);
   const [feeStructures, setFeeStructures] = useState<FeeStructure[]>([]);
   const [demands, setDemands] = useState<Map<string, FeeDemand>>(new Map());
+  const [originalDemands, setOriginalDemands] = useState<Map<string, FeeDemand>>(new Map()); // Track original values
+  const [modifiedDemands, setModifiedDemands] = useState<Set<string>>(new Set()); // Track which demands changed
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -211,6 +213,10 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
         });
 
         setDemands(demandsMap);
+        // Store original values for change tracking
+        setOriginalDemands(new Map(demandsMap));
+        // Clear modified set when loading new data
+        setModifiedDemands(new Set());
       }
     } catch (error) {
       console.error('Error loading fee demands:', error);
@@ -236,6 +242,11 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
 
       newDemands.set(feeStructureId, updatedDemand);
       setDemands(newDemands);
+
+      // Mark this demand as modified
+      const newModified = new Set(modifiedDemands);
+      newModified.add(feeStructureId);
+      setModifiedDemands(newModified);
     }
   };
 
@@ -245,17 +256,34 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
       return;
     }
 
+    // Only send modified demands for better performance
+    if (modifiedDemands.size === 0) {
+      toast.info('No changes to save');
+      return;
+    }
+
     setSaving(true);
     try {
-      const demandsArray = Array.from(demands.values()).map(demand => ({
-        student_id: selectedStudent,
-        fee_structure_id: demand.fee_structure_id,
-        academic_year: selectedAcademicYear,
-        original_amount: demand.original_amount,
-        discount_amount: demand.discount_amount,
-        discount_reason: demand.discount_reason,
-        demand_amount: demand.demand_amount
-      }));
+      // Only include demands that were actually modified
+      const demandsArray = Array.from(modifiedDemands)
+        .map(feeStructureId => {
+          const demand = demands.get(feeStructureId);
+          if (!demand) return null;
+
+          return {
+            id: demand.id, // Include ID if updating existing demand
+            student_id: selectedStudent,
+            fee_structure_id: demand.fee_structure_id,
+            academic_year: selectedAcademicYear,
+            original_amount: demand.original_amount,
+            discount_amount: demand.discount_amount,
+            discount_reason: demand.discount_reason || '',
+            demand_amount: demand.demand_amount
+          };
+        })
+        .filter(Boolean);
+
+      console.log(`Saving ${demandsArray.length} modified demands (out of ${demands.size} total)`);
 
       const response = await fetch(`/api/admin/fees/demands?school_id=${schoolId}`, {
         method: 'POST',
@@ -264,8 +292,8 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
       });
 
       if (response.ok) {
-        toast.success('Fee demands saved successfully');
-        // Reload data
+        toast.success(`Successfully saved ${demandsArray.length} fee demand(s)`);
+        // Reload data to get updated values
         await handleSearch();
       } else {
         const error = await response.json();
