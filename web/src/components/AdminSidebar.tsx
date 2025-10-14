@@ -206,7 +206,7 @@ export function AdminSidebar({ brand, isOpen, onClose }: AdminSidebarProps) {
           icon={DollarSign}
           isActive={pathname.startsWith("/school-admin/fees")}
         >
-          Fee Management
+          Finance & Accounting
         </SidebarLink>
 
         <SidebarLink
