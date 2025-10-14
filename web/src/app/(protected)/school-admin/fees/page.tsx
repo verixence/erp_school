@@ -23,6 +23,7 @@ import ChequeBookList from '@/components/fees/accounts/ChequeBookList';
 import AdminExpenseClaims from '@/components/fees/AdminExpenseClaims';
 import AdminExpenseManagement from '@/components/fees/AdminExpenseManagement';
 import TransactionReports from '@/components/reports/TransactionReports';
+import FeeStatusExport from '@/components/fees/FeeStatusExport';
 
 interface DashboardStats {
   total_outstanding: number;
@@ -83,7 +84,7 @@ interface FeeStructureItem {
 
 type DashboardSection = 'accounts' | 'settings' | 'reports' | 'main';
 type AccountsView = 'apply-payment' | 'claim' | 'expenses' | 'receipts';
-type SettingsView = 'fee-types' | 'fee-structures' | 'fee-demand' | 'expense-types' | 'bank-master' | 'cheque-register';
+type SettingsView = 'fee-types' | 'fee-structures' | 'fee-demand' | 'expense-types' | 'bank-master' | 'cheque-register' | 'export-fee-status';
 type ReportsView = 'transactions';
 
 export default function FeeManagementUnified() {
@@ -643,13 +644,21 @@ export default function FeeManagementUnified() {
                 <Building2 className="h-6 w-6 text-green-500" />
                 <span className="text-sm font-medium text-center">Bank Master</span>
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="h-20 flex flex-col items-center justify-center space-y-2"
                 onClick={() => navigateToSection('settings', 'cheque-register')}
               >
                 <CheckSquare className="h-6 w-6 text-red-600" />
                 <span className="text-sm font-medium text-center">Cheque Register</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-20 flex flex-col items-center justify-center space-y-2"
+                onClick={() => navigateToSection('settings', 'export-fee-status')}
+              >
+                <FileText className="h-6 w-6 text-indigo-600" />
+                <span className="text-sm font-medium text-center">Export Fee Status</span>
               </Button>
             </div>
           </CardContent>
@@ -767,7 +776,8 @@ export default function FeeManagementUnified() {
             { key: 'fee-demand', label: 'Fee Demand', icon: DollarSign },
             { key: 'expense-types', label: 'Expense Types', icon: PieChart },
             { key: 'bank-master', label: 'Bank Master', icon: Building2 },
-            { key: 'cheque-register', label: 'Cheque Register', icon: CheckSquare }
+            { key: 'cheque-register', label: 'Cheque Register', icon: CheckSquare },
+            { key: 'export-fee-status', label: 'Export Fee Status', icon: FileText }
           ].map(tab => {
             const Icon = tab.icon;
             return (
@@ -912,6 +922,9 @@ export default function FeeManagementUnified() {
             )}
             {settingsView === 'cheque-register' && schoolId && (
               <ChequeBookList schoolId={schoolId} />
+            )}
+            {settingsView === 'export-fee-status' && schoolId && (
+              <FeeStatusExport schoolId={schoolId} />
             )}
           </CardContent>
         </Card>
