@@ -294,21 +294,81 @@ export default function InventoryItemList({ schoolId }: InventoryItemListProps) 
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredItems.map((item: any) => (
-                <div key={item.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h3 className="font-medium">{item.name}</h3>
-                      <p className="text-sm text-gray-600">{item.item_code}</p>
+                <div key={item.id} className="border rounded-lg overflow-hidden hover:shadow-lg transition-all">
+                  {/* Header Section */}
+                  <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 border-b">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg text-gray-900 mb-1">{item.name}</h3>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono bg-white px-2 py-0.5 rounded border">{item.item_code}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            item.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                          }`}>
+                            {item.status}
+                          </span>
+                        </div>
+                      </div>
+                      <Package className="h-6 w-6 text-blue-600" />
                     </div>
-                    <Package className="h-5 w-5 text-gray-400" />
                   </div>
-                  <div className="space-y-1 text-sm mb-3">
-                    <p>Category: <span className="font-medium">{item.category?.name}</span></p>
-                    <p>Stock: <span className={`font-medium ${item.current_stock <= item.minimum_stock_level ? 'text-orange-600' : 'text-green-600'}`}>{item.current_stock} {item.unit_of_measurement}</span></p>
-                    <p>Location: {item.location || 'N/A'}</p>
-                    <p>Price: ₹{item.unit_price}</p>
+
+                  {/* Content Section */}
+                  <div className="p-4 space-y-3">
+                    {/* Category */}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Category</span>
+                      <span className="font-medium text-gray-900">{item.category?.name}</span>
+                    </div>
+
+                    {/* Stock Level */}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Stock Level</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-2xl font-bold ${
+                          item.current_stock <= item.minimum_stock_level ? 'text-orange-600' : 'text-green-600'
+                        }`}>
+                          {item.current_stock}
+                        </span>
+                        <span className="text-gray-600">{item.unit_of_measurement || 'units'}</span>
+                      </div>
+                    </div>
+
+                    {/* Stock Status Bar */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>Min: {item.minimum_stock_level}</span>
+                        {item.current_stock <= item.minimum_stock_level && (
+                          <span className="text-orange-600 font-medium">Low Stock!</span>
+                        )}
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all ${
+                            item.current_stock <= item.minimum_stock_level ? 'bg-orange-500' : 'bg-green-500'
+                          }`}
+                          style={{
+                            width: `${Math.min((item.current_stock / (item.minimum_stock_level * 2)) * 100, 100)}%`
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Location & Price */}
+                    <div className="pt-2 border-t space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-500">Location</span>
+                        <span className="font-medium text-gray-700">{item.location || 'Not specified'}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-500">Unit Price</span>
+                        <span className="font-semibold text-blue-600">₹{item.unit_price.toLocaleString()}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
+
+                  {/* Action Buttons */}
+                  <div className="p-4 pt-0 flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => handleEdit(item)} className="flex-1">
                       <Edit className="h-3 w-3 mr-1" /> Edit
                     </Button>
