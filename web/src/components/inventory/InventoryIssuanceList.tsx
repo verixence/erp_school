@@ -123,6 +123,7 @@ export default function InventoryIssuanceList({ schoolId }: InventoryIssuanceLis
 
   const activeIssuances = issuancesData?.issuances?.filter((i: any) => i.status === 'issued') || [];
   const returnedIssuances = issuancesData?.issuances?.filter((i: any) => i.status === 'returned') || [];
+  const permanentIssuances = issuancesData?.issuances?.filter((i: any) => i.status === 'permanent') || [];
   const overdueIssuances = issuancesData?.issuances?.filter((i: any) =>
     i.status === 'issued' && i.expected_return_date && new Date(i.expected_return_date) < new Date()
   ) || [];
@@ -179,12 +180,12 @@ export default function InventoryIssuanceList({ schoolId }: InventoryIssuanceLis
                 <Input type="date" value={formData.issue_date} onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })} />
               </div>
               <div>
-                <Label>Expected Return Date</Label>
-                <Input type="date" value={formData.expected_return_date} onChange={(e) => setFormData({ ...formData, expected_return_date: e.target.value })} />
+                <Label>Expected Return Date (Leave empty for permanent sale/distribution)</Label>
+                <Input type="date" value={formData.expected_return_date} onChange={(e) => setFormData({ ...formData, expected_return_date: e.target.value })} placeholder="Optional - leave empty for permanent" />
               </div>
               <div>
                 <Label>Purpose</Label>
-                <Input value={formData.purpose} onChange={(e) => setFormData({ ...formData, purpose: e.target.value })} />
+                <Input value={formData.purpose} onChange={(e) => setFormData({ ...formData, purpose: e.target.value })} placeholder="e.g., distribution, sale, loan" />
               </div>
               <Button type="submit" className="w-full">Issue Item</Button>
             </form>
@@ -193,9 +194,10 @@ export default function InventoryIssuanceList({ schoolId }: InventoryIssuanceLis
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="active">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="active">Active ({activeIssuances.length})</TabsTrigger>
             <TabsTrigger value="overdue">Overdue ({overdueIssuances.length})</TabsTrigger>
+            <TabsTrigger value="permanent">Sold/Permanent ({permanentIssuances.length})</TabsTrigger>
             <TabsTrigger value="returned">Returned ({returnedIssuances.length})</TabsTrigger>
           </TabsList>
 
@@ -248,6 +250,26 @@ export default function InventoryIssuanceList({ schoolId }: InventoryIssuanceLis
                   <Button size="sm" variant="outline" onClick={() => handleReturn(issuance, 'damaged')} className="flex-1">
                     Return (Damaged)
                   </Button>
+                </div>
+              </div>
+            ))}
+          </TabsContent>
+
+          <TabsContent value="permanent" className="space-y-3">
+            {permanentIssuances.map((issuance: any) => (
+              <div key={issuance.id} className="border bg-purple-50 rounded-lg p-4">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h3 className="font-medium text-purple-700">{issuance.item?.name}</h3>
+                    <p className="text-sm text-purple-600">Sold/Distributed to: {issuance.issued_to_name}</p>
+                  </div>
+                  <Package className="h-5 w-5 text-purple-500" />
+                </div>
+                <div className="text-sm text-purple-600">
+                  <p>Quantity: <span className="font-medium">{issuance.quantity}</span></p>
+                  <p>Date: {new Date(issuance.issue_date).toLocaleDateString()}</p>
+                  {issuance.purpose && <p>Purpose: <span className="font-medium">{issuance.purpose}</span></p>}
+                  <p className="text-xs mt-2 text-purple-500">No return expected - Permanent sale/distribution</p>
                 </div>
               </div>
             ))}

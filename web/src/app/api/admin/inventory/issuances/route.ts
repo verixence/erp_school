@@ -9,13 +9,13 @@ const issuanceSchema = z.object({
   issued_to_name: z.string().min(1),
   quantity: z.number().int().min(1),
   issue_date: z.string().optional(),
-  expected_return_date: z.string().optional(),
-  actual_return_date: z.string().optional(),
+  expected_return_date: z.string().optional().nullable().transform(val => val === '' ? null : val),
+  actual_return_date: z.string().optional().nullable().transform(val => val === '' ? null : val),
   return_condition: z.enum(['good', 'damaged', 'lost']).optional(),
   issued_by: z.string().uuid().optional(),
   returned_to: z.string().uuid().optional(),
   purpose: z.string().optional(),
-  status: z.enum(['issued', 'returned', 'overdue', 'lost']).default('issued'),
+  status: z.enum(['issued', 'returned', 'overdue', 'lost', 'permanent']).default('issued'),
   notes: z.string().optional(),
 });
 
@@ -92,11 +92,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Determine if this is a permanent sale (no return expected)
+    const isPermanent = !validated.expected_return_date;
+    const finalStatus = isPermanent ? 'permanent' : validated.status;
+
     const { data: issuance, error } = await supabase
       .from('inventory_issuances')
       .insert({
         school_id,
         ...validated,
+        status: finalStatus,
       })
       .select()
       .single();
@@ -113,7 +118,7 @@ export async function POST(request: NextRequest) {
       quantity: validated.quantity,
       transaction_date: validated.issue_date || new Date().toISOString().split('T')[0],
       performed_by: validated.issued_by,
-      notes: `Issued to ${validated.issued_to_name}`,
+      notes: isPermanent ? `Permanently issued/sold to ${validated.issued_to_name}` : `Issued to ${validated.issued_to_name}`,
     });
 
     return NextResponse.json({ issuance }, { status: 201 });
