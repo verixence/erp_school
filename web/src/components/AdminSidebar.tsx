@@ -7,12 +7,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { Brand } from '@erp/common';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
-import { 
-  LayoutDashboard, 
+import {
+  LayoutDashboard,
   Building2,
-  GraduationCap, 
-  UserCheck, 
-  Users, 
+  GraduationCap,
+  UserCheck,
+  Users,
   UserPlus,
   ClipboardCheck,
   Calendar,
@@ -38,7 +38,8 @@ import {
   Settings,
   UserX,
   DollarSign,
-  TrendingUp
+  TrendingUp,
+  Package
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -207,6 +208,14 @@ export function AdminSidebar({ brand, isOpen, onClose }: AdminSidebarProps) {
           isActive={pathname.startsWith("/school-admin/fees")}
         >
           Finance & Accounting
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/inventory"
+          icon={Package}
+          isActive={pathname.startsWith("/school-admin/inventory")}
+        >
+          Inventory
         </SidebarLink>
 
         <SidebarLink
