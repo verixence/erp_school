@@ -29,7 +29,7 @@ export function createServerSupabaseClient(request: NextRequest) {
 // Simple client for API routes
 export async function createClient() {
   const cookieStore = await cookies();
-  
+
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -47,6 +47,20 @@ export async function createClient() {
             // Ignore if called from Server Component
           }
         },
+      },
+    }
+  );
+}
+
+// Admin client with service role (bypasses RLS)
+export function createAdminClient() {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      cookies: {
+        getAll() { return []; },
+        setAll() {},
       },
     }
   );

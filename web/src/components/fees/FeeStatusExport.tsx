@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Download, FileDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase-client';
 
 interface FeeStatusExportProps {
   schoolId: string;
@@ -18,6 +19,90 @@ export default function FeeStatusExport({ schoolId }: FeeStatusExportProps) {
   const [sectionFilter, setSectionFilter] = useState('all');
   const [academicYear, setAcademicYear] = useState('2024-2025');
   const [exporting, setExporting] = useState(false);
+
+  const [classes, setClasses] = useState<Array<{ grade: string }>>([]);
+  const [sections, setSections] = useState<Array<{ section: string }>>([]);
+
+  // Load classes on mount
+  useEffect(() => {
+    loadClasses();
+  }, [schoolId]);
+
+  // Load sections when grade changes
+  useEffect(() => {
+    if (gradeFilter && gradeFilter !== 'all') {
+      loadSections();
+    } else {
+      setSections([]);
+      setSectionFilter('all');
+    }
+  }, [gradeFilter, schoolId]);
+
+  const loadClasses = async () => {
+    try {
+      // Try sections table first
+      let { data: sectionsData } = await supabase
+        .from('sections')
+        .select('grade')
+        .eq('school_id', schoolId)
+        .order('grade');
+
+      // Fall back to students table if sections is empty
+      if (!sectionsData || sectionsData.length === 0) {
+        const { data: studentsData } = await supabase
+          .from('students')
+          .select('grade')
+          .eq('school_id', schoolId)
+          .eq('status', 'active');
+
+        sectionsData = studentsData;
+      }
+
+      if (sectionsData) {
+        const uniqueGrades = [...new Set(sectionsData.map(s => s.grade?.toString()).filter(Boolean))];
+        uniqueGrades.sort((a, b) => {
+          const numA = parseInt(a!.replace(/[^0-9]/g, '')) || 0;
+          const numB = parseInt(b!.replace(/[^0-9]/g, '')) || 0;
+          if (numA && numB) return numA - numB;
+          return a!.localeCompare(b!);
+        });
+        setClasses(uniqueGrades.map(grade => ({ grade: grade! })));
+      }
+    } catch (error) {
+      console.error('Error loading classes:', error);
+    }
+  };
+
+  const loadSections = async () => {
+    try {
+      // Try sections table first
+      let { data: sectionsData } = await supabase
+        .from('sections')
+        .select('section')
+        .eq('school_id', schoolId)
+        .eq('grade', gradeFilter)
+        .order('section');
+
+      // Fall back to students table if sections is empty
+      if (!sectionsData || sectionsData.length === 0) {
+        const { data: studentsData } = await supabase
+          .from('students')
+          .select('section')
+          .eq('school_id', schoolId)
+          .eq('grade', gradeFilter)
+          .eq('status', 'active');
+
+        sectionsData = studentsData;
+      }
+
+      if (sectionsData) {
+        const uniqueSections = [...new Set(sectionsData.map(s => s.section).filter(Boolean))];
+        setSections(uniqueSections.map(section => ({ section: section! })));
+      }
+    } catch (error) {
+      console.error('Error loading sections:', error);
+    }
+  };
 
   const handleExport = async (format: 'csv' | 'json') => {
     setExporting(true);
@@ -115,12 +200,9 @@ export default function FeeStatusExport({ schoolId }: FeeStatusExportProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Grades</SelectItem>
-                <SelectItem value="Nursery">Nursery</SelectItem>
-                <SelectItem value="LKG">LKG</SelectItem>
-                <SelectItem value="UKG">UKG</SelectItem>
-                {Array.from({ length: 12 }, (_, i) => (
-                  <SelectItem key={i + 1} value={`Grade ${i + 1}`}>
-                    Grade {i + 1}
+                {classes.map((cls) => (
+                  <SelectItem key={cls.grade} value={cls.grade}>
+                    {cls.grade}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -129,16 +211,17 @@ export default function FeeStatusExport({ schoolId }: FeeStatusExportProps) {
 
           <div>
             <Label htmlFor="section">Section</Label>
-            <Select value={sectionFilter} onValueChange={setSectionFilter}>
+            <Select value={sectionFilter} onValueChange={setSectionFilter} disabled={gradeFilter === 'all'}>
               <SelectTrigger id="section">
-                <SelectValue placeholder="All Sections" />
+                <SelectValue placeholder={gradeFilter === 'all' ? 'Select grade first' : 'All Sections'} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Sections</SelectItem>
-                <SelectItem value="A">Section A</SelectItem>
-                <SelectItem value="B">Section B</SelectItem>
-                <SelectItem value="C">Section C</SelectItem>
-                <SelectItem value="D">Section D</SelectItem>
+                {sections.map((sec) => (
+                  <SelectItem key={sec.section} value={sec.section}>
+                    {sec.section}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

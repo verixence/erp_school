@@ -443,7 +443,7 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
                       <tr key={structure.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-medium">{feeCategoryName}</td>
                         <td className="px-4 py-3 text-right font-mono">
-                          {demand.original_amount.toFixed(2)}
+                          {(demand.original_amount || 0).toFixed(2)}
                         </td>
                         <td className="px-4 py-3">
                           <Input
@@ -465,7 +465,7 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
                           />
                         </td>
                         <td className="px-4 py-3 text-right font-mono font-medium">
-                          {demand.demand_amount.toFixed(2)}
+                          {(demand.demand_amount || 0).toFixed(2)}
                         </td>
                       </tr>
                     );

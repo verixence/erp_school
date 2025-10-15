@@ -19,11 +19,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Build the query
+    // Build the query - get basic fee demand data
     let query = supabase
       .from('student_fee_demands')
       .select(`
         id,
+        student_id,
+        fee_structure_id,
         academic_year,
         original_amount,
         discount_amount,
@@ -33,25 +35,10 @@ export async function GET(request: NextRequest) {
         payment_status,
         due_date,
         created_at,
-        updated_at,
-        students (
-          id,
-          full_name,
-          admission_number,
-          grade,
-          section
-        ),
-        fee_structures (
-          id,
-          name,
-          amount,
-          payment_frequency
-        )
+        updated_at
       `)
       .eq('school_id', schoolId)
-      .order('students(grade)', { ascending: true })
-      .order('students(section)', { ascending: true })
-      .order('students(full_name)', { ascending: true });
+      .order('created_at', { ascending: false });
 
     // Apply filters
     if (paymentStatus && paymentStatus !== 'all') {
@@ -79,21 +66,84 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Get unique student IDs and fee structure IDs
+    const studentIds = [...new Set(feeDemands.map(d => d.student_id).filter(Boolean))];
+    const feeStructureIds = [...new Set(feeDemands.map(d => d.fee_structure_id).filter(Boolean))];
+
+    console.log('Student IDs to fetch:', studentIds);
+    console.log('Fee Structure IDs to fetch:', feeStructureIds);
+
+    // Fetch students data separately (bypassing RLS issues with joins)
+    const { data: studentsData, error: studentsError } = await supabase
+      .from('students')
+      .select('id, full_name, admission_no, grade, section')
+      .in('id', studentIds);
+
+    console.log('Students fetched:', studentsData?.length, 'Error:', studentsError);
+
+    // Fetch fee structures with categories
+    const { data: feeStructuresData, error: feeStructuresError } = await supabase
+      .from('fee_structures')
+      .select(`
+        id,
+        amount,
+        payment_frequency,
+        fee_categories!fee_category_id (
+          id,
+          name
+        )
+      `)
+      .in('id', feeStructureIds);
+
+    console.log('Fee structures fetched:', feeStructuresData?.length, 'Error:', feeStructuresError);
+
+    // Create lookup maps
+    const studentsMap = new Map(studentsData?.map(s => [s.id, s]) || []);
+    const feeStructuresMap = new Map(feeStructuresData?.map(f => [f.id, f]) || []);
+
+    // Enrich fee demands with student and fee structure data
+    const enrichedDemands = feeDemands.map(demand => ({
+      ...demand,
+      students: studentsMap.get(demand.student_id),
+      fee_structures: feeStructuresMap.get(demand.fee_structure_id)
+    }));
+
+    console.log('Total fee demands fetched:', enrichedDemands.length);
+    console.log('Filters - Grade:', gradeFilter, 'Section:', sectionFilter);
+    console.log('Sample enriched:', JSON.stringify(enrichedDemands[0], null, 2));
+
     // Filter by grade and section on the client side (since they're nested)
-    let filteredData = feeDemands.filter((demand: any) => {
-      if (gradeFilter && demand.students?.grade !== gradeFilter) return false;
-      if (sectionFilter && demand.students?.section !== sectionFilter) return false;
-      return true;
+    let filteredData = enrichedDemands.filter((demand: any) => {
+      const gradeMatch = !gradeFilter || gradeFilter === 'all' || demand.students?.grade === gradeFilter;
+      const sectionMatch = !sectionFilter || sectionFilter === 'all' || demand.students?.section === sectionFilter;
+      return gradeMatch && sectionMatch;
+    });
+
+    console.log('Filtered data count:', filteredData.length);
+
+    // Sort by grade, section, and student name
+    filteredData.sort((a: any, b: any) => {
+      const gradeA = a.students?.grade || '';
+      const gradeB = b.students?.grade || '';
+      if (gradeA !== gradeB) return gradeA.localeCompare(gradeB);
+
+      const sectionA = a.students?.section || '';
+      const sectionB = b.students?.section || '';
+      if (sectionA !== sectionB) return sectionA.localeCompare(sectionB);
+
+      const nameA = a.students?.full_name || '';
+      const nameB = b.students?.full_name || '';
+      return nameA.localeCompare(nameB);
     });
 
     // Transform data for export
     const exportData = filteredData.map((demand: any) => ({
-      'Admission Number': demand.students?.admission_number || 'N/A',
+      'Admission Number': demand.students?.admission_no || 'N/A',
       'Student Name': demand.students?.full_name || 'Unknown',
       'Grade': demand.students?.grade || 'N/A',
       'Section': demand.students?.section || 'N/A',
       'Academic Year': demand.academic_year,
-      'Fee Type': demand.fee_structures?.name || 'N/A',
+      'Fee Type': demand.fee_structures?.fee_categories?.name || 'N/A',
       'Original Amount': parseFloat(demand.original_amount || 0).toFixed(2),
       'Discount': parseFloat(demand.discount_amount || 0).toFixed(2),
       'Demand Amount': parseFloat(demand.demand_amount || 0).toFixed(2),
