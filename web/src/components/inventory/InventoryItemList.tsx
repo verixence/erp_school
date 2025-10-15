@@ -19,7 +19,7 @@ export default function InventoryItemList({ schoolId }: InventoryItemListProps) 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterCategory, setFilterCategory] = useState<string>('');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
   const [formData, setFormData] = useState({
     category_id: '',
     item_code: '',
@@ -53,7 +53,7 @@ export default function InventoryItemList({ schoolId }: InventoryItemListProps) 
     queryKey: ['inventory-items', schoolId, filterCategory],
     queryFn: async () => {
       const params = new URLSearchParams({ school_id: schoolId });
-      if (filterCategory) params.append('category_id', filterCategory);
+      if (filterCategory && filterCategory !== 'all') params.append('category_id', filterCategory);
       const res = await fetch(`/api/admin/inventory/items?${params}`);
       if (!res.ok) throw new Error('Failed to fetch items');
       return res.json();
@@ -281,7 +281,7 @@ export default function InventoryItemList({ schoolId }: InventoryItemListProps) 
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Categories</SelectItem>
+                <SelectItem value="all">All Categories</SelectItem>
                 {categoriesData?.categories?.map((cat: any) => (
                   <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                 ))}
