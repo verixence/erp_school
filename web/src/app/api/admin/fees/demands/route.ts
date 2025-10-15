@@ -90,7 +90,8 @@ const demandSchema = z.object({
   original_amount: z.number().positive(),
   discount_amount: z.number().min(0),
   discount_reason: z.string().optional(),
-  demand_amount: z.number().min(0) // Allow 0 when discount equals original amount
+  demand_amount: z.number().min(0), // Allow 0 when discount equals original amount
+  due_date: z.string().optional() // Optional due date in YYYY-MM-DD format
 });
 
 export async function POST(request: NextRequest) {
@@ -139,6 +140,7 @@ export async function POST(request: NextRequest) {
       discount_amount: demand.discount_amount,
       discount_reason: demand.discount_reason || '',
       demand_amount: demand.demand_amount,
+      due_date: demand.due_date || null,
       updated_by: user?.id || null
     }));
 

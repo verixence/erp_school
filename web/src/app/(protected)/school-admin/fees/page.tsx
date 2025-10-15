@@ -24,6 +24,7 @@ import AdminExpenseClaims from '@/components/fees/AdminExpenseClaims';
 import AdminExpenseManagement from '@/components/fees/AdminExpenseManagement';
 import TransactionReports from '@/components/reports/TransactionReports';
 import FeeStatusExport from '@/components/fees/FeeStatusExport';
+import CarryForwardDues from '@/components/fees/CarryForwardDues';
 
 interface DashboardStats {
   total_outstanding: number;
@@ -84,7 +85,7 @@ interface FeeStructureItem {
 
 type DashboardSection = 'accounts' | 'settings' | 'reports' | 'main';
 type AccountsView = 'apply-payment' | 'claim' | 'expenses' | 'receipts';
-type SettingsView = 'fee-types' | 'fee-structures' | 'fee-demand' | 'expense-types' | 'bank-master' | 'cheque-register' | 'export-fee-status';
+type SettingsView = 'fee-types' | 'fee-structures' | 'fee-demand' | 'expense-types' | 'bank-master' | 'cheque-register' | 'export-fee-status' | 'carry-forward';
 type ReportsView = 'transactions';
 
 export default function FeeManagementUnified() {
@@ -660,6 +661,14 @@ export default function FeeManagementUnified() {
                 <FileText className="h-6 w-6 text-indigo-600" />
                 <span className="text-sm font-medium text-center">Export Fee Status</span>
               </Button>
+              <Button
+                variant="outline"
+                className="h-20 flex flex-col items-center justify-center space-y-2"
+                onClick={() => navigateToSection('settings', 'carry-forward')}
+              >
+                <TrendingUp className="h-6 w-6 text-purple-600" />
+                <span className="text-sm font-medium text-center">Carry Forward Dues</span>
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -777,7 +786,8 @@ export default function FeeManagementUnified() {
             { key: 'expense-types', label: 'Expense Types', icon: PieChart },
             { key: 'bank-master', label: 'Bank Master', icon: Building2 },
             { key: 'cheque-register', label: 'Cheque Register', icon: CheckSquare },
-            { key: 'export-fee-status', label: 'Export Fee Status', icon: FileText }
+            { key: 'export-fee-status', label: 'Export Fee Status', icon: FileText },
+            { key: 'carry-forward', label: 'Carry Forward Dues', icon: TrendingUp }
           ].map(tab => {
             const Icon = tab.icon;
             return (
@@ -925,6 +935,9 @@ export default function FeeManagementUnified() {
             )}
             {settingsView === 'export-fee-status' && schoolId && (
               <FeeStatusExport schoolId={schoolId} />
+            )}
+            {settingsView === 'carry-forward' && schoolId && (
+              <CarryForwardDues schoolId={schoolId} />
             )}
           </CardContent>
         </Card>

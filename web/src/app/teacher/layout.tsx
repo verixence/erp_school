@@ -13,6 +13,7 @@ import { BookOpen, Calendar, Users, Home, GraduationCap, FileText, MessageSquare
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase-client';
+import OverdueFeeNotificationBar from '@/components/teacher/OverdueFeeNotificationBar';
 
 export default function TeacherLayout({ 
   children 
@@ -228,6 +229,13 @@ export default function TeacherLayout({
 
           {/* Main Content */}
           <main className="flex-1 overflow-x-hidden">
+            {/* Overdue Fee Notification Bar */}
+            {user?.school_id && (
+              <div className="sticky top-0 z-40">
+                <OverdueFeeNotificationBar schoolId={user.school_id} />
+              </div>
+            )}
+
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <AnimatePresence mode="wait">
                 <motion.div
