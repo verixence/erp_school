@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, ArrowRightLeft, CheckCircle, Clock } from 'lucide-react';
+import { Plus, ArrowRightLeft, CheckCircle, Clock, Package } from 'lucide-react';
 
 interface InventoryIssuanceListProps {
   schoolId: string;

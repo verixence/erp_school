@@ -41,36 +41,65 @@ export default function InventoryTransactionHistory({ schoolId }: InventoryTrans
       <CardContent>
         {isLoading ? (
           <p className="text-center text-muted-foreground">Loading transactions...</p>
+        ) : transactionsData?.transactions?.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">No transactions found</p>
         ) : (
           <div className="space-y-3">
             {transactionsData?.transactions?.map((transaction: any) => (
               <div
                 key={transaction.id}
-                className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                className="border rounded-lg p-4 hover:bg-gray-50 transition-colors"
               >
-                <div className="flex items-center gap-4">
-                  {getTransactionIcon(transaction.transaction_type)}
-                  <div>
-                    <h3 className="font-medium">{transaction.item?.name}</h3>
-                    <p className="text-sm text-gray-600">
-                      Code: {transaction.item?.item_code}
-                    </p>
-                    <p className={`text-sm capitalize ${getTransactionColor(transaction.transaction_type)}`}>
-                      {transaction.transaction_type}
-                    </p>
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-start gap-3">
+                    {getTransactionIcon(transaction.transaction_type)}
+                    <div className="space-y-1">
+                      <h3 className="font-semibold text-base">{transaction.item?.name}</h3>
+                      <div className="flex items-center gap-3 text-sm text-gray-600">
+                        <span>Code: {transaction.item?.item_code}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
+                          ['purchase', 'return', 'adjustment'].includes(transaction.transaction_type)
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}>
+                          {transaction.transaction_type}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`text-xl font-bold ${getTransactionColor(transaction.transaction_type)}`}>
+                      {['issue', 'damage', 'loss'].includes(transaction.transaction_type) ? '-' : '+'}
+                      {transaction.quantity}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {new Date(transaction.transaction_date).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                      })}
+                    </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className={`text-lg font-bold ${getTransactionColor(transaction.transaction_type)}`}>
-                    {['issue', 'damage', 'loss'].includes(transaction.transaction_type) ? '-' : '+'}
-                    {transaction.quantity}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    {new Date(transaction.transaction_date).toLocaleDateString()}
-                  </div>
+
+                {/* Additional information */}
+                <div className="mt-3 pt-3 border-t space-y-1.5">
+                  {transaction.user?.display_name && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Processed by:</span>
+                      <span className="font-medium text-gray-700">{transaction.user.display_name}</span>
+                    </div>
+                  )}
                   {transaction.reference_number && (
-                    <div className="text-xs text-gray-500">
-                      Ref: {transaction.reference_number}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Reference:</span>
+                      <span className="font-mono text-gray-700">{transaction.reference_number}</span>
+                    </div>
+                  )}
+                  {transaction.notes && (
+                    <div className="text-sm mt-2">
+                      <span className="text-gray-500">Notes:</span>
+                      <p className="text-gray-700 mt-1 pl-2 border-l-2 border-gray-200">{transaction.notes}</p>
                     </div>
                   )}
                 </div>
