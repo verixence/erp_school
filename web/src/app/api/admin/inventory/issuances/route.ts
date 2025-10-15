@@ -36,8 +36,8 @@ export async function GET(request: NextRequest) {
     .select(`
       *,
       item:inventory_items(id, name, item_code),
-      issuer:issued_by(id, full_name),
-      receiver:returned_to(id, full_name)
+      issuer:issued_by(id, display_name),
+      receiver:returned_to(id, display_name)
     `)
     .eq('school_id', schoolId);
 

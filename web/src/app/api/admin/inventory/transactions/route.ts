@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     .select(`
       *,
       item:inventory_items(id, name, item_code),
-      user:users(id, full_name)
+      user:users(id, display_name)
     `)
     .eq('school_id', schoolId);
 
