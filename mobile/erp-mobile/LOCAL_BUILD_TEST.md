@@ -11,7 +11,18 @@ Test your Android build locally before pushing to EAS Build.
 
 ### Installation (macOS)
 
-#### 1. Install Java 17
+#### 1. Install Homebrew (if not installed)
+```bash
+# Install Homebrew
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Follow the on-screen instructions to add Homebrew to PATH
+# Usually:
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
+```
+
+#### 2. Install Java 17
 ```bash
 # Using Homebrew
 brew install openjdk@17
@@ -24,7 +35,7 @@ source ~/.zshrc
 java -version  # Should show version 17
 ```
 
-#### 2. Install Android SDK (Choose one)
+#### 3. Install Android SDK (Choose one)
 
 **Option A: Android Studio (Recommended)**
 - Download from: https://developer.android.com/studio
@@ -231,5 +242,18 @@ All configurations have been fixed:
 - ✅ BuildConfig imports added
 - ✅ Node 20.19.4 in EAS config
 - ✅ All SDK versions updated
+- ✅ **New Architecture enabled** (required by react-native-reanimated)
 
 **Ready for EAS Build!** 🚀
+
+---
+
+## Quick Start (No Java/Android Setup Required)
+
+If you just want to validate without installing Java/Android SDK locally:
+
+1. **Push the changes** (newArchEnabled=true is now set)
+2. **Use EAS Build** which has all tools pre-installed
+3. **Monitor the build logs** on expo.dev
+
+The `newArchEnabled=true` fix should resolve the Reanimated error.
