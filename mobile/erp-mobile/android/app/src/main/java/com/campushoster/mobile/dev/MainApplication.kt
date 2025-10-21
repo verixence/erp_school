@@ -15,7 +15,7 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
-import com.campushoster.mobile.BuildConfig
+import com.campushoster.mobile.dev.BuildConfig
 
 class MainApplication : Application(), ReactApplication {
 

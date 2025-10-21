@@ -31,7 +31,7 @@ export default {
     android: {
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
-        backgroundColor: '#8b5cf6'
+        backgroundColor: '#ffffff'
       },
       package: IS_PRODUCTION
         ? 'com.campushoster.mobile'
