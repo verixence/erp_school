@@ -23,8 +23,7 @@
       },
       "android": {
         "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease",
-        "resourceClass": "large"
+        "gradleCommand": ":app:assembleRelease"
       },
       "ios": {
         "simulator": true
@@ -40,8 +39,7 @@
       },
       "android": {
         "buildType": "app-bundle",
-        "gradleCommand": ":app:bundleRelease",
-        "resourceClass": "large"
+        "gradleCommand": ":app:bundleRelease"
       },
       "ios": {
         "simulator": false
