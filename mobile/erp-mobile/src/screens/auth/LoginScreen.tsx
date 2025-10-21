@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -15,14 +15,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Button, TextInput, Card, Provider as PaperProvider } from 'react-native-paper';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withTiming, 
-  withSpring,
-  FadeInDown,
-  FadeInUp 
-} from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -37,24 +29,6 @@ export const LoginScreen: React.FC = () => {
   const [errors, setErrors] = useState<{ loginId?: string; password?: string }>({});
 
   const { signIn, signInWithUsername } = useAuth();
-
-  // Animation values
-  const logoScale = useSharedValue(0);
-  const formOpacity = useSharedValue(0);
-
-  useEffect(() => {
-    // Start animations on component mount
-    logoScale.value = withSpring(1, { duration: 800 });
-    formOpacity.value = withTiming(1, { duration: 1000 });
-  }, []);
-
-  const logoAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: logoScale.value }],
-  }));
-
-  const formAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: formOpacity.value,
-  }));
 
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -140,9 +114,8 @@ export const LoginScreen: React.FC = () => {
               showsVerticalScrollIndicator={false}
             >
               {/* Logo and Header Section */}
-              <Animated.View 
-                entering={FadeInUp.delay(200).duration(800)}
-                style={[{ alignItems: 'center', marginBottom: 48 }, logoAnimatedStyle]}
+              <View
+                style={{ alignItems: 'center', marginBottom: 48 }}
               >
                 <View style={{
                   width: 150,
@@ -199,13 +172,10 @@ export const LoginScreen: React.FC = () => {
                 }}>
                   Connecting teachers and parents{'\n'}for better learning outcomes
                 </Text>
-              </Animated.View>
+              </View>
 
               {/* Login Form */}
-              <Animated.View 
-                entering={FadeInDown.delay(400).duration(800)}
-                style={formAnimatedStyle}
-              >
+              <View>
                 <Card style={{
                   backgroundColor: 'rgba(255,255,255,0.95)',
                   borderRadius: 24,
@@ -403,11 +373,10 @@ export const LoginScreen: React.FC = () => {
                     {loading ? 'Signing in...' : 'Sign In'}
                   </Button>
                 </Card>
-              </Animated.View>
+              </View>
 
               {/* Footer */}
-              <Animated.View
-                entering={FadeInUp.delay(600).duration(800)}
+              <View
                 style={{
                   alignItems: 'center',
                   marginTop: 40,
@@ -466,7 +435,7 @@ export const LoginScreen: React.FC = () => {
                 }}>
                   Version 1.0.0 • Built with ❤️ for education
                 </Text>
-              </Animated.View>
+              </View>
             </ScrollView>
           </KeyboardAvoidingView>
         </LinearGradient>

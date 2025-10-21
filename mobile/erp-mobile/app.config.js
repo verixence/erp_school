@@ -79,6 +79,9 @@ export default {
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
       environment: IS_PRODUCTION ? 'production' : IS_PREVIEW ? 'preview' : 'development'
     },
-    runtimeVersion: '1.0.0'
+    runtimeVersion: '1.0.0',
+    autolinking: {
+      exclude: ['react-native-worklets']
+    }
   }
 };
