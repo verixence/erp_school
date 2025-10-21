@@ -34,16 +34,34 @@ import { TeacherLeaveRequestsScreen } from '../screens/teacher/TeacherLeaveReque
 import { TeacherOnlineClassesScreen } from '../screens/teacher/TeacherOnlineClassesScreen';
 import { TeacherMarksEntryScreen } from '../screens/teacher/TeacherMarksEntryScreen';
 import { SettingsScreen } from '../screens/shared/SettingsScreen';
+import { ThemeSettingsScreen } from '../screens/settings/ThemeSettingsScreen';
+import { schoolTheme } from '../theme/schoolTheme';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 const DashboardStack = () => (
   <Stack.Navigator>
-    <Stack.Screen 
-      name="Dashboard" 
+    <Stack.Screen
+      name="Dashboard"
       component={TeacherDashboardScreen}
       options={{ headerShown: false }}
+    />
+    {/* Communication screens accessible from Dashboard quick actions */}
+    <Stack.Screen
+      name="Announcements"
+      component={TeacherAnnouncementsScreen}
+      options={{ title: 'Announcements' }}
+    />
+    <Stack.Screen
+      name="Community"
+      component={TeacherCommunityScreen}
+      options={{ title: 'Community' }}
+    />
+    <Stack.Screen
+      name="ThemeSettings"
+      component={ThemeSettingsScreen}
+      options={{ title: 'Theme Settings' }}
     />
   </Stack.Navigator>
 );
@@ -103,30 +121,7 @@ const AcademicsStack = () => (
   </Stack.Navigator>
 );
 
-const CommunicationStack = () => (
-  <Stack.Navigator>
-    <Stack.Screen 
-      name="Announcements" 
-      component={TeacherAnnouncementsScreen}
-      options={{ title: 'Announcements' }}
-    />
-    <Stack.Screen 
-      name="Community" 
-      component={TeacherCommunityScreen}
-      options={{ title: 'Community' }}
-    />
-  </Stack.Navigator>
-);
-
-const GalleryStack = () => (
-  <Stack.Navigator>
-    <Stack.Screen 
-      name="Gallery" 
-      component={TeacherGalleryScreen}
-      options={{ title: 'Gallery' }}
-    />
-  </Stack.Navigator>
-);
+// Communication screens removed from tab bar - accessible via Dashboard and push notifications
 
 const SettingsStack = () => (
   <Stack.Navigator>
@@ -155,12 +150,6 @@ export const TeacherNavigator: React.FC = () => {
             case 'AcademicsTab':
               IconComponent = GraduationCap;
               break;
-            case 'MessagesTab':
-              IconComponent = MessageSquare;
-              break;
-            case 'GalleryTab':
-              IconComponent = Camera;
-              break;
             case 'SettingsTab':
               IconComponent = Settings;
               break;
@@ -170,51 +159,47 @@ export const TeacherNavigator: React.FC = () => {
 
           return <IconComponent size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#3b82f6',
-        tabBarInactiveTintColor: '#6b7280',
+        tabBarActiveTintColor: schoolTheme.colors.teacher.main,
+        tabBarInactiveTintColor: schoolTheme.colors.text.secondary,
         tabBarStyle: {
           backgroundColor: 'white',
-          borderTopWidth: 1,
-          borderTopColor: '#e5e7eb',
-          paddingBottom: 8,
-          paddingTop: 8,
-          height: 80
+          borderTopWidth: 0,
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          paddingBottom: 12,
+          paddingTop: 12,
+          height: 85,
+          elevation: 10,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: '500',
+          fontWeight: '600',
           marginTop: 4
         },
         headerShown: false,
       })}
     >
-      <Tab.Screen 
-        name="DashboardTab" 
+      <Tab.Screen
+        name="DashboardTab"
         component={DashboardStack}
-        options={{ title: 'Dashboard' }}
+        options={{ title: 'Home' }}
       />
-      <Tab.Screen 
-        name="AttendanceTab" 
+      <Tab.Screen
+        name="AttendanceTab"
         component={AttendanceStack}
         options={{ title: 'Attendance' }}
       />
-      <Tab.Screen 
-        name="AcademicsTab" 
+      <Tab.Screen
+        name="AcademicsTab"
         component={AcademicsStack}
         options={{ title: 'Academics' }}
       />
-      <Tab.Screen 
-        name="MessagesTab" 
-        component={CommunicationStack}
-        options={{ title: 'Messages' }}
-      />
-      <Tab.Screen 
-        name="GalleryTab" 
-        component={GalleryStack}
-        options={{ title: 'Gallery' }}
-      />
-      <Tab.Screen 
-        name="SettingsTab" 
+      <Tab.Screen
+        name="SettingsTab"
         component={SettingsStack}
         options={{ title: 'Settings' }}
       />

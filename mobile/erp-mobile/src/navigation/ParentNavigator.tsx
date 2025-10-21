@@ -33,21 +33,44 @@ import { ParentFeedbackScreen } from '../screens/parent/ParentFeedbackScreen';
 import { ParentOnlineClassesScreen } from '../screens/parent/ParentOnlineClassesScreen';
 import { ParentAnalyticsScreen } from '../screens/parent/ParentAnalyticsScreen';
 import { SettingsScreen } from '../screens/shared/SettingsScreen';
+import { ThemeSettingsScreen } from '../screens/settings/ThemeSettingsScreen';
+import { schoolTheme } from '../theme/schoolTheme';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 const DashboardStack = () => (
   <Stack.Navigator>
-    <Stack.Screen 
-      name="Dashboard" 
+    <Stack.Screen
+      name="Dashboard"
       component={ParentDashboardScreen}
       options={{ headerShown: false }}
     />
-    <Stack.Screen 
-      name="Analytics" 
+    <Stack.Screen
+      name="Analytics"
       component={ParentAnalyticsScreen}
       options={{ title: 'Performance Analytics' }}
+    />
+    {/* Communication screens accessible from Dashboard quick actions */}
+    <Stack.Screen
+      name="Community"
+      component={ParentCommunityScreen}
+      options={{ title: 'Community' }}
+    />
+    <Stack.Screen
+      name="Announcements"
+      component={ParentAnnouncementsScreen}
+      options={{ title: 'Announcements' }}
+    />
+    <Stack.Screen
+      name="Feedback"
+      component={ParentFeedbackScreen}
+      options={{ title: 'Feedback' }}
+    />
+    <Stack.Screen
+      name="ThemeSettings"
+      component={ThemeSettingsScreen}
+      options={{ title: 'Theme Settings' }}
     />
   </Stack.Navigator>
 );
@@ -87,25 +110,8 @@ const AcademicsStack = () => (
   </Stack.Navigator>
 );
 
-const CommunicationStack = () => (
-  <Stack.Navigator>
-    <Stack.Screen 
-      name="Community" 
-      component={ParentCommunityScreen}
-      options={{ title: 'Community' }}
-    />
-    <Stack.Screen 
-      name="Announcements" 
-      component={ParentAnnouncementsScreen}
-      options={{ title: 'Announcements' }}
-    />
-    <Stack.Screen 
-      name="Feedback" 
-      component={ParentFeedbackScreen}
-      options={{ title: 'Feedback' }}
-    />
-  </Stack.Navigator>
-);
+// Communication screens accessible from Dashboard and push notifications
+// No need for separate tab - reduces clutter
 
 const MediaStack = () => (
   <Stack.Navigator>
@@ -151,12 +157,6 @@ export const ParentNavigator: React.FC = () => {
             case 'AcademicsTab':
               IconComponent = GraduationCap;
               break;
-            case 'MessagesTab':
-              IconComponent = MessageSquare;
-              break;
-            case 'MediaTab':
-              IconComponent = Camera;
-              break;
             case 'CalendarTab':
               IconComponent = CalendarDays;
               break;
@@ -169,51 +169,47 @@ export const ParentNavigator: React.FC = () => {
 
           return <IconComponent size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#8b5cf6',
-        tabBarInactiveTintColor: '#6b7280',
+        tabBarActiveTintColor: schoolTheme.colors.parent.main,
+        tabBarInactiveTintColor: schoolTheme.colors.text.secondary,
         tabBarStyle: {
           backgroundColor: 'white',
-          borderTopWidth: 1,
-          borderTopColor: '#e5e7eb',
-          paddingBottom: 8,
-          paddingTop: 8,
-          height: 80
+          borderTopWidth: 0,
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          paddingBottom: 12,
+          paddingTop: 12,
+          height: 85,
+          elevation: 10,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: '500',
+          fontWeight: '600',
           marginTop: 4
         },
         headerShown: false,
       })}
     >
-      <Tab.Screen 
-        name="DashboardTab" 
+      <Tab.Screen
+        name="DashboardTab"
         component={DashboardStack}
-        options={{ title: 'Dashboard' }}
+        options={{ title: 'Home' }}
       />
-      <Tab.Screen 
-        name="AcademicsTab" 
+      <Tab.Screen
+        name="AcademicsTab"
         component={AcademicsStack}
         options={{ title: 'Academics' }}
       />
-      <Tab.Screen 
-        name="MessagesTab" 
-        component={CommunicationStack}
-        options={{ title: 'Messages' }}
-      />
-      <Tab.Screen 
-        name="MediaTab" 
-        component={MediaStack}
-        options={{ title: 'Gallery' }}
-      />
-      <Tab.Screen 
-        name="CalendarTab" 
+      <Tab.Screen
+        name="CalendarTab"
         component={CalendarStack}
         options={{ title: 'Calendar' }}
       />
-      <Tab.Screen 
-        name="SettingsTab" 
+      <Tab.Screen
+        name="SettingsTab"
         component={SettingsStack}
         options={{ title: 'Settings' }}
       />

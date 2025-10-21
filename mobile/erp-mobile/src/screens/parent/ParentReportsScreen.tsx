@@ -1,34 +1,34 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  ScrollView, 
-  SafeAreaView, 
-  RefreshControl, 
+import {
+  View,
+  Text,
+  ScrollView,
+  SafeAreaView,
+  RefreshControl,
   TouchableOpacity,
   Alert,
-  Linking
+  Linking,
+  StyleSheet
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
-import { Card, CardContent, CardHeader } from '../../components/ui/Card';
-import { 
-  FileText, 
-  Download, 
-  Eye, 
+import { Card, CardContent } from '../../components/ui/Card';
+import {
+  FileText,
+  Download,
+  Eye,
   Calendar,
   TrendingUp,
   Award,
   BookOpen,
   BarChart3,
-  User,
   GraduationCap,
   Clock,
-  CheckCircle,
-  ExternalLink
+  CheckCircle
 } from 'lucide-react-native';
+import { schoolTheme } from '../../theme/schoolTheme';
 
 interface ReportCard {
   id: string;
@@ -114,7 +114,7 @@ export const ParentReportsScreen: React.FC = () => {
     queryFn: async (): Promise<ReportCard[]> => {
       if (!selectedChild) return [];
 
-      const { data, error } = await supabase
+      const { data, error} = await supabase
         .from('report_cards')
         .select(`
           id,
@@ -257,75 +257,60 @@ export const ParentReportsScreen: React.FC = () => {
     const statusColor = getStatusColor(report.status);
 
     return (
-      <Card key={report.id} className="mb-4">
-        <CardContent className="p-4">
+      <Card key={report.id} style={styles.reportCard}>
+        <CardContent style={styles.cardContent}>
           {/* Header */}
-          <View className="flex-row items-start justify-between mb-3">
-            <View className="flex-1">
-              <View className="flex-row items-center mb-2">
-                <View 
-                  className="w-10 h-10 rounded-lg flex items-center justify-center mr-3"
-                  style={{ backgroundColor: typeColor + '20' }}
-                >
-                  <ReportIcon size={20} color={typeColor} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-lg font-semibold text-gray-900">
-                    {report.title}
-                  </Text>
-                  <View className="flex-row items-center">
-                    <Text className="text-sm text-gray-600">
-                      {report.academic_year}
-                    </Text>
-                    {report.term && (
-                      <Text className="text-sm text-gray-600"> • {report.term}</Text>
-                    )}
-                  </View>
+          <View style={styles.reportHeader}>
+            <View style={styles.reportHeaderLeft}>
+              <View style={[styles.typeIconContainer, { backgroundColor: typeColor + '20' }]}>
+                <ReportIcon size={24} color={typeColor} />
+              </View>
+              <View style={styles.reportHeaderText}>
+                <Text style={styles.reportTitle}>{report.title}</Text>
+                <View style={styles.reportMeta}>
+                  <Text style={styles.academicYear}>{report.academic_year}</Text>
+                  {report.term && (
+                    <Text style={styles.term}> • {report.term}</Text>
+                  )}
                 </View>
               </View>
             </View>
-            
-            <View 
-              className="px-2 py-1 rounded-full flex-row items-center"
-              style={{ backgroundColor: statusColor + '20' }}
-            >
+
+            <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
               <StatusIcon size={12} color={statusColor} />
-              <Text 
-                className="text-xs font-medium capitalize ml-1"
-                style={{ color: statusColor }}
-              >
-                {report.status}
+              <Text style={[styles.statusText, { color: statusColor }]}>
+                {report.status.toUpperCase()}
               </Text>
             </View>
           </View>
 
           {/* Summary Stats */}
           {report.summary && (
-            <View className="bg-gray-50 p-3 rounded-lg mb-3">
-              <View className="flex-row justify-between items-center">
-                <View className="flex-1">
-                  <View className="flex-row items-center mb-1">
+            <View style={styles.summaryContainer}>
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryLeft}>
+                  <View style={styles.summaryItem}>
                     <BarChart3 size={14} color="#6b7280" />
-                    <Text className="text-sm font-medium text-gray-700 ml-1">
+                    <Text style={styles.summaryText}>
                       Average: {report.summary.average_marks.toFixed(1)}%
                     </Text>
                   </View>
-                  <View className="flex-row items-center">
+                  <View style={styles.summaryItem}>
                     <Award size={14} color="#6b7280" />
-                    <Text className="text-sm text-gray-600 ml-1">
+                    <Text style={styles.summaryText}>
                       Grade: {report.summary.grade}
                     </Text>
                     {report.summary.rank && (
-                      <Text className="text-sm text-gray-600"> • Rank: {report.summary.rank}</Text>
+                      <Text style={styles.summaryText}> • Rank: {report.summary.rank}</Text>
                     )}
                   </View>
                 </View>
-                
-                <View className="items-end">
-                  <Text className="text-sm font-medium text-gray-700">
+
+                <View style={styles.summaryRight}>
+                  <Text style={styles.summaryValue}>
                     {report.summary.total_subjects} Subjects
                   </Text>
-                  <Text className="text-sm text-gray-600">
+                  <Text style={styles.summarySecondary}>
                     {report.summary.attendance_percentage}% Attendance
                   </Text>
                 </View>
@@ -334,38 +319,36 @@ export const ParentReportsScreen: React.FC = () => {
           )}
 
           {/* Footer */}
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center">
+          <View style={styles.reportFooter}>
+            <View style={styles.dateContainer}>
               <Calendar size={14} color="#6b7280" />
-              <Text className="text-sm text-gray-500 ml-1">
+              <Text style={styles.dateText}>
                 Generated {formatDate(report.generated_at)}
               </Text>
             </View>
-            
-            <View className="flex-row items-center space-x-2">
-              {report.file_url && report.status !== 'draft' && (
+
+            <View style={styles.actionButtons}>
+              {report.file_url && report.status !== 'draft' ? (
                 <>
                   <TouchableOpacity
                     onPress={() => handleViewReport(report)}
-                    className="bg-blue-600 px-3 py-1 rounded-lg flex-row items-center"
+                    style={[styles.actionButton, { backgroundColor: '#3b82f6' }]}
                   >
                     <Eye size={14} color="white" />
-                    <Text className="text-white ml-1 text-sm font-medium">View</Text>
+                    <Text style={styles.actionButtonText}>View</Text>
                   </TouchableOpacity>
-                  
+
                   <TouchableOpacity
                     onPress={() => handleDownloadReport(report)}
-                    className="bg-green-600 px-3 py-1 rounded-lg flex-row items-center"
+                    style={[styles.actionButton, { backgroundColor: '#10b981' }]}
                   >
                     <Download size={14} color="white" />
-                    <Text className="text-white ml-1 text-sm font-medium">Download</Text>
+                    <Text style={styles.actionButtonText}>Download</Text>
                   </TouchableOpacity>
                 </>
-              )}
-              
-              {report.status === 'draft' && (
-                <View className="bg-gray-200 px-3 py-1 rounded-lg">
-                  <Text className="text-gray-600 text-sm font-medium">Preparing...</Text>
+              ) : (
+                <View style={styles.draftBadge}>
+                  <Text style={styles.draftText}>Preparing...</Text>
                 </View>
               )}
             </View>
@@ -377,44 +360,57 @@ export const ParentReportsScreen: React.FC = () => {
 
   if (childrenLoading || reportsLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50">
+      <SafeAreaView style={styles.container}>
         <StatusBar style="dark" />
-        <View className="flex-1 justify-center items-center">
-          <Text className="text-gray-500">Loading reports...</Text>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading reports...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
-      
+
       {/* Header */}
-      <View className="bg-white px-4 py-3 border-b border-gray-200">
-        <Text className="text-xl font-bold text-gray-900 mb-3">Report Cards</Text>
-        
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <FileText size={24} color={schoolTheme.colors.parent.main} />
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle}>Report Cards</Text>
+            <Text style={styles.headerSubtitle}>View your child's academic progress</Text>
+          </View>
+        </View>
+
         {/* Child Selector */}
         {children.length > 1 && (
-          <View className="mb-3">
-            <Text className="text-sm font-medium text-gray-700 mb-2">Select Child:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.childSelectorSection}>
+            <Text style={styles.sectionLabel}>Select Child:</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.childScroll}
+            >
               {children.map((child) => (
                 <TouchableOpacity
                   key={child.id}
                   onPress={() => setSelectedChild(child.id)}
-                  className={`mr-2 px-3 py-2 rounded-lg ${
-                    selectedChild === child.id ? 'bg-blue-600' : 'bg-gray-200'
-                  }`}
+                  style={[
+                    styles.childButton,
+                    selectedChild === child.id && styles.childButtonActive
+                  ]}
                 >
-                  <Text className={`text-sm font-medium ${
-                    selectedChild === child.id ? 'text-white' : 'text-gray-700'
-                  }`}>
+                  <Text style={[
+                    styles.childButtonText,
+                    selectedChild === child.id && styles.childButtonTextActive
+                  ]}>
                     {child.full_name}
                   </Text>
-                  <Text className={`text-xs ${
-                    selectedChild === child.id ? 'text-blue-100' : 'text-gray-500'
-                  }`}>
+                  <Text style={[
+                    styles.childButtonGrade,
+                    selectedChild === child.id && styles.childButtonGradeActive
+                  ]}>
                     Grade {child.grade}-{child.section}
                   </Text>
                 </TouchableOpacity>
@@ -424,7 +420,11 @@ export const ParentReportsScreen: React.FC = () => {
         )}
 
         {/* Report Type Filter */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterScroll}
+        >
           {[
             { key: 'all', label: 'All Reports' },
             { key: 'term', label: 'Term Reports' },
@@ -436,13 +436,15 @@ export const ParentReportsScreen: React.FC = () => {
             <TouchableOpacity
               key={filter.key}
               onPress={() => setReportTypeFilter(filter.key)}
-              className={`mr-2 px-3 py-2 rounded-lg ${
-                reportTypeFilter === filter.key ? 'bg-blue-600' : 'bg-gray-200'
-              }`}
+              style={[
+                styles.filterButton,
+                reportTypeFilter === filter.key && styles.filterButtonActive
+              ]}
             >
-              <Text className={`text-sm font-medium ${
-                reportTypeFilter === filter.key ? 'text-white' : 'text-gray-700'
-              }`}>
+              <Text style={[
+                styles.filterButtonText,
+                reportTypeFilter === filter.key && styles.filterButtonTextActive
+              ]}>
                 {filter.label}
               </Text>
             </TouchableOpacity>
@@ -452,61 +454,374 @@ export const ParentReportsScreen: React.FC = () => {
 
       {/* Content */}
       <ScrollView
-        className="flex-1 px-4"
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
-        <View className="py-4">
-          {filteredReports.length === 0 ? (
-            <View className="flex-1 justify-center items-center py-20">
-              <FileText size={48} color="#9ca3af" />
-              <Text className="text-gray-500 text-center mt-4">
-                {reportTypeFilter === 'all' 
-                  ? 'No report cards available yet'
-                  : `No ${reportTypeFilter} reports available`
-                }
-              </Text>
-              <Text className="text-gray-400 text-center mt-2 text-sm">
-                Reports will appear here once they are generated by the school
-              </Text>
-            </View>
-          ) : (
-            <>
-              {/* Summary Stats */}
-              <Card className="mb-4">
-                <CardContent className="p-4">
-                  <Text className="text-lg font-semibold text-gray-900 mb-3">
-                    Report Summary
-                  </Text>
-                  <View className="flex-row justify-between">
-                    <View className="items-center">
-                      <Text className="text-2xl font-bold text-blue-600">
-                        {filteredReports.length}
-                      </Text>
-                      <Text className="text-sm text-gray-600">Total Reports</Text>
-                    </View>
-                    <View className="items-center">
-                      <Text className="text-2xl font-bold text-green-600">
-                        {filteredReports.filter(r => r.status === 'finalized').length}
-                      </Text>
-                      <Text className="text-sm text-gray-600">Finalized</Text>
-                    </View>
-                    <View className="items-center">
-                      <Text className="text-2xl font-bold text-orange-600">
-                        {filteredReports.filter(r => r.status === 'draft').length}
-                      </Text>
-                      <Text className="text-sm text-gray-600">In Progress</Text>
-                    </View>
+        {filteredReports.length === 0 ? (
+          <View style={styles.emptyState}>
+            <FileText size={64} color="#9ca3af" />
+            <Text style={styles.emptyStateTitle}>
+              {reportTypeFilter === 'all'
+                ? 'No report cards available yet'
+                : `No ${reportTypeFilter} reports available`
+              }
+            </Text>
+            <Text style={styles.emptyStateSubtitle}>
+              Reports will appear here once they are generated by the school
+            </Text>
+          </View>
+        ) : (
+          <>
+            {/* Summary Stats */}
+            <Card style={styles.summaryCard}>
+              <CardContent style={styles.summaryCardContent}>
+                <Text style={styles.summaryCardTitle}>Report Summary</Text>
+                <View style={styles.summaryStats}>
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statNumber, { color: '#3b82f6' }]}>
+                      {filteredReports.length}
+                    </Text>
+                    <Text style={styles.statLabel}>Total Reports</Text>
                   </View>
-                </CardContent>
-              </Card>
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statNumber, { color: '#10b981' }]}>
+                      {filteredReports.filter(r => r.status === 'finalized').length}
+                    </Text>
+                    <Text style={styles.statLabel}>Finalized</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={[styles.statNumber, { color: '#f59e0b' }]}>
+                      {filteredReports.filter(r => r.status === 'draft').length}
+                    </Text>
+                    <Text style={styles.statLabel}>In Progress</Text>
+                  </View>
+                </View>
+              </CardContent>
+            </Card>
 
-              {/* Report Cards */}
-              {filteredReports.map(renderReportCard)}
-            </>
-          )}
-        </View>
+            {/* Report Cards */}
+            {filteredReports.map(renderReportCard)}
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f9fafb',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#6b7280',
+    fontSize: 16,
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  header: {
+    backgroundColor: 'white',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    ...schoolTheme.shadows.sm,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111827',
+    fontFamily: schoolTheme.typography.fonts.bold,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  childSelectorSection: {
+    marginBottom: 12,
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 8,
+    fontFamily: schoolTheme.typography.fonts.medium,
+  },
+  childScroll: {
+    marginBottom: 4,
+  },
+  childButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    marginRight: 8,
+  },
+  childButtonActive: {
+    backgroundColor: schoolTheme.colors.parent.main,
+  },
+  childButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6b7280',
+    marginBottom: 2,
+    fontFamily: schoolTheme.typography.fonts.medium,
+  },
+  childButtonTextActive: {
+    color: 'white',
+  },
+  childButtonGrade: {
+    fontSize: 12,
+    color: '#9ca3af',
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  childButtonGradeActive: {
+    color: 'rgba(255,255,255,0.8)',
+  },
+  filterScroll: {
+    marginTop: 4,
+  },
+  filterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    marginRight: 8,
+  },
+  filterButtonActive: {
+    backgroundColor: schoolTheme.colors.parent.main,
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6b7280',
+    fontFamily: schoolTheme.typography.fonts.medium,
+  },
+  filterButtonTextActive: {
+    color: 'white',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+  },
+  summaryCard: {
+    marginBottom: 20,
+  },
+  summaryCardContent: {
+    padding: 20,
+  },
+  summaryCardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 16,
+    fontFamily: schoolTheme.typography.fonts.semibold,
+  },
+  summaryStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    marginBottom: 4,
+    fontFamily: schoolTheme.typography.fonts.bold,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  reportCard: {
+    marginBottom: 16,
+  },
+  cardContent: {
+    padding: 16,
+  },
+  reportHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  reportHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  typeIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  reportHeaderText: {
+    flex: 1,
+  },
+  reportTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+    fontFamily: schoolTheme.typography.fonts.semibold,
+  },
+  reportMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  academicYear: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  term: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: schoolTheme.typography.fonts.semibold,
+  },
+  summaryContainer: {
+    backgroundColor: '#f9fafb',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  summaryLeft: {
+    flex: 1,
+  },
+  summaryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 6,
+  },
+  summaryText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    fontFamily: schoolTheme.typography.fonts.medium,
+  },
+  summaryRight: {
+    alignItems: 'flex-end',
+  },
+  summaryValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 4,
+    fontFamily: schoolTheme.typography.fonts.medium,
+  },
+  summarySecondary: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  reportFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+    paddingTop: 12,
+  },
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dateText: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
+  },
+  actionButtonText: {
+    color: 'white',
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: schoolTheme.typography.fonts.semibold,
+  },
+  draftBadge: {
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  draftText: {
+    color: '#6b7280',
+    fontSize: 13,
+    fontWeight: '500',
+    fontFamily: schoolTheme.typography.fonts.medium,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+    fontFamily: schoolTheme.typography.fonts.semibold,
+  },
+  emptyStateSubtitle: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+});

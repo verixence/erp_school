@@ -1,35 +1,32 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  ScrollView, 
-  SafeAreaView, 
-  RefreshControl, 
+import {
+  View,
+  Text,
+  ScrollView,
+  SafeAreaView,
+  RefreshControl,
   TouchableOpacity,
   TextInput,
-  Alert
+  Alert,
+  StyleSheet,
+  Switch
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
-import { Card, CardContent, CardHeader } from '../../components/ui/Card';
-import { 
-  MessageSquare, 
-  Star, 
-  Send, 
+import { Card, CardContent } from '../../components/ui/Card';
+import {
+  MessageSquare,
+  Send,
   User,
   Calendar,
   CheckCircle,
   Clock,
   AlertCircle,
-  ThumbsUp,
-  BookOpen,
-  Users,
-  GraduationCap,
-  Heart,
-  Filter
+  BookOpen
 } from 'lucide-react-native';
+import { schoolTheme } from '../../theme/schoolTheme';
 
 interface FeedbackItem {
   id: string;
@@ -68,7 +65,7 @@ export const ParentFeedbackScreen: React.FC = () => {
   const [selectedChild, setSelectedChild] = useState<string>('');
   const [feedbackSubject, setFeedbackSubject] = useState('');
   const [feedbackDescription, setFeedbackDescription] = useState('');
-  const [feedbackType, setFeedbackType] = useState<string>('feedback');
+  const [feedbackType, setFeedbackType] = useState<string>('academic');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -153,13 +150,13 @@ export const ParentFeedbackScreen: React.FC = () => {
         submitter_name: feedback.submitter_name,
         submitter_email: feedback.submitter_email,
         is_anonymous: feedback.is_anonymous,
-        responses: [] // TODO: Implement responses if needed
+        responses: []
       }));
     },
     enabled: !!user?.id,
   });
 
-  // Submit feedback mutation - Direct database integration
+  // Submit feedback mutation
   const submitFeedbackMutation = useMutation({
     mutationFn: async (feedbackData: {
       subject: string;
@@ -171,7 +168,7 @@ export const ParentFeedbackScreen: React.FC = () => {
         .from('feedback_box')
         .insert({
           school_id: user?.school_id,
-          type: feedbackData.type === 'suggestion' ? 'suggestion' : 
+          type: feedbackData.type === 'suggestion' ? 'suggestion' :
                 feedbackData.type === 'complaint' ? 'complaint' : 'feedback',
           original_type: feedbackData.type,
           subject: feedbackData.subject,
@@ -193,7 +190,7 @@ export const ParentFeedbackScreen: React.FC = () => {
       setShowFeedbackForm(false);
       setFeedbackSubject('');
       setFeedbackDescription('');
-      setFeedbackType('feedback');
+      setFeedbackType('academic');
       setIsAnonymous(false);
       Alert.alert('Success', 'Your feedback has been submitted successfully!');
     },
@@ -282,73 +279,52 @@ export const ParentFeedbackScreen: React.FC = () => {
     const statusColor = getStatusColor(feedback.status);
 
     return (
-      <Card key={feedback.id} className="mb-4">
-        <CardContent className="p-4">
+      <Card key={feedback.id} style={styles.feedbackCard}>
+        <CardContent style={styles.cardContent}>
           {/* Header */}
-          <View className="flex-row items-start justify-between mb-3">
-            <View className="flex-1">
-              <View className="flex-row items-center mb-2">
-                <View 
-                  className="w-8 h-8 rounded-lg flex items-center justify-center mr-3"
-                  style={{ backgroundColor: typeColor + '20' }}
-                >
-                  <TypeIcon size={16} color={typeColor} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-lg font-semibold text-gray-900">
-                    {feedback.subject}
-                  </Text>
-                  <Text className="text-sm text-gray-600">
-                    {feedback.is_anonymous ? 'Anonymous' : (feedback.submitter_name || 'Submitted by you')}
-                  </Text>
-                </View>
+          <View style={styles.feedbackHeader}>
+            <View style={styles.feedbackHeaderLeft}>
+              <View style={[styles.typeIconContainer, { backgroundColor: typeColor + '20' }]}>
+                <TypeIcon size={20} color={typeColor} />
               </View>
-            </View>
-            
-            <View className="flex-row items-center space-x-2">
-              <View 
-                className="px-2 py-1 rounded-full"
-                style={{ backgroundColor: typeColor + '20' }}
-              >
-                <Text 
-                  className="text-xs font-medium capitalize"
-                  style={{ color: typeColor }}
-                >
-                  {feedback.original_type || feedback.type}
-                </Text>
-              </View>
-              
-              <View 
-                className="px-2 py-1 rounded-full flex-row items-center"
-                style={{ backgroundColor: statusColor + '20' }}
-              >
-                <StatusIcon size={12} color={statusColor} />
-                <Text 
-                  className="text-xs font-medium capitalize ml-1"
-                  style={{ color: statusColor }}
-                >
-                  {feedback.status}
+              <View style={styles.feedbackHeaderText}>
+                <Text style={styles.feedbackSubject}>{feedback.subject}</Text>
+                <Text style={styles.feedbackSubmitter}>
+                  {feedback.is_anonymous ? 'Anonymous' : (feedback.submitter_name || 'Submitted by you')}
                 </Text>
               </View>
             </View>
           </View>
 
+          {/* Status Badges */}
+          <View style={styles.badgeContainer}>
+            <View style={[styles.badge, { backgroundColor: typeColor + '20' }]}>
+              <Text style={[styles.badgeText, { color: typeColor }]}>
+                {(feedback.original_type || feedback.type).toUpperCase()}
+              </Text>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
+              <StatusIcon size={12} color={statusColor} />
+              <Text style={[styles.statusText, { color: statusColor }]}>
+                {feedback.status.replace('_', ' ').toUpperCase()}
+              </Text>
+            </View>
+          </View>
+
           {/* Message */}
-          <Text className="text-gray-700 mb-3">{feedback.description}</Text>
+          <Text style={styles.feedbackDescription}>{feedback.description}</Text>
 
           {/* Responses */}
           {feedback.responses && feedback.responses.length > 0 && (
-            <View className="bg-blue-50 p-3 rounded-lg mb-3">
-              <View className="flex-row items-center mb-2">
+            <View style={styles.responseContainer}>
+              <View style={styles.responseHeader}>
                 <User size={14} color="#3b82f6" />
-                <Text className="text-sm font-medium text-blue-900 ml-1">
-                  School Response
-                </Text>
+                <Text style={styles.responseHeaderText}>School Response</Text>
               </View>
               {feedback.responses.map((response, index) => (
-                <View key={response.id || index} className="mb-2">
-                  <Text className="text-blue-800 text-sm">{response.message}</Text>
-                  <Text className="text-blue-600 text-xs mt-1">
+                <View key={response.id || index} style={styles.responseItem}>
+                  <Text style={styles.responseMessage}>{response.message}</Text>
+                  <Text style={styles.responseDate}>
                     {formatDate(response.created_at)} • {response.author}
                   </Text>
                 </View>
@@ -357,23 +333,11 @@ export const ParentFeedbackScreen: React.FC = () => {
           )}
 
           {/* Footer */}
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center">
+          <View style={styles.feedbackFooter}>
+            <View style={styles.dateContainer}>
               <Calendar size={14} color="#6b7280" />
-              <Text className="text-sm text-gray-500 ml-1">
-                Submitted {formatDate(feedback.created_at)}
-              </Text>
-            </View>
-            
-            <View 
-              className="px-2 py-1 rounded-full"
-              style={{ backgroundColor: typeColor + '20' }}
-            >
-              <Text 
-                className="text-xs font-medium capitalize"
-                style={{ color: typeColor }}
-              >
-                {feedback.original_type || feedback.type}
+              <Text style={styles.dateText}>
+                {formatDate(feedback.created_at)}
               </Text>
             </View>
           </View>
@@ -384,33 +348,40 @@ export const ParentFeedbackScreen: React.FC = () => {
 
   if (childrenLoading || feedbacksLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50">
+      <SafeAreaView style={styles.container}>
         <StatusBar style="dark" />
-        <View className="flex-1 justify-center items-center">
-          <Text className="text-gray-500">Loading feedback...</Text>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading feedback...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
-      
+
       {/* Header */}
-      <View className="bg-white px-4 py-3 border-b border-gray-200">
-        <View className="flex-row items-center justify-between">
-          <Text className="text-xl font-bold text-gray-900">Feedback</Text>
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <Text style={styles.headerTitle}>Feedback</Text>
           <TouchableOpacity
             onPress={() => setShowFeedbackForm(!showFeedbackForm)}
-            className="bg-blue-600 px-3 py-1 rounded-lg"
+            style={styles.newFeedbackButton}
           >
-            <Text className="text-white font-medium">New Feedback</Text>
+            <Text style={styles.newFeedbackButtonText}>
+              {showFeedbackForm ? 'Cancel' : 'New Feedback'}
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* Status Filter */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterScroll}
+          contentContainerStyle={styles.filterContent}
+        >
           {[
             { key: 'all', label: 'All' },
             { key: 'new', label: 'New' },
@@ -421,13 +392,15 @@ export const ParentFeedbackScreen: React.FC = () => {
             <TouchableOpacity
               key={filter.key}
               onPress={() => setStatusFilter(filter.key)}
-              className={`mr-2 px-3 py-2 rounded-lg ${
-                statusFilter === filter.key ? 'bg-blue-600' : 'bg-gray-200'
-              }`}
+              style={[
+                styles.filterButton,
+                statusFilter === filter.key && styles.filterButtonActive
+              ]}
             >
-              <Text className={`text-sm font-medium ${
-                statusFilter === filter.key ? 'text-white' : 'text-gray-700'
-              }`}>
+              <Text style={[
+                styles.filterButtonText,
+                statusFilter === filter.key && styles.filterButtonTextActive
+              ]}>
                 {filter.label}
               </Text>
             </TouchableOpacity>
@@ -436,89 +409,61 @@ export const ParentFeedbackScreen: React.FC = () => {
       </View>
 
       <ScrollView
-        className="flex-1 px-4"
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
         {/* New Feedback Form */}
         {showFeedbackForm && (
-          <Card className="my-4">
-            <CardContent className="p-4">
-              <Text className="font-semibold text-gray-900 mb-3">Submit New Feedback</Text>
-              
-              {/* Child Selector */}
-              {children.length > 1 && (
-                <View className="mb-3">
-                  <Text className="text-sm font-medium text-gray-700 mb-2">Child:</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {children.map((child) => (
+          <Card style={styles.formCard}>
+            <CardContent style={styles.formContent}>
+              <Text style={styles.formTitle}>Submit New Feedback</Text>
+
+              {/* Type */}
+              <View style={styles.formSection}>
+                <Text style={styles.formLabel}>Type:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.typeButtonContainer}>
+                    {[
+                      { key: 'academic', label: 'Academic' },
+                      { key: 'behavioral', label: 'Behavioral' },
+                      { key: 'facilities', label: 'Facilities' },
+                      { key: 'teaching', label: 'Teaching' },
+                      { key: 'communication', label: 'Communication' },
+                      { key: 'suggestion', label: 'Suggestion' },
+                      { key: 'complaint', label: 'Complaint' },
+                      { key: 'other', label: 'Other' }
+                    ].map((type) => (
                       <TouchableOpacity
-                        key={child.id}
-                        onPress={() => setSelectedChild(child.id)}
-                        className={`mr-2 px-3 py-2 rounded-lg ${
-                          selectedChild === child.id ? 'bg-blue-600' : 'bg-gray-200'
-                        }`}
+                        key={type.key}
+                        onPress={() => setFeedbackType(type.key)}
+                        style={[
+                          styles.typeButton,
+                          feedbackType === type.key && styles.typeButtonActive
+                        ]}
                       >
-                        <Text className={`text-sm font-medium ${
-                          selectedChild === child.id ? 'text-white' : 'text-gray-700'
-                        }`}>
-                          {child.full_name}
+                        <Text style={[
+                          styles.typeButtonText,
+                          feedbackType === type.key && styles.typeButtonTextActive
+                        ]}>
+                          {type.label}
                         </Text>
                       </TouchableOpacity>
                     ))}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Type */}
-              <View className="mb-3">
-                <Text className="text-sm font-medium text-gray-700 mb-2">Type:</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {[
-                    { key: 'academic', label: 'Academic' },
-                    { key: 'behavioral', label: 'Behavioral' },
-                    { key: 'facilities', label: 'Facilities' },
-                    { key: 'teaching', label: 'Teaching' },
-                    { key: 'communication', label: 'Communication' },
-                    { key: 'extracurricular', label: 'Extracurricular' },
-                    { key: 'suggestion', label: 'Suggestion' },
-                    { key: 'complaint', label: 'Complaint' },
-                    { key: 'other', label: 'Other' }
-                  ].map((type) => (
-                    <TouchableOpacity
-                      key={type.key}
-                      onPress={() => setFeedbackType(type.key)}
-                      className={`mr-2 px-3 py-2 rounded-lg ${
-                        feedbackType === type.key ? 'bg-blue-600' : 'bg-gray-200'
-                      }`}
-                    >
-                      <Text className={`text-sm font-medium ${
-                        feedbackType === type.key ? 'text-white' : 'text-gray-700'
-                      }`}>
-                        {type.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                  </View>
                 </ScrollView>
               </View>
 
               {/* Anonymous Option */}
-              <View className="mb-3">
-                <TouchableOpacity
-                  onPress={() => setIsAnonymous(!isAnonymous)}
-                  className="flex-row items-center"
-                >
-                  <View className={`w-5 h-5 rounded mr-2 border-2 ${
-                    isAnonymous ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
-                  } flex items-center justify-center`}>
-                    {isAnonymous && (
-                      <CheckCircle size={12} color="white" />
-                    )}
-                  </View>
-                  <Text className="text-sm font-medium text-gray-700">
-                    Submit anonymously
-                  </Text>
-                </TouchableOpacity>
+              <View style={styles.anonymousContainer}>
+                <Text style={styles.formLabel}>Submit anonymously</Text>
+                <Switch
+                  value={isAnonymous}
+                  onValueChange={setIsAnonymous}
+                  trackColor={{ false: '#f3f4f6', true: schoolTheme.colors.parent.main }}
+                  thumbColor={isAnonymous ? '#fff' : '#fff'}
+                />
               </View>
 
               {/* Subject */}
@@ -526,7 +471,8 @@ export const ParentFeedbackScreen: React.FC = () => {
                 value={feedbackSubject}
                 onChangeText={setFeedbackSubject}
                 placeholder="Feedback subject..."
-                className="border border-gray-300 rounded-lg p-3 text-gray-900 mb-3"
+                placeholderTextColor="#9ca3af"
+                style={styles.input}
               />
 
               {/* Description */}
@@ -534,35 +480,27 @@ export const ParentFeedbackScreen: React.FC = () => {
                 value={feedbackDescription}
                 onChangeText={setFeedbackDescription}
                 placeholder="Please describe your feedback in detail..."
+                placeholderTextColor="#9ca3af"
                 multiline
                 numberOfLines={4}
-                className="border border-gray-300 rounded-lg p-3 text-gray-900 mb-3"
-                style={{ textAlignVertical: 'top' }}
+                style={[styles.input, styles.textArea]}
+                textAlignVertical="top"
               />
 
               {/* Actions */}
-              <View className="flex-row space-x-2">
+              <View style={styles.formActions}>
                 <TouchableOpacity
                   onPress={handleSubmitFeedback}
                   disabled={!feedbackSubject.trim() || !feedbackDescription.trim() || submitFeedbackMutation.isPending}
-                  className="flex-1 bg-blue-600 px-4 py-2 rounded-lg flex-row items-center justify-center"
+                  style={[
+                    styles.submitButton,
+                    (!feedbackSubject.trim() || !feedbackDescription.trim() || submitFeedbackMutation.isPending) && styles.submitButtonDisabled
+                  ]}
                 >
                   <Send size={16} color="white" />
-                  <Text className="text-white ml-2 font-medium">
+                  <Text style={styles.submitButtonText}>
                     {submitFeedbackMutation.isPending ? 'Submitting...' : 'Submit'}
                   </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    setShowFeedbackForm(false);
-                    setFeedbackSubject('');
-                    setFeedbackDescription('');
-                    setFeedbackType('feedback');
-                    setIsAnonymous(false);
-                  }}
-                  className="bg-gray-300 px-4 py-2 rounded-lg items-center justify-center"
-                >
-                  <Text className="text-gray-700 font-medium">Cancel</Text>
                 </TouchableOpacity>
               </View>
             </CardContent>
@@ -570,13 +508,13 @@ export const ParentFeedbackScreen: React.FC = () => {
         )}
 
         {/* Feedback List */}
-        <View className="py-4">
+        <View style={styles.feedbackList}>
           {filteredFeedbacks.length === 0 ? (
-            <View className="flex-1 justify-center items-center py-20">
+            <View style={styles.emptyState}>
               <MessageSquare size={48} color="#9ca3af" />
-              <Text className="text-gray-500 text-center mt-4">
-                {statusFilter === 'all' 
-                  ? 'No feedback submitted yet. Tap "New Feedback" to get started!'
+              <Text style={styles.emptyStateText}>
+                {statusFilter === 'all'
+                  ? 'No feedback submitted yet.\nTap "New Feedback" to get started!'
                   : `No ${statusFilter.replace('_', ' ')} feedback found`
                 }
               </Text>
@@ -588,4 +526,309 @@ export const ParentFeedbackScreen: React.FC = () => {
       </ScrollView>
     </SafeAreaView>
   );
-}; 
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f9fafb',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#6b7280',
+    fontSize: 16,
+  },
+  header: {
+    backgroundColor: 'white',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    ...schoolTheme.shadows.sm,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111827',
+    fontFamily: schoolTheme.typography.fonts.bold,
+  },
+  newFeedbackButton: {
+    backgroundColor: schoolTheme.colors.parent.main,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  newFeedbackButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 14,
+    fontFamily: schoolTheme.typography.fonts.semibold,
+  },
+  filterScroll: {
+    marginTop: 4,
+  },
+  filterContent: {
+    gap: 8,
+  },
+  filterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    marginRight: 8,
+  },
+  filterButtonActive: {
+    backgroundColor: schoolTheme.colors.parent.main,
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6b7280',
+    fontFamily: schoolTheme.typography.fonts.medium,
+  },
+  filterButtonTextActive: {
+    color: 'white',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+  },
+  formCard: {
+    marginBottom: 20,
+  },
+  formContent: {
+    padding: 20,
+  },
+  formTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 16,
+    fontFamily: schoolTheme.typography.fonts.semibold,
+  },
+  formSection: {
+    marginBottom: 16,
+  },
+  formLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 8,
+    fontFamily: schoolTheme.typography.fonts.medium,
+  },
+  typeButtonContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  typeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    marginRight: 8,
+  },
+  typeButtonActive: {
+    backgroundColor: schoolTheme.colors.parent.main,
+  },
+  typeButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6b7280',
+    fontFamily: schoolTheme.typography.fonts.medium,
+  },
+  typeButtonTextActive: {
+    color: 'white',
+  },
+  anonymousContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#111827',
+    backgroundColor: 'white',
+    marginBottom: 12,
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  textArea: {
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  formActions: {
+    marginTop: 8,
+  },
+  submitButton: {
+    backgroundColor: schoolTheme.colors.parent.main,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  submitButtonDisabled: {
+    opacity: 0.5,
+  },
+  submitButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: schoolTheme.typography.fonts.semibold,
+  },
+  feedbackList: {
+    gap: 16,
+  },
+  feedbackCard: {
+    marginBottom: 16,
+  },
+  cardContent: {
+    padding: 16,
+  },
+  feedbackHeader: {
+    marginBottom: 12,
+  },
+  feedbackHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  typeIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  feedbackHeaderText: {
+    flex: 1,
+  },
+  feedbackSubject: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+    fontFamily: schoolTheme.typography.fonts.semibold,
+  },
+  feedbackSubmitter: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: schoolTheme.typography.fonts.semibold,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: schoolTheme.typography.fonts.semibold,
+  },
+  feedbackDescription: {
+    fontSize: 15,
+    color: '#374151',
+    lineHeight: 22,
+    marginBottom: 12,
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  responseContainer: {
+    backgroundColor: '#eff6ff',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  responseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 6,
+  },
+  responseHeaderText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1e40af',
+    fontFamily: schoolTheme.typography.fonts.medium,
+  },
+  responseItem: {
+    marginBottom: 8,
+  },
+  responseMessage: {
+    fontSize: 14,
+    color: '#1e3a8a',
+    marginBottom: 4,
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  responseDate: {
+    fontSize: 12,
+    color: '#3b82f6',
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  feedbackFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+    paddingTop: 12,
+  },
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dateText: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyStateText: {
+    fontSize: 15,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 16,
+    lineHeight: 22,
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+});

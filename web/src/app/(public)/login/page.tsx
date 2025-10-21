@@ -255,9 +255,21 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-sm text-gray-500 mt-8">
-          Secure authentication with enterprise-grade security
-        </p>
+        <div className="mt-8 space-y-4">
+          {/* Made in India Badge */}
+          <div className="flex items-center justify-center">
+            <div className="inline-flex items-center gap-2 bg-white px-5 py-2.5 rounded-full shadow-md border border-gray-200">
+              <span className="text-2xl">🇮🇳</span>
+              <span className="text-sm font-semibold text-gray-700 tracking-wide">
+                Made in India
+              </span>
+            </div>
+          </div>
+
+          <p className="text-center text-sm text-gray-500">
+            Secure authentication with enterprise-grade security
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  ScrollView, 
-  TouchableOpacity, 
-  RefreshControl, 
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
   SafeAreaView,
   Dimensions,
-  StyleSheet
+  StyleSheet,
+  Animated
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
@@ -15,22 +16,37 @@ import { supabase } from '../../services/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
-import { 
-  Users, 
-  BookOpen, 
-  Calendar, 
-  Award, 
+import {
+  Users,
+  BookOpen,
+  Calendar,
+  Award,
   PenTool,
   MessageSquare,
-  Bell,
   Search,
   ChevronRight,
   Star,
   Video,
   Camera,
   UserX,
-  Send
+  Send,
+  Sparkles,
+  Heart,
+  HelpCircle,
+  GraduationCap,
+  CheckCircle,
+  FileEdit,
+  ClipboardCheck,
+  Megaphone,
+  ImageIcon
 } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+import { schoolTheme } from '../../theme/schoolTheme';
+import { StatCardSkeleton, ActionCardSkeleton, ListItemSkeleton } from '../../components/ui/SkeletonLoader';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { ImportantAlerts } from '../../components/dashboard/ImportantAlerts';
+import { RecentActivity } from '../../components/dashboard/RecentActivity';
+import { AccountMenu } from '../../components/modals/AccountMenu';
 
 const { width } = Dimensions.get('window');
 
@@ -38,9 +54,10 @@ interface TeacherStats {
   totalStudents: number;
   assignedSections: number;
   classTeacherSections: number;
-  completedExams: number;
+  upcomingExams: number;
   pendingReports: number;
   upcomingHomework: number;
+  lastUpdated: Date;
 }
 
 interface Section {
@@ -64,6 +81,8 @@ export const TeacherDashboardScreen: React.FC = () => {
   const { user, signOut } = useAuth();
   const navigation = useNavigation();
   const [refreshing, setRefreshing] = useState(false);
+  const [showStatHelp, setShowStatHelp] = useState<string | null>(null);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
 
   // Fetch teacher's assigned sections
   const { data: teacherSections = [], isLoading: sectionsLoading, refetch: refetchSections } = useQuery({
@@ -86,7 +105,7 @@ export const TeacherDashboardScreen: React.FC = () => {
         .eq('sections.school_id', user.school_id);
 
       if (error) throw error;
-      
+
       return (data || []).map((item: any) => ({
         id: item.sections.id,
         grade: item.sections.grade,
@@ -103,20 +122,20 @@ export const TeacherDashboardScreen: React.FC = () => {
     queryKey: ['teacher-total-students', user?.id, teacherSections],
     queryFn: async (): Promise<number> => {
       if (!user?.id || teacherSections.length === 0) return 0;
-      
+
       const sectionIds = teacherSections.map(s => s.id);
       const { data, error } = await supabase
         .from('students')
         .select('id', { count: 'exact' })
         .in('section_id', sectionIds);
-      
+
       if (error) throw error;
       return data?.length || 0;
     },
     enabled: !!user?.id && teacherSections.length > 0,
   });
 
-  // Get class teacher sections (sections where this teacher is the class teacher)
+  // Get class teacher sections
   const { data: classTeacherSections = [], isLoading: classTeacherLoading } = useQuery({
     queryKey: ['class-teacher-sections', user?.id],
     queryFn: async (): Promise<Section[]> => {
@@ -134,16 +153,11 @@ export const TeacherDashboardScreen: React.FC = () => {
     enabled: !!user?.id,
   });
 
-  // Get exam groups and papers
+  // Get exam papers
   const { data: examPapers = [], isLoading: examsLoading } = useQuery({
     queryKey: ['teacher-exam-papers', user?.id],
     queryFn: async (): Promise<ExamPaper[]> => {
-      if (!user?.id) {
-        console.log('❌ Dashboard: No user ID for exam papers query');
-        return [];
-      }
-
-      console.log('🔍 Dashboard: Fetching exam papers for teacher:', user.id);
+      if (!user?.id) return [];
 
       const { data, error } = await supabase
         .from('exam_papers')
@@ -162,22 +176,15 @@ export const TeacherDashboardScreen: React.FC = () => {
         .eq('teachers.user_id', user.id)
         .order('exam_date', { ascending: true });
 
-      console.log('📊 Dashboard: Exam papers query result:', { data, error });
-
-      if (error) {
-        console.error('❌ Dashboard: Exam papers query error:', error);
-        throw error;
-      }
-      
-      console.log('✅ Dashboard: Fetched exam papers:', data?.length || 0, 'papers');
+      if (error) throw error;
       return data || [];
     },
     enabled: !!user?.id,
   });
 
   // Calculate statistics
-  const completedExams = examPapers.filter(paper => 
-    paper.exam_date && new Date(paper.exam_date) <= new Date()
+  const upcomingExams = examPapers.filter(paper =>
+    paper.exam_date && new Date(paper.exam_date) > new Date()
   ).length;
 
   const pendingMarksPapers = examPapers.filter(paper => {
@@ -185,27 +192,19 @@ export const TeacherDashboardScreen: React.FC = () => {
     return isPastExam;
   }).slice(0, 5);
 
-  console.log('📊 Dashboard: Pending marks calculation:', {
-    totalExamPapers: examPapers.length,
-    completedExams,
-    pendingMarksPapers: pendingMarksPapers.length,
-    pendingPapers: pendingMarksPapers.map(p => ({ id: p.id, subject: p.subject, date: p.exam_date }))
-  });
-
   const stats: TeacherStats = {
     totalStudents,
     assignedSections: teacherSections.length,
     classTeacherSections: classTeacherSections.length,
-    completedExams,
-    pendingReports: 0, // Will be calculated from reports data
-    upcomingHomework: 0, // Will be calculated from homework data
+    upcomingExams,
+    pendingReports: 0,
+    upcomingHomework: 0,
+    lastUpdated: new Date(),
   };
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([
-      refetchSections(),
-    ]);
+    await Promise.all([refetchSections()]);
     setRefreshing(false);
   };
 
@@ -216,41 +215,45 @@ export const TeacherDashboardScreen: React.FC = () => {
     return 'Good Evening';
   };
 
+  const handleButtonPress = (action: () => void) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    action();
+  };
 
-  // Quick Actions with better organization
+  // Quick Actions
   const primaryActions = [
     {
       title: "Take Attendance",
-      subtitle: "Mark student attendance",
-      icon: Users,
-      color: "#3b82f6",
-      gradient: ["#3b82f6", "#1d4ed8"],
+      subtitle: "Mark who's here today",
+      icon: CheckCircle,
+      color: schoolTheme.quickActions.attendance.color,
+      lightBg: schoolTheme.quickActions.attendance.lightBg,
       onPress: () => (navigation as any).navigate('AttendanceTab', { screen: 'Attendance' })
     },
     {
       title: "Enter Marks",
-      subtitle: "Update exam marks",
-      icon: PenTool,
-      color: "#10b981",
-      gradient: ["#10b981", "#059669"],
+      subtitle: "Update test scores",
+      icon: FileEdit,
+      color: schoolTheme.quickActions.marks.color,
+      lightBg: schoolTheme.quickActions.marks.lightBg,
       badge: pendingMarksPapers.length > 0 ? pendingMarksPapers.length : null,
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Marks' })
     },
     {
       title: "My Timetable",
-      subtitle: "View class schedule",
+      subtitle: "Today's schedule",
       icon: Calendar,
-      color: "#f59e0b",
-      gradient: ["#f59e0b", "#d97706"],
+      color: schoolTheme.quickActions.timetable.color,
+      lightBg: schoolTheme.quickActions.timetable.lightBg,
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Timetable' })
     },
     {
       title: "Community",
-      subtitle: "Connect & share",
+      subtitle: "Connect with others",
       icon: MessageSquare,
-      color: "#8b5cf6",
-      gradient: ["#8b5cf6", "#7c3aed"],
-      onPress: () => (navigation as any).navigate('MessagesTab', { screen: 'Community' })
+      color: schoolTheme.quickActions.community.color,
+      lightBg: schoolTheme.quickActions.community.lightBg,
+      onPress: () => (navigation as any).navigate('DashboardTab', { screen: 'Community' })
     }
   ];
 
@@ -258,172 +261,298 @@ export const TeacherDashboardScreen: React.FC = () => {
     {
       title: "Homework",
       icon: BookOpen,
-      color: "#ef4444",
+      color: schoolTheme.quickActions.homework.color,
+      lightBg: schoolTheme.quickActions.homework.lightBg,
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Homework' })
     },
     {
       title: "Exams",
       icon: Award,
-      color: "#06b6d4",
+      color: schoolTheme.quickActions.exams.color,
+      lightBg: schoolTheme.quickActions.exams.lightBg,
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Exams' })
     },
     {
       title: "Online Classes",
       icon: Video,
-      color: "#84cc16",
+      color: schoolTheme.quickActions.onlineClasses.color,
+      lightBg: schoolTheme.quickActions.onlineClasses.lightBg,
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'OnlineClasses' })
     },
     {
       title: "Leave Requests",
-      icon: UserX,
-      color: "#f97316",
+      icon: ClipboardCheck,
+      color: schoolTheme.colors.warning.main,
+      lightBg: schoolTheme.colors.warning.bg,
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'LeaveRequests' })
     },
     {
       title: "Announcements",
-      icon: Send,
-      color: "#06b6d4",
-      onPress: () => (navigation as any).navigate('MessagesTab', { screen: 'Announcements' })
+      icon: Megaphone,
+      color: schoolTheme.quickActions.announcements.color,
+      lightBg: schoolTheme.quickActions.announcements.lightBg,
+      onPress: () => (navigation as any).navigate('DashboardTab', { screen: 'Announcements' })
     },
     {
-      title: "Gallery",
-      icon: Camera,
-      color: "#84cc16",
-      onPress: () => (navigation as any).navigate('GalleryTab')
+      title: "Calendar",
+      icon: Calendar,
+      color: schoolTheme.quickActions.calendar?.color || schoolTheme.colors.primary.main,
+      lightBg: schoolTheme.quickActions.calendar?.lightBg || schoolTheme.colors.primary.bg,
+      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Calendar' })
     }
+  ];
+
+  // Recent Activities - teacher specific
+  const recentActivities = [
+    {
+      id: '1',
+      type: 'attendance' as const,
+      title: 'Attendance Marked',
+      description: `Marked attendance for ${teacherSections.length > 0 ? teacherSections.length : 0} section${teacherSections.length !== 1 ? 's' : ''}`,
+      time: 'Today',
+    },
+    {
+      id: '2',
+      type: 'homework' as const,
+      title: 'Homework Assigned',
+      description: 'Mathematics assignment posted for Grade 10',
+      time: '2 hours ago',
+    },
+    {
+      id: '3',
+      type: 'exam' as const,
+      title: 'Marks Entry',
+      description: 'Entered marks for Science test',
+      time: 'Yesterday',
+    },
   ];
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
-      
-      {/* Enhanced Header with Gradient */}
+
+      {/* Colorful Header */}
       <LinearGradient
-        colors={['#1e40af', '#3b82f6']}
+        colors={schoolTheme.colors.teacher.gradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
         <View style={styles.headerTop}>
           <View style={styles.headerLeft}>
-            <View style={styles.avatarContainer}>
-              <Text style={styles.avatarText}>
-                {user?.first_name?.charAt(0) || 'T'}
-              </Text>
-            </View>
+            <TouchableOpacity onPress={() => handleButtonPress(() => setShowAccountMenu(true))}>
+              <View style={styles.avatarContainer}>
+                <GraduationCap size={32} color="white" />
+              </View>
+            </TouchableOpacity>
             <View style={styles.greetingContainer}>
-              <Text style={styles.greeting}>
-                {getGreeting()}
-              </Text>
+              <Text style={styles.greeting}>{getGreeting()}</Text>
               <Text style={styles.userName}>
                 {user?.first_name}!
               </Text>
             </View>
           </View>
-          <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.headerButton}>
-              <Bell size={20} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerButton}>
-              <Search size={20} color="white" />
-            </TouchableOpacity>
-          </View>
         </View>
 
-        {/* Stats Cards in Header */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.totalStudents}</Text>
-            <Text style={styles.statLabel}>Students</Text>
+        {/* Stats Cards with Help Icons - Larger sizing */}
+        {sectionsLoading || studentsLoading ? (
+          <View style={styles.statsContainer}>
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.assignedSections}</Text>
-            <Text style={styles.statLabel}>Sections</Text>
+        ) : (
+          <View style={styles.statsContainer}>
+            <TouchableOpacity
+              style={[styles.statCard, { backgroundColor: 'rgba(255,255,255,0.25)' }]}
+              onPress={() => handleButtonPress(() => setShowStatHelp(showStatHelp === 'students' ? null : 'students'))}
+            >
+              <View style={styles.statHeader}>
+                <Users size={26} color="rgba(255,255,255,0.95)" />
+                <HelpCircle size={14} color="rgba(255,255,255,0.7)" />
+              </View>
+              <Text style={styles.statNumber}>{stats.totalStudents}</Text>
+              <Text style={styles.statLabel}>Students</Text>
+              {showStatHelp === 'students' && (
+                <Text style={styles.statHelpText}>Total students in all your sections</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.statCard, { backgroundColor: 'rgba(255,255,255,0.25)' }]}
+              onPress={() => handleButtonPress(() => setShowStatHelp(showStatHelp === 'classes' ? null : 'classes'))}
+            >
+              <View style={styles.statHeader}>
+                <BookOpen size={26} color="rgba(255,255,255,0.95)" />
+                <HelpCircle size={14} color="rgba(255,255,255,0.7)" />
+              </View>
+              <Text style={styles.statNumber}>{stats.assignedSections}</Text>
+              <Text style={styles.statLabel}>Classes</Text>
+              {showStatHelp === 'classes' && (
+                <Text style={styles.statHelpText}>Classes you teach</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.statCard, { backgroundColor: 'rgba(255,255,255,0.25)' }]}
+              onPress={() => handleButtonPress(() => setShowStatHelp(showStatHelp === 'exams' ? null : 'exams'))}
+            >
+              <View style={styles.statHeader}>
+                <PenTool size={26} color="rgba(255,255,255,0.95)" />
+                <HelpCircle size={14} color="rgba(255,255,255,0.7)" />
+              </View>
+              <Text style={styles.statNumber}>{stats.upcomingExams}</Text>
+              <Text style={styles.statLabel}>Upcoming</Text>
+              {showStatHelp === 'exams' && (
+                <Text style={styles.statHelpText}>Exams scheduled ahead</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.statCard, { backgroundColor: 'rgba(255,255,255,0.25)' }]}
+              onPress={() => handleButtonPress(() => setShowStatHelp(showStatHelp === 'class_teacher' ? null : 'class_teacher'))}
+            >
+              <View style={styles.statHeader}>
+                <Star size={26} color="rgba(255,255,255,0.95)" />
+                <HelpCircle size={14} color="rgba(255,255,255,0.7)" />
+              </View>
+              <Text style={styles.statNumber}>{stats.classTeacherSections}</Text>
+              <Text style={styles.statLabel}>Class Teacher</Text>
+              {showStatHelp === 'class_teacher' && (
+                <Text style={styles.statHelpText}>Classes where you're the class teacher</Text>
+              )}
+            </TouchableOpacity>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.completedExams}</Text>
-            <Text style={styles.statLabel}>Exams</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.classTeacherSections}</Text>
-            <Text style={styles.statLabel}>Class Teacher</Text>
-          </View>
-        </View>
+        )}
+
+        {/* Last Updated */}
+        <Text style={styles.lastUpdated}>
+          Updated {stats.lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+        </Text>
       </LinearGradient>
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Primary Actions Grid */}
+        {/* Important Alerts Section */}
+        <ImportantAlerts
+          alerts={[
+            ...(pendingMarksPapers.length > 0
+              ? [
+                  {
+                    id: 'pending-marks',
+                    type: 'warning' as const,
+                    title: 'Pending Marks Entry',
+                    message: `You have ${pendingMarksPapers.length} exam${pendingMarksPapers.length > 1 ? 's' : ''} waiting for marks entry.`,
+                    action: () => handleButtonPress(() => (navigation as any).navigate('AcademicsTab', { screen: 'Marks' })),
+                    actionLabel: 'Enter Marks',
+                  },
+                ]
+              : []),
+            ...(stats.upcomingExams > 3
+              ? [
+                  {
+                    id: 'upcoming-exams',
+                    type: 'info' as const,
+                    title: 'Upcoming Exams',
+                    message: `You have ${stats.upcomingExams} exams scheduled in the coming weeks.`,
+                    action: () => handleButtonPress(() => (navigation as any).navigate('AcademicsTab', { screen: 'Exams' })),
+                    actionLabel: 'View Schedule',
+                  },
+                ]
+              : []),
+          ].slice(0, 3)}
+        />
+
+        {/* Quick Actions */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Quick Actions</Text>
-            <TouchableOpacity>
-              <Text style={styles.sectionLink}>See All</Text>
-            </TouchableOpacity>
           </View>
-          <View style={styles.primaryGrid}>
-            {primaryActions.map((action, index) => (
-              <TouchableOpacity 
-                key={index} 
-                style={styles.primaryCard}
-                onPress={action.onPress}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={action.gradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.primaryCardGradient}
-                >
-                  <View style={styles.primaryCardContent}>
-                    <View style={styles.primaryIconContainer}>
-                      <action.icon size={24} color="white" />
-                    </View>
-                    <Text style={styles.primaryCardTitle}>{action.title}</Text>
-                    <Text style={styles.primaryCardSubtitle}>{action.subtitle}</Text>
+          {sectionsLoading ? (
+            <View style={styles.primaryGrid}>
+              <ActionCardSkeleton />
+              <ActionCardSkeleton />
+              <ActionCardSkeleton />
+              <ActionCardSkeleton />
+            </View>
+          ) : (
+            <View style={styles.primaryGrid}>
+              {primaryActions.map((action, index) => {
+                const IconComponent = action.icon;
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={[styles.primaryCard, { backgroundColor: action.color }]}
+                    onPress={() => handleButtonPress(action.onPress)}
+                    activeOpacity={0.7}
+                  >
                     {action.badge && (
                       <View style={styles.badge}>
                         <Text style={styles.badgeText}>{action.badge}</Text>
                       </View>
                     )}
-                  </View>
-                </LinearGradient>
-              </TouchableOpacity>
-            ))}
-          </View>
+                    <View style={styles.primaryCardContent}>
+                      <View style={styles.primaryIconContainer}>
+                        <IconComponent size={28} color="white" />
+                      </View>
+                      <Text style={styles.primaryCardTitle}>{action.title}</Text>
+                      <Text style={styles.primaryCardSubtitle}>{action.subtitle}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
 
-        {/* Secondary Actions */}
+        {/* Recent Activity Section */}
+        <RecentActivity activities={recentActivities} />
+
+        {/* More Tools - Reduced to 6 items with See All button */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>More Features</Text>
+          <Text style={styles.sectionTitle}>More Tools</Text>
           <View style={styles.secondaryGrid}>
-            {secondaryActions.map((action, index) => (
-              <TouchableOpacity 
-                key={index} 
-                style={styles.secondaryCard}
-                onPress={action.onPress}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.secondaryIconContainer, { backgroundColor: action.color + '15' }]}>
-                  <action.icon size={20} color={action.color} />
-                </View>
-                <Text style={styles.secondaryCardTitle}>{action.title}</Text>
-              </TouchableOpacity>
-            ))}
+            {secondaryActions.slice(0, 6).map((action, index) => {
+              const IconComponent = action.icon;
+              return (
+                <TouchableOpacity
+                  key={index}
+                  style={[styles.secondaryCard, { backgroundColor: action.lightBg }]}
+                  onPress={() => handleButtonPress(action.onPress)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.secondaryIconContainer, { backgroundColor: action.color + '20' }]}>
+                    <IconComponent size={20} color={action.color} />
+                  </View>
+                  <Text style={[styles.secondaryCardTitle, { color: action.color }]}>
+                    {action.title}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
+          <TouchableOpacity style={styles.seeAllButton} activeOpacity={0.7}>
+            <Text style={styles.seeAllText}>See All</Text>
+            <ChevronRight size={16} color={schoolTheme.colors.teacher.main} />
+          </TouchableOpacity>
         </View>
 
-        {/* Pending Actions */}
-        {pendingMarksPapers.length > 0 && (
+        {/* Pending Tasks */}
+        {examsLoading ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Pending Tasks</Text>
+            <ListItemSkeleton />
+            <ListItemSkeleton />
+          </View>
+        ) : pendingMarksPapers.length > 0 ? (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Pending Actions</Text>
+              <Text style={styles.sectionTitle}>Pending Tasks</Text>
               <View style={styles.urgentBadge}>
-                <Text style={styles.urgentBadgeText}>Urgent</Text>
+                <Sparkles size={12} color="#92400e" />
+                <Text style={styles.urgentBadgeText}>Action Needed</Text>
               </View>
             </View>
             <View style={styles.pendingContainer}>
@@ -431,10 +560,10 @@ export const TeacherDashboardScreen: React.FC = () => {
                 <TouchableOpacity
                   key={paper.id}
                   style={styles.pendingCard}
-                  onPress={() => {
-                    (navigation as any).navigate('AcademicsTab', { 
+                  onPress={() => handleButtonPress(() => {
+                    (navigation as any).navigate('AcademicsTab', {
                       screen: 'Marks',
-                      params: { 
+                      params: {
                         examId: paper.id,
                         examDetails: {
                           id: paper.id,
@@ -445,10 +574,10 @@ export const TeacherDashboardScreen: React.FC = () => {
                         }
                       }
                     });
-                  }}
+                  })}
                 >
                   <View style={styles.pendingIconContainer}>
-                    <PenTool size={16} color="#f59e0b" />
+                    <FileEdit size={24} color={schoolTheme.colors.warning.main} />
                   </View>
                   <View style={styles.pendingContent}>
                     <Text style={styles.pendingTitle}>Enter Marks - {paper.subject}</Text>
@@ -456,54 +585,96 @@ export const TeacherDashboardScreen: React.FC = () => {
                       Max: {paper.max_marks} marks • {paper.exam_date ? new Date(paper.exam_date).toLocaleDateString() : 'TBD'}
                     </Text>
                   </View>
-                  <ChevronRight size={16} color="#6b7280" />
+                  <ChevronRight size={20} color={schoolTheme.colors.warning.main} />
                 </TouchableOpacity>
               ))}
             </View>
           </View>
-        )}
+        ) : null}
 
-        {/* Class Sections */}
-        {teacherSections.length > 0 && (
+        {/* My Classes */}
+        {sectionsLoading ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>My Sections</Text>
+            <Text style={styles.sectionTitle}>My Classes</Text>
             <View style={styles.sectionsGrid}>
-              {teacherSections.slice(0, 4).map((section) => (
-                <View key={section.id} style={styles.sectionCard}>
-                  <View style={styles.sectionCardHeader}>
-                    <Text style={styles.sectionGrade}>Grade {section.grade}{section.section}</Text>
-                    {section.class_teacher === user?.id && (
-                      <View style={styles.classTeacherBadge}>
-                        <Star size={10} color="#fbbf24" />
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.sectionRole}>
-                    {section.class_teacher === user?.id ? 'Class Teacher' : 'Subject Teacher'}
-                  </Text>
-                  <View style={styles.sectionActions}>
-                    <TouchableOpacity 
-                      style={[styles.sectionActionBtn, { backgroundColor: '#3b82f6' }]}
-                      onPress={() => (navigation as any).navigate('AttendanceTab')}
-                    >
-                      <Users size={12} color="white" />
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.sectionActionBtn, { backgroundColor: '#10b981' }]}
-                      onPress={() => (navigation as any).navigate('AcademicsTab', { screen: 'Timetable' })}
-                    >
-                      <Calendar size={12} color="white" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
+              <ActionCardSkeleton />
+              <ActionCardSkeleton />
             </View>
+          </View>
+        ) : teacherSections.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>My Classes</Text>
+            <View style={styles.sectionsGrid}>
+              {teacherSections.slice(0, 4).map((section, idx) => {
+                const cardColors = [
+                  { bg: '#DBEAFE', text: '#1E40AF' },
+                  { bg: '#D1FAE5', text: '#065F46' },
+                  { bg: '#FEF3C7', text: '#92400E' },
+                  { bg: '#FCE7F3', text: '#831843' },
+                ];
+                const colorSet = cardColors[idx % 4];
+                const isClassTeacher = section.class_teacher === user?.id;
+
+                return (
+                  <View key={section.id} style={[styles.sectionCard, { backgroundColor: colorSet.bg }]}>
+                    <View style={styles.sectionCardHeader}>
+                      <Text style={[styles.sectionGrade, { color: colorSet.text }]}>
+                        Grade {section.grade}{section.section}
+                      </Text>
+                      {isClassTeacher && (
+                        <View style={styles.classTeacherBadge}>
+                          <Star size={14} color="#fbbf24" fill="#fbbf24" />
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.sectionRole, { color: colorSet.text }]}>
+                      {isClassTeacher ? 'Class Teacher' : 'Subject Teacher'}
+                    </Text>
+                    <View style={styles.sectionActions}>
+                      <TouchableOpacity
+                        style={[styles.sectionActionBtn, { backgroundColor: schoolTheme.colors.attendance }]}
+                        onPress={() => handleButtonPress(() => (navigation as any).navigate('AttendanceTab'))}
+                      >
+                        <Users size={16} color="white" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.sectionActionBtn, { backgroundColor: schoolTheme.colors.timetable }]}
+                        onPress={() => handleButtonPress(() => (navigation as any).navigate('AcademicsTab', { screen: 'Timetable' }))}
+                      >
+                        <Calendar size={16} color="white" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        ) : (
+          <View style={styles.section}>
+            <EmptyState
+              icon="book"
+              title="No Classes Assigned"
+              message="You don't have any classes assigned yet. Please contact your administrator."
+            />
           </View>
         )}
 
-        {/* Bottom Spacing */}
-        <View style={{ height: 20 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Account Menu Modal */}
+      <AccountMenu
+        visible={showAccountMenu}
+        onClose={() => setShowAccountMenu(false)}
+        onNavigateToTheme={() => {
+          setShowAccountMenu(false);
+          (navigation as any).navigate('DashboardTab', { screen: 'ThemeSettings' });
+        }}
+        onNavigateToNotifications={() => {
+          setShowAccountMenu(false);
+          (navigation as any).navigate('SettingsTab', { screen: 'Settings' });
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -511,18 +682,20 @@ export const TeacherDashboardScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: schoolTheme.colors.background.main,
   },
   header: {
     paddingTop: 10,
-    paddingBottom: 20,
+    paddingBottom: 24,
     paddingHorizontal: 20,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -530,64 +703,99 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   avatarContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 15,
-  },
-  avatarText: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: 'bold',
+    marginRight: 16,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   greetingContainer: {
     flex: 1,
   },
   greeting: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 16,
+    fontFamily: schoolTheme.typography.fonts.semibold,
   },
   userName: {
     color: 'white',
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 26,
+    fontFamily: schoolTheme.typography.fonts.bold,
+    marginTop: 2,
   },
   headerRight: {
     flexDirection: 'row',
     gap: 12,
   },
   headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#EF4444',
+    borderWidth: 2,
+    borderColor: 'white',
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: 10,
   },
   statCard: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16,
+    padding: 14,
     alignItems: 'center',
     flex: 1,
-    marginHorizontal: 4,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    position: 'relative',
+  },
+  statHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
   },
   statNumber: {
     color: 'white',
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontFamily: schoolTheme.typography.fonts.bold,
   },
   statLabel: {
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.95)',
     fontSize: 12,
-    marginTop: 2,
+    marginTop: 3,
+    fontFamily: schoolTheme.typography.fonts.semibold,
+  },
+  statHelpText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 13,
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  lastUpdated: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 12,
   },
   scrollView: {
     flex: 1,
@@ -596,7 +804,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   section: {
-    marginBottom: 30,
+    marginBottom: 28,
     paddingHorizontal: 20,
   },
   sectionHeader: {
@@ -606,65 +814,67 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  sectionLink: {
-    color: '#3b82f6',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 22,
+    fontFamily: schoolTheme.typography.fonts.bold,
+    color: schoolTheme.colors.text.primary,
   },
   primaryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 16,
   },
   primaryCard: {
-    width: (width - 52) / 2,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  primaryCardGradient: {
+    width: (width - 56) / 2,
+    height: 180,
+    borderRadius: 20,
     padding: 20,
-    height: 140,
     justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
   primaryCardContent: {
     flex: 1,
+    justifyContent: 'center',
   },
   primaryIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   primaryCardTitle: {
     color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontFamily: schoolTheme.typography.fonts.bold,
     marginBottom: 4,
   },
   primaryCardSubtitle: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
+    color: 'rgba(255,255,255,0.95)',
+    fontSize: 13,
+    fontFamily: schoolTheme.typography.fonts.medium,
   },
   badge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: '#ef4444',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    top: 12,
+    right: 12,
+    backgroundColor: '#EF4444',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 2,
+    borderColor: 'white',
+    ...schoolTheme.shadows.sm,
   },
   badgeText: {
     color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
+    fontSize: 12,
+    fontFamily: schoolTheme.typography.fonts.bold,
   },
   secondaryGrid: {
     flexDirection: 'row',
@@ -673,15 +883,12 @@ const styles = StyleSheet.create({
   },
   secondaryCard: {
     width: (width - 64) / 3,
-    backgroundColor: 'white',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 2,
+    borderColor: 'rgba(0,0,0,0.05)',
+    ...schoolTheme.shadows.sm,
   },
   secondaryIconContainer: {
     width: 40,
@@ -692,44 +899,62 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   secondaryCardTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#374151',
+    fontSize: 13,
+    fontFamily: schoolTheme.typography.fonts.bold,
     textAlign: 'center',
   },
-  urgentBadge: {
-    backgroundColor: '#fef3c7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 12,
+    backgroundColor: schoolTheme.colors.teacher.main + '10',
+    borderWidth: 1,
+    borderColor: schoolTheme.colors.teacher.main + '30',
+  },
+  seeAllText: {
+    fontSize: 15,
+    fontFamily: schoolTheme.typography.fonts.semibold,
+    color: schoolTheme.colors.teacher.main,
+    marginRight: 4,
+  },
+  urgentBadge: {
+    backgroundColor: schoolTheme.colors.warning.bg,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 2,
+    borderColor: schoolTheme.colors.warning.main,
   },
   urgentBadgeText: {
     color: '#92400e',
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: schoolTheme.typography.fonts.bold,
   },
   pendingContainer: {
     gap: 12,
   },
   pendingCard: {
     backgroundColor: 'white',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    borderLeftWidth: 4,
-    borderLeftColor: '#f59e0b',
+    borderLeftWidth: 6,
+    borderLeftColor: schoolTheme.colors.warning.main,
+    ...schoolTheme.shadows.md,
   },
   pendingIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#fef3c7',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: schoolTheme.colors.warning.bg,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -738,14 +963,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pendingTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 2,
+    fontSize: 16,
+    fontFamily: schoolTheme.typography.fonts.bold,
+    color: schoolTheme.colors.text.primary,
+    marginBottom: 4,
   },
   pendingSubtitle: {
-    fontSize: 12,
-    color: '#6b7280',
+    fontSize: 13,
+    color: schoolTheme.colors.text.secondary,
   },
   sectionsGrid: {
     flexDirection: 'row',
@@ -754,14 +979,11 @@ const styles = StyleSheet.create({
   },
   sectionCard: {
     width: (width - 52) / 2,
-    backgroundColor: 'white',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 2,
+    borderColor: 'rgba(0,0,0,0.1)',
+    ...schoolTheme.shadows.sm,
   },
   sectionCardHeader: {
     flexDirection: 'row',
@@ -770,21 +992,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sectionGrade: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1f2937',
+    fontSize: 18,
+    fontFamily: schoolTheme.typography.fonts.bold,
   },
   classTeacherBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#fef3c7',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sectionRole: {
-    fontSize: 12,
-    color: '#6b7280',
+    fontSize: 13,
+    fontFamily: schoolTheme.typography.fonts.semibold,
     marginBottom: 12,
   },
   sectionActions: {
@@ -792,10 +1013,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionActionBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    ...schoolTheme.shadows.sm,
   },
-}); 
+});

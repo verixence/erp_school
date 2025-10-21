@@ -48,8 +48,17 @@ export {
   useCreateNotification,
   useDeleteNotification,
   subscribeToNotifications,
+  // Push notification functions (Web → Mobile sync)
+  createBulkNotifications,
+  sendPushToUsers,
+  getUsersByAudience,
+  getPushQueueStats,
+  sendAnnouncementNotification,
+  sendHomeworkNotification,
+  sendExamNotification,
   type Notification,
-  type CreateNotificationData
+  type CreateNotificationData,
+  type BulkNotificationResult
 } from './notifications';
 
 // Exams API exports

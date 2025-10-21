@@ -6,10 +6,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { useNavigation } from '@react-navigation/native';
-import { 
-  Users, 
-  BookOpen, 
-  Calendar, 
+import {
+  Users,
+  BookOpen,
+  Calendar,
   Award,
   MessageSquare,
   FileText,
@@ -36,8 +36,18 @@ import {
   Home,
   PenTool,
   UserX,
-  Camera
+  Camera,
+  DollarSign,
+  HelpCircle
 } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+import { schoolTheme } from '../../theme/schoolTheme';
+import { StatCardSkeleton, ActionCardSkeleton, ListItemSkeleton } from '../../components/ui/SkeletonLoader';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { ChildSelectorModal } from '../../components/modals/ChildSelectorModal';
+import { AccountMenu } from '../../components/modals/AccountMenu';
+import { ImportantAlerts } from '../../components/dashboard/ImportantAlerts';
+import { RecentActivity } from '../../components/dashboard/RecentActivity';
 
 const { width } = Dimensions.get('window');
 
@@ -61,6 +71,7 @@ interface ParentStats {
   lastActivity: string;
   totalExams: number;
   averageGrade: string;
+  lastUpdated: Date;
 }
 
 // Simple Progress Circle Component
@@ -112,6 +123,9 @@ export const ParentDashboardScreen: React.FC = () => {
   const navigation = useNavigation();
   const [selectedChild, setSelectedChild] = useState<string>('');
   const [refreshing, setRefreshing] = useState(false);
+  const [showChildSelector, setShowChildSelector] = useState(false);
+  const [showStatHelp, setShowStatHelp] = useState<string | null>(null);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
 
   // Fetch children using the correct student_parents table relationship
   const { data: children = [], isLoading: childrenLoading, refetch: refetchChildren } = useQuery({
@@ -234,7 +248,8 @@ export const ParentDashboardScreen: React.FC = () => {
         attendancePercentage,
         lastActivity: 'Today',
         totalExams,
-        averageGrade
+        averageGrade,
+        lastUpdated: new Date()
       };
     },
     enabled: !!user?.id && children.length > 0,
@@ -256,109 +271,148 @@ export const ParentDashboardScreen: React.FC = () => {
     return 'Good Evening';
   };
 
+  const handleButtonPress = (action: () => void) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    action();
+  };
+
+  const handleChildSelect = (childId: string) => {
+    setSelectedChild(childId);
+  };
+
   const statsData = stats || {
     childrenCount: children.length,
     upcomingHomework: 0,
     attendancePercentage: 0,
     lastActivity: 'Today',
     totalExams: 0,
-    averageGrade: 'N/A'
+    averageGrade: 'N/A',
+    lastUpdated: new Date()
   };
 
-  // Quick Actions with better organization
+  // Quick Actions - reduced emoji usage
   const primaryActions = [
     {
       title: "View Attendance",
-      subtitle: "Daily attendance records",
+      subtitle: "Track daily presence",
       icon: Users,
-      color: "#3b82f6",
-      gradient: ["#3b82f6", "#1d4ed8"],
+      emoji: "✅",
+      color: schoolTheme.quickActions.attendance.color,
+      gradient: schoolTheme.quickActions.attendance.gradient,
+      lightBg: schoolTheme.quickActions.attendance.lightBg,
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Attendance' })
     },
     {
       title: "Check Homework",
-      subtitle: "Assignments & submissions",
+      subtitle: "Assignments & tasks",
       icon: BookOpen,
-      color: "#10b981",
-      gradient: ["#10b981", "#059669"],
+      emoji: "📚",
+      color: schoolTheme.quickActions.homework.color,
+      gradient: schoolTheme.quickActions.homework.gradient,
+      lightBg: schoolTheme.quickActions.homework.lightBg,
       badge: statsData.upcomingHomework > 0 ? statsData.upcomingHomework : null,
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Homework' })
     },
     {
-      title: "Class Timetable",
-      subtitle: "View class schedule",
-      icon: Calendar,
-      color: "#f59e0b",
-      gradient: ["#f59e0b", "#d97706"],
-      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Timetable' })
+      title: "Exam Results",
+      subtitle: "View test scores",
+      icon: Award,
+      emoji: "🏆",
+      color: schoolTheme.quickActions.exams.color,
+      gradient: schoolTheme.quickActions.exams.gradient,
+      lightBg: schoolTheme.quickActions.exams.lightBg,
+      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Exams' })
     },
     {
       title: "Community",
-      subtitle: "Connect & share",
+      subtitle: "Connect with others",
       icon: MessageSquare,
-      color: "#8b5cf6",
-      gradient: ["#8b5cf6", "#7c3aed"],
-      onPress: () => (navigation as any).navigate('MessagesTab', { screen: 'Community' })
+      emoji: "💬",
+      color: schoolTheme.quickActions.community.color,
+      gradient: schoolTheme.quickActions.community.gradient,
+      lightBg: schoolTheme.quickActions.community.lightBg,
+      onPress: () => (navigation as any).navigate('DashboardTab', { screen: 'Community' })
     }
   ];
 
   const secondaryActions = [
     {
-      title: "Exam Results",
-      icon: Award,
-      color: "#ef4444",
-      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Exams' })
+      title: "Timetable",
+      icon: Calendar,
+      emoji: "📅",
+      color: schoolTheme.quickActions.timetable.color,
+      lightBg: schoolTheme.quickActions.timetable.lightBg,
+      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Timetable' })
+    },
+    {
+      title: "Analytics",
+      icon: BarChart3,
+      emoji: "📊",
+      color: schoolTheme.colors.primary.main,
+      lightBg: schoolTheme.colors.primary.bg,
+      onPress: () => (navigation as any).navigate('DashboardTab', { screen: 'Analytics' })
     },
     {
       title: "Reports",
       icon: FileText,
-      color: "#06b6d4",
+      emoji: "📊",
+      color: schoolTheme.quickActions.reports.color,
+      lightBg: schoolTheme.quickActions.reports.lightBg,
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Reports' })
     },
     {
       title: "Online Classes",
       icon: Video,
-      color: "#84cc16",
+      emoji: "🎥",
+      color: schoolTheme.quickActions.onlineClasses.color,
+      lightBg: schoolTheme.quickActions.onlineClasses.lightBg,
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'OnlineClasses' })
     },
     {
       title: "Announcements",
       icon: Send,
-      color: "#f97316",
-      onPress: () => (navigation as any).navigate('MessagesTab', { screen: 'Announcements' })
+      emoji: "📢",
+      color: schoolTheme.quickActions.announcements.color,
+      lightBg: schoolTheme.quickActions.announcements.lightBg,
+      onPress: () => (navigation as any).navigate('DashboardTab', { screen: 'Announcements' })
     },
     {
-      title: "Gallery",
-      icon: Camera,
-      color: "#84cc16",
-      onPress: () => (navigation as any).navigate('MediaTab', { screen: 'Gallery' })
-    },
-    {
-      title: "Calendar",
-      icon: Calendar,
-      color: "#06b6d4",
-      onPress: () => (navigation as any).navigate('MediaTab', { screen: 'Calendar' })
+      title: "Feedback",
+      icon: MessageSquare,
+      emoji: "💬",
+      color: schoolTheme.colors.info.main,
+      lightBg: schoolTheme.colors.info.bg,
+      onPress: () => (navigation as any).navigate('DashboardTab', { screen: 'Feedback' })
     }
   ];
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
-      
-      {/* Enhanced Header with Gradient */}
+
+      {/* Child Selector Modal */}
+      <ChildSelectorModal
+        visible={showChildSelector}
+        children={children}
+        selectedChildId={selectedChild}
+        onSelect={handleChildSelect}
+        onClose={() => setShowChildSelector(false)}
+      />
+
+      {/* Colorful Header */}
       <LinearGradient
-        colors={['#8b5cf6', '#a855f7']}
+        colors={schoolTheme.colors.parent.gradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
         <View style={styles.headerTop}>
           <View style={styles.headerLeft}>
-            <View style={styles.avatarContainer}>
-              <Text style={styles.avatarText}>
-                {user?.first_name?.charAt(0) || 'P'}
-              </Text>
-            </View>
+            <TouchableOpacity onPress={() => handleButtonPress(() => setShowAccountMenu(true))}>
+              <View style={styles.avatarContainer}>
+                <Users size={32} color="white" />
+              </View>
+            </TouchableOpacity>
             <View style={styles.greetingContainer}>
               <Text style={styles.greeting}>
                 {getGreeting()}
@@ -368,25 +422,17 @@ export const ParentDashboardScreen: React.FC = () => {
               </Text>
             </View>
           </View>
-          <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.headerButton}>
-              <Bell size={20} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerButton}>
-              <Search size={20} color="white" />
-            </TouchableOpacity>
-          </View>
         </View>
 
         {/* Child Selector */}
         {children.length > 1 && (
           <View style={styles.childSelector}>
             <Text style={styles.childSelectorLabel}>
-              Select Child
+              Viewing
             </Text>
             <TouchableOpacity
               style={styles.childSelectorButton}
-              onPress={() => console.log('Open child selector')}
+              onPress={() => handleButtonPress(() => setShowChildSelector(true))}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <GraduationCap size={20} color="white" />
@@ -399,91 +445,189 @@ export const ParentDashboardScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Stats Cards in Header */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{statsData.childrenCount}</Text>
-            <Text style={styles.statLabel}>Children</Text>
+        {/* Stats Cards - 3 cards at 33% width each */}
+        {childrenLoading || statsLoading ? (
+          <View style={styles.statsContainer}>
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{statsData.attendancePercentage}%</Text>
-            <Text style={styles.statLabel}>Attendance</Text>
+        ) : (
+          <View style={styles.statsContainer}>
+            <TouchableOpacity
+              style={[styles.statCard, { backgroundColor: 'rgba(255,255,255,0.25)' }]}
+              onPress={() => handleButtonPress(() => setShowStatHelp(showStatHelp === 'children' ? null : 'children'))}
+            >
+              <View style={styles.statHeader}>
+                <GraduationCap size={26} color="rgba(255,255,255,0.95)" />
+                <HelpCircle size={14} color="rgba(255,255,255,0.7)" />
+              </View>
+              <Text style={styles.statNumber}>{statsData.childrenCount}</Text>
+              <Text style={styles.statLabel}>Children</Text>
+              {showStatHelp === 'children' && (
+                <Text style={styles.statHelpText}>Total children linked to your account</Text>
+              )}
+            </TouchableOpacity>
+            <View style={[styles.statCard, { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
+              <View style={styles.statWithProgress}>
+                <ProgressCircle
+                  percentage={statsData.attendancePercentage}
+                  size={54}
+                  color="white"
+                />
+              </View>
+              <Text style={styles.statLabel}>Attendance</Text>
+              <Text style={styles.statHelpText}>This month</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.statCard, { backgroundColor: 'rgba(255,255,255,0.25)' }]}
+              onPress={() => handleButtonPress(() => setShowStatHelp(showStatHelp === 'homework' ? null : 'homework'))}
+            >
+              <View style={styles.statHeader}>
+                <BookOpen size={26} color="rgba(255,255,255,0.95)" />
+                <HelpCircle size={14} color="rgba(255,255,255,0.7)" />
+              </View>
+              <Text style={styles.statNumber}>{statsData.upcomingHomework}</Text>
+              <Text style={styles.statLabel}>Homework</Text>
+              {showStatHelp === 'homework' && (
+                <Text style={styles.statHelpText}>Upcoming assignments</Text>
+              )}
+            </TouchableOpacity>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{statsData.upcomingHomework}</Text>
-            <Text style={styles.statLabel}>Homework</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{statsData.averageGrade}</Text>
-            <Text style={styles.statLabel}>Avg Grade</Text>
-          </View>
-        </View>
+        )}
+
+        {/* Last Updated */}
+        <Text style={styles.lastUpdated}>
+          Updated {statsData.lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+        </Text>
       </LinearGradient>
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Primary Actions Grid */}
+        {/* Important Alerts Section */}
+        <ImportantAlerts
+          alerts={[
+            ...(statsData.upcomingHomework > 0
+              ? [
+                  {
+                    id: 'homework-pending',
+                    type: 'warning' as const,
+                    title: 'Pending Homework',
+                    message: `You have ${statsData.upcomingHomework} upcoming assignment${statsData.upcomingHomework > 1 ? 's' : ''} to review.`,
+                    action: () => handleButtonPress(() => (navigation as any).navigate('AcademicsTab', { screen: 'Homework' })),
+                    actionLabel: 'View Homework',
+                  },
+                ]
+              : []),
+            ...(statsData.attendancePercentage < 75
+              ? [
+                  {
+                    id: 'low-attendance',
+                    type: 'danger' as const,
+                    title: 'Low Attendance',
+                    message: `Attendance is at ${statsData.attendancePercentage}%. Please ensure regular attendance.`,
+                    action: () => handleButtonPress(() => (navigation as any).navigate('AcademicsTab', { screen: 'Attendance' })),
+                    actionLabel: 'View Attendance',
+                  },
+                ]
+              : []),
+          ].slice(0, 3)}
+        />
+
+        {/* Quick Actions */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Quick Actions</Text>
-            <TouchableOpacity>
-              <Text style={styles.sectionLink}>See All</Text>
-            </TouchableOpacity>
           </View>
-          <View style={styles.primaryGrid}>
-            {primaryActions.map((action, index) => (
-              <TouchableOpacity 
-                key={index} 
-                style={styles.primaryCard}
-                onPress={action.onPress}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={action.gradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.primaryCardGradient}
+          {childrenLoading ? (
+            <View style={styles.primaryGrid}>
+              <ActionCardSkeleton />
+              <ActionCardSkeleton />
+              <ActionCardSkeleton />
+              <ActionCardSkeleton />
+            </View>
+          ) : (
+            <View style={styles.primaryGrid}>
+              {primaryActions.map((action, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[styles.primaryCard, { backgroundColor: action.color }]}
+                  onPress={() => handleButtonPress(action.onPress)}
+                  activeOpacity={0.7}
                 >
+                  {action.badge && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{action.badge}</Text>
+                    </View>
+                  )}
                   <View style={styles.primaryCardContent}>
                     <View style={styles.primaryIconContainer}>
-                      <action.icon size={24} color="white" />
+                      <action.icon size={28} color="white" />
                     </View>
                     <Text style={styles.primaryCardTitle}>{action.title}</Text>
                     <Text style={styles.primaryCardSubtitle}>{action.subtitle}</Text>
-                    {action.badge && (
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{action.badge}</Text>
-                      </View>
-                    )}
                   </View>
-                </LinearGradient>
-              </TouchableOpacity>
-            ))}
-          </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
-        {/* Secondary Actions */}
+        {/* Recent Activity Section */}
+        <RecentActivity
+          activities={[
+            {
+              id: '1',
+              type: 'attendance',
+              title: 'Attendance Marked',
+              description: currentChild ? `${currentChild.full_name} marked present today` : 'Child marked present today',
+              time: 'Today',
+            },
+            {
+              id: '2',
+              type: 'homework',
+              title: 'New Homework',
+              description: 'Mathematics assignment posted for review',
+              time: '2 hours ago',
+            },
+            {
+              id: '3',
+              type: 'exam',
+              title: 'Exam Results',
+              description: 'Science test results available',
+              time: 'Yesterday',
+            },
+          ]}
+        />
+
+        {/* More Tools - Reduced to 6 items */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>More Features</Text>
+          <Text style={styles.sectionTitle}>More Tools</Text>
           <View style={styles.secondaryGrid}>
-            {secondaryActions.map((action, index) => (
-              <TouchableOpacity 
-                key={index} 
-                style={styles.secondaryCard}
-                onPress={action.onPress}
+            {secondaryActions.slice(0, 6).map((action, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[styles.secondaryCard, { backgroundColor: action.lightBg }]}
+                onPress={() => handleButtonPress(action.onPress)}
                 activeOpacity={0.7}
               >
-                <View style={[styles.secondaryIconContainer, { backgroundColor: action.color + '15' }]}>
+                <View style={[styles.secondaryIconContainer, { backgroundColor: action.color + '20' }]}>
                   <action.icon size={20} color={action.color} />
                 </View>
-                <Text style={styles.secondaryCardTitle}>{action.title}</Text>
+                <Text style={[styles.secondaryCardTitle, { color: action.color }]}>
+                  {action.title}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
+          <TouchableOpacity style={styles.seeAllButton} activeOpacity={0.7}>
+            <Text style={styles.seeAllText}>See All</Text>
+            <ChevronRight size={16} color={schoolTheme.colors.parent.main} />
+          </TouchableOpacity>
         </View>
 
         {/* Current Child Info Enhanced - Only if children exist */}
@@ -496,7 +640,7 @@ export const ParentDashboardScreen: React.FC = () => {
               <View style={styles.childCardHeader}>
                 <Text style={styles.childGrade}>Grade {currentChild.sections?.grade}{currentChild.sections?.section}</Text>
                 <View style={styles.activeBadge}>
-                  <Star size={10} color="#fbbf24" />
+                  <Star size={10} color="#fbbf24" fill="#fbbf24" />
                 </View>
               </View>
               <Text style={styles.childName}>{currentChild.full_name}</Text>
@@ -504,23 +648,26 @@ export const ParentDashboardScreen: React.FC = () => {
                 Admission: {currentChild.admission_no || 'N/A'}
               </Text>
               <View style={styles.childActions}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.childActionBtn, { backgroundColor: '#3b82f6' }]}
-                  onPress={() => (navigation as any).navigate('AcademicsTab', { screen: 'Attendance' })}
+                  onPress={() => handleButtonPress(() => (navigation as any).navigate('AcademicsTab', { screen: 'Attendance' }))}
                 >
-                  <Users size={12} color="white" />
+                  <Users size={18} color="white" />
+                  <Text style={styles.childActionLabel}>Attendance</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.childActionBtn, { backgroundColor: '#10b981' }]}
-                  onPress={() => (navigation as any).navigate('AcademicsTab', { screen: 'Timetable' })}
+                  onPress={() => handleButtonPress(() => (navigation as any).navigate('AcademicsTab', { screen: 'Timetable' }))}
                 >
-                  <Calendar size={12} color="white" />
+                  <Calendar size={18} color="white" />
+                  <Text style={styles.childActionLabel}>Timetable</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.childActionBtn, { backgroundColor: '#f59e0b' }]}
-                  onPress={() => (navigation as any).navigate('AcademicsTab', { screen: 'Homework' })}
+                  onPress={() => handleButtonPress(() => (navigation as any).navigate('AcademicsTab', { screen: 'Homework' }))}
                 >
-                  <BookOpen size={12} color="white" />
+                  <BookOpen size={18} color="white" />
+                  <Text style={styles.childActionLabel}>Homework</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -543,6 +690,20 @@ export const ParentDashboardScreen: React.FC = () => {
         {/* Bottom Spacing */}
         <View style={{ height: 20 }} />
       </ScrollView>
+
+      {/* Account Menu Modal */}
+      <AccountMenu
+        visible={showAccountMenu}
+        onClose={() => setShowAccountMenu(false)}
+        onNavigateToTheme={() => {
+          setShowAccountMenu(false);
+          (navigation as any).navigate('DashboardTab', { screen: 'ThemeSettings' });
+        }}
+        onNavigateToNotifications={() => {
+          setShowAccountMenu(false);
+          (navigation as any).navigate('SettingsTab', { screen: 'Settings' });
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -550,12 +711,14 @@ export const ParentDashboardScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: schoolTheme.colors.background.main,
   },
   header: {
     paddingTop: 10,
-    paddingBottom: 20,
+    paddingBottom: 24,
     paddingHorizontal: 20,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
   headerTop: {
     flexDirection: 'row',
@@ -569,72 +732,115 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   avatarContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 15,
+    marginRight: 16,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   avatarText: {
     color: 'white',
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: schoolTheme.typography.fonts.bold,
   },
   greetingContainer: {
     flex: 1,
   },
   greeting: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 16,
+    fontFamily: schoolTheme.typography.fonts.semibold,
   },
   userName: {
     color: 'white',
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 26,
+    fontFamily: schoolTheme.typography.fonts.bold,
+    marginTop: 2,
   },
   headerRight: {
     flexDirection: 'row',
     gap: 12,
   },
   headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#EF4444',
+    borderWidth: 2,
+    borderColor: 'white',
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 20,
+    gap: 10,
   },
   statCard: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16,
+    padding: 14,
     alignItems: 'center',
     flex: 1,
-    marginHorizontal: 4,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    position: 'relative',
+  },
+  statHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  statWithProgress: {
+    marginBottom: 6,
   },
   statNumber: {
     color: 'white',
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontFamily: schoolTheme.typography.fonts.bold,
   },
   statLabel: {
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.95)',
     fontSize: 12,
-    marginTop: 2,
+    marginTop: 3,
+    fontFamily: schoolTheme.typography.fonts.semibold,
+  },
+  statHelpText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 13,
+    fontFamily: schoolTheme.typography.fonts.regular,
+  },
+  lastUpdated: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 12,
+    fontFamily: schoolTheme.typography.fonts.regular,
   },
   childSelector: {
     marginTop: 16,
   },
   childSelectorLabel: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: schoolTheme.typography.fonts.medium,
     color: 'rgba(255,255,255,0.8)',
     marginBottom: 8,
   },
@@ -653,7 +859,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: 'white',
     marginLeft: 8,
-    fontWeight: '500',
+    fontFamily: schoolTheme.typography.fonts.medium,
   },
   scrollView: {
     flex: 1,
@@ -662,7 +868,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   section: {
-    marginBottom: 30,
+    marginBottom: 28,
     paddingHorizontal: 20,
   },
   sectionHeader: {
@@ -672,65 +878,72 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1f2937',
+    fontSize: 22,
+    fontFamily: schoolTheme.typography.fonts.bold,
+    color: schoolTheme.colors.text.primary,
   },
   sectionLink: {
-    color: '#8b5cf6',
+    color: schoolTheme.colors.parent.main,
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: schoolTheme.typography.fonts.semibold,
   },
   primaryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 16,
   },
   primaryCard: {
-    width: (width - 52) / 2,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  primaryCardGradient: {
+    width: (width - 56) / 2,
+    height: 180,
+    borderRadius: 20,
     padding: 20,
-    height: 140,
     justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
   primaryCardContent: {
     flex: 1,
+    justifyContent: 'center',
   },
   primaryIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   primaryCardTitle: {
     color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontFamily: schoolTheme.typography.fonts.bold,
     marginBottom: 4,
   },
   primaryCardSubtitle: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
+    color: 'rgba(255,255,255,0.95)',
+    fontSize: 13,
+    fontFamily: schoolTheme.typography.fonts.medium,
   },
   badge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: '#ef4444',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    top: 12,
+    right: 12,
+    backgroundColor: '#EF4444',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 2,
+    borderColor: 'white',
+    ...schoolTheme.shadows.sm,
   },
   badgeText: {
     color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
+    fontSize: 12,
+    fontFamily: schoolTheme.typography.fonts.bold,
   },
   secondaryGrid: {
     flexDirection: 'row',
@@ -739,15 +952,12 @@ const styles = StyleSheet.create({
   },
   secondaryCard: {
     width: (width - 64) / 3,
-    backgroundColor: 'white',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 2,
+    borderColor: 'rgba(0,0,0,0.05)',
+    ...schoolTheme.shadows.sm,
   },
   secondaryIconContainer: {
     width: 40,
@@ -758,9 +968,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   secondaryCardTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#374151',
+    fontSize: 13,
+    fontFamily: schoolTheme.typography.fonts.bold,
     textAlign: 'center',
   },
   childCard: {
@@ -781,7 +990,7 @@ const styles = StyleSheet.create({
   },
   childGrade: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontFamily: schoolTheme.typography.fonts.bold,
     color: '#1f2937',
   },
   activeBadge: {
@@ -794,25 +1003,35 @@ const styles = StyleSheet.create({
   },
   childName: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: schoolTheme.typography.fonts.semibold,
     color: '#1f2937',
     marginBottom: 4,
   },
   childDetails: {
     fontSize: 12,
+    fontFamily: schoolTheme.typography.fonts.regular,
     color: '#6b7280',
     marginBottom: 12,
   },
   childActions: {
     flexDirection: 'row',
     gap: 8,
+    marginTop: 4,
   },
   childActionBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  childActionLabel: {
+    color: 'white',
+    fontSize: 10,
+    fontFamily: schoolTheme.typography.fonts.semibold,
   },
   emptyStateCard: {
     backgroundColor: 'white',
@@ -827,15 +1046,34 @@ const styles = StyleSheet.create({
   },
   emptyStateTitle: {
     fontSize: 20,
-    fontWeight: '600',
+    fontFamily: schoolTheme.typography.fonts.semibold,
     color: '#1f2937',
     marginBottom: 8,
     textAlign: 'center',
   },
   emptyStateText: {
     fontSize: 16,
+    fontFamily: schoolTheme.typography.fonts.regular,
     color: '#6b7280',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: schoolTheme.colors.parent.main + '10',
+    borderWidth: 1,
+    borderColor: schoolTheme.colors.parent.main + '30',
+  },
+  seeAllText: {
+    fontSize: 15,
+    fontFamily: schoolTheme.typography.fonts.semibold,
+    color: schoolTheme.colors.parent.main,
+    marginRight: 4,
   },
 });

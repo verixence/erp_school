@@ -232,6 +232,29 @@ export const createAnnouncement = async (schoolId: string, announcementData: Cre
   if (error) {
     throw error;
   }
+
+  // 🔔 Auto-trigger push notifications to mobile users
+  // Only if announcement is published
+  if (data && announcementData.is_published !== false) {
+    try {
+      // Import the notification function dynamically to avoid circular dependencies
+      const { sendAnnouncementNotification } = await import('./notifications');
+
+      await sendAnnouncementNotification(
+        schoolId,
+        announcementData.title,
+        announcementData.content,
+        announcementData.target_audience,
+        data.id
+      );
+
+      console.log(`📲 Push notifications queued for announcement: ${announcementData.title}`);
+    } catch (notifError) {
+      // Don't fail the entire operation if notifications fail
+      console.error('Failed to queue push notifications:', notifError);
+    }
+  }
+
   return data;
 };
 

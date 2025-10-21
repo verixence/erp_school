@@ -5,11 +5,12 @@ import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
 // Configure how notifications should be handled when the app is running
+// For mobile apps: Don't show in-app notifications - only push notifications when app is in background
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
+    shouldShowAlert: false,  // Don't show in-app alerts (only push notifications)
+    shouldPlaySound: false,  // Don't play sound when app is open
+    shouldSetBadge: true,    // Update badge count
   }),
 });
 

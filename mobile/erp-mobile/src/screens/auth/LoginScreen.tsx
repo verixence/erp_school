@@ -406,15 +406,46 @@ export const LoginScreen: React.FC = () => {
               </Animated.View>
 
               {/* Footer */}
-              <Animated.View 
+              <Animated.View
                 entering={FadeInUp.delay(600).duration(800)}
-                style={{ 
-                  alignItems: 'center', 
+                style={{
+                  alignItems: 'center',
                   marginTop: 40,
-                  paddingBottom: 20 
+                  paddingBottom: 20
                 }}
               >
-                <TouchableOpacity 
+                {/* Made in India Badge */}
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: 20,
+                  marginBottom: 16,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 3,
+                }}>
+                  <Text style={{
+                    fontSize: 20,
+                    marginRight: 8,
+                  }}>
+                    🇮🇳
+                  </Text>
+                  <Text style={{
+                    fontSize: 15,
+                    fontWeight: '600',
+                    color: '#2D3748',
+                    letterSpacing: 0.5,
+                  }}>
+                    Made in India
+                  </Text>
+                </View>
+
+                <TouchableOpacity
                   onPress={() => Linking.openURL('https://www.verixence.com')}
                   activeOpacity={0.7}
                 >

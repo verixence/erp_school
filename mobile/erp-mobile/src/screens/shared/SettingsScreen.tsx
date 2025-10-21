@@ -4,28 +4,13 @@ import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { 
-  User, 
-  Bell, 
-  Shield, 
-  HelpCircle, 
+import {
+  Bell,
+  HelpCircle,
   LogOut,
   ChevronRight,
   Settings as SettingsIcon,
-  Moon,
-  Globe,
-  Smartphone,
-  Mail,
-  Phone,
-  MapPin,
-  Edit3,
-  Heart,
-  Star,
-  Info,
-  MessageSquare,
-  Download,
-  Trash2,
-  RefreshCw
+  Info
 } from 'lucide-react-native';
 
 export const SettingsScreen: React.FC = () => {
@@ -39,8 +24,6 @@ export const SettingsScreen: React.FC = () => {
     announcements: true,
     grades: true
   });
-  const [darkMode, setDarkMode] = useState(false);
-  const [language, setLanguage] = useState('English');
 
   const handleSignOut = () => {
     Alert.alert(
@@ -62,77 +45,19 @@ export const SettingsScreen: React.FC = () => {
 
   const profileSections = [
     {
-      title: 'Account Information',
+      title: 'Support & Information',
       items: [
-        {
-          title: 'Edit Profile',
-          description: 'Update your personal information',
-          icon: Edit3,
-          onPress: () => Alert.alert('Coming Soon', 'Profile editing will be available soon'),
-        },
-        {
-          title: 'Change Password',
-          description: 'Update your account password',
-          icon: Shield,
-          onPress: () => Alert.alert('Coming Soon', 'Password change will be available soon'),
-        },
-        {
-          title: 'Contact Information',
-          description: 'Manage your contact details',
-          icon: Phone,
-          onPress: () => Alert.alert('Coming Soon', 'Contact management will be available soon'),
-        }
-      ]
-    },
-    {
-      title: 'App Preferences',
-      items: [
-        {
-          title: 'Language',
-          description: `Current: ${language}`,
-          icon: Globe,
-          onPress: () => Alert.alert('Coming Soon', 'Language settings will be available soon'),
-        },
-        {
-          title: 'Data & Storage',
-          description: 'Manage app data and cache',
-          icon: Smartphone,
-          onPress: () => Alert.alert('Coming Soon', 'Data management will be available soon'),
-        },
-        {
-          title: 'Download Settings',
-          description: 'Manage offline content',
-          icon: Download,
-          onPress: () => Alert.alert('Coming Soon', 'Download settings will be available soon'),
-        }
-      ]
-    },
-    {
-      title: 'Support & Feedback',
-      items: [
-        {
-          title: 'Help Center',
-          description: 'Get help and support',
-          icon: HelpCircle,
-          onPress: () => Alert.alert('Coming Soon', 'Help center will be available soon'),
-        },
-        {
-          title: 'Send Feedback',
-          description: 'Share your thoughts with us',
-          icon: MessageSquare,
-          onPress: () => Alert.alert('Coming Soon', 'Feedback system will be available soon'),
-        },
-        {
-          title: 'Rate App',
-          description: 'Rate us on the app store',
-          icon: Star,
-          onPress: () => Alert.alert('Coming Soon', 'App rating will be available soon'),
-        },
         {
           title: 'About',
           description: 'App version and information',
           icon: Info,
-          onPress: () => Alert.alert('ERP School Mobile', 'Version 1.0.0\nBuilt with ❤️ for education'),
+          onPress: () => Alert.alert('ERP School Mobile', 'Version 1.0.0\nBuilt with ❤️ for education\n\nA comprehensive school management system designed to streamline communication between teachers, parents, and administrators.'),
+        },
+        {
+          title: 'Help & Support',
+          description: 'Contact school administration',
+          icon: HelpCircle,
+          onPress: () => Alert.alert('Help & Support', 'For assistance, please contact your school administration or IT support team.'),
         }
       ]
     }
@@ -388,45 +313,13 @@ export const SettingsScreen: React.FC = () => {
           </View>
         ))}
 
-        {/* Danger Zone */}
+        {/* Sign Out */}
         <View style={{ marginBottom: 40 }}>
           <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827', marginBottom: 16 }}>
-            Account Actions
+            Account
           </Text>
           <Card>
             <CardContent style={{ padding: 20 }}>
-              <TouchableOpacity
-                onPress={() => Alert.alert('Coming Soon', 'Data clearing will be available soon')}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingVertical: 12,
-                  borderBottomWidth: 1,
-                  borderBottomColor: '#f3f4f6'
-                }}
-              >
-                <View style={{ 
-                  width: 40, 
-                  height: 40, 
-                  borderRadius: 20, 
-                  backgroundColor: '#fef3c7', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  marginRight: 16
-                }}>
-                  <RefreshCw size={20} color="#f59e0b" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 16, fontWeight: '500', color: '#111827', marginBottom: 2 }}>
-                    Clear App Data
-                  </Text>
-                  <Text style={{ fontSize: 14, color: '#6b7280' }}>
-                    Reset app to default settings
-                  </Text>
-                </View>
-                <ChevronRight size={20} color="#6b7280" />
-              </TouchableOpacity>
-              
               <TouchableOpacity
                 onPress={handleSignOut}
                 style={{
@@ -435,12 +328,12 @@ export const SettingsScreen: React.FC = () => {
                   paddingVertical: 12
                 }}
               >
-                <View style={{ 
-                  width: 40, 
-                  height: 40, 
-                  borderRadius: 20, 
-                  backgroundColor: '#fee2e2', 
-                  alignItems: 'center', 
+                <View style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: '#fee2e2',
+                  alignItems: 'center',
                   justifyContent: 'center',
                   marginRight: 16
                 }}>

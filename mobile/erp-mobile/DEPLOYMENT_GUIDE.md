@@ -1,6 +1,29 @@
-# ERP School Mobile App - Production Deployment Guide
+# CampusHoster Mobile - Google Play Store Deployment Guide
 
-This guide will walk you through deploying your ERP School mobile app to production using EAS (Expo Application Services).
+This guide will walk you through deploying the CampusHoster mobile app to Google Play Store using EAS (Expo Application Services).
+
+## ✅ What's Already Configured
+
+The following production configurations have been completed:
+
+### Build Configuration
+- ✅ **Package Name**: `com.campushoster.mobile` (production) / `com.campushoster.mobile.dev` (dev)
+- ✅ **App Name**: CampusHoster
+- ✅ **Version**: 1.0.0 (versionCode: 1)
+- ✅ **Build Optimization**: Code minification and resource shrinking enabled
+- ✅ **Hermes Engine**: Enabled for better performance
+
+### Credentials & Environment
+- ✅ **EAS Credentials**: Configured to auto-manage keystores
+- ✅ **Production Environment Variables**: Supabase URL and anon key configured
+- ✅ **Build Profiles**: Development, Preview, and Production configured
+
+### App Assets
+- ✅ **App Icon**: CampusHoster logo configured
+- ✅ **Splash Screen**: Configured with brand colors
+- ✅ **Adaptive Icons**: Android adaptive icons configured
+
+---
 
 ## Prerequisites
 
@@ -104,17 +127,20 @@ eas submit --platform ios --profile production
 
 ## 📱 App Store Requirements
 
-### Google Play Store
+### Google Play Store Requirements
 - **App Bundle**: ✅ Configured to build AAB
 - **Target API Level**: 34 (Android 14)
 - **Permissions**: ✅ All required permissions configured
 - **App Signing**: Let Google Play manage (recommended)
+- **Package Name**: `com.campushoster.mobile`
 
-### Apple App Store
-- **Bundle ID**: `com.erpschool.mobile`
-- **iOS Version**: Minimum iOS 13.0
-- **App Store Guidelines**: Ensure compliance
-- **Privacy Policy**: Required for apps handling user data
+### Required Before Submission
+- [ ] **Feature Graphic**: Create 1024x500px graphic
+- [ ] **Screenshots**: Capture 2-8 screenshots from app
+- [ ] **Privacy Policy**: Create and host publicly
+- [ ] **App Description**: Write short (80 chars) and full description
+- [ ] **Content Rating**: Complete questionnaire in Play Console
+- [ ] **Google Play Developer Account**: $25 one-time fee
 
 ## 🔐 Security Checklist
 

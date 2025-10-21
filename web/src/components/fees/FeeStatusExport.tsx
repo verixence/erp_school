@@ -18,6 +18,7 @@ export default function FeeStatusExport({ schoolId }: FeeStatusExportProps) {
   const [gradeFilter, setGradeFilter] = useState('all');
   const [sectionFilter, setSectionFilter] = useState('all');
   const [academicYear, setAcademicYear] = useState('2024-2025');
+  const [viewType, setViewType] = useState<'summary' | 'detailed'>('summary');
   const [exporting, setExporting] = useState(false);
 
   const [classes, setClasses] = useState<Array<{ grade: string }>>([]);
@@ -111,7 +112,8 @@ export default function FeeStatusExport({ schoolId }: FeeStatusExportProps) {
         school_id: schoolId,
         format,
         payment_status: paymentStatus,
-        academic_year: academicYear
+        academic_year: academicYear,
+        view: viewType
       });
 
       if (gradeFilter !== 'all') {
@@ -176,7 +178,20 @@ export default function FeeStatusExport({ schoolId }: FeeStatusExportProps) {
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div>
+            <Label htmlFor="view_type">View Type</Label>
+            <Select value={viewType} onValueChange={(value: 'summary' | 'detailed') => setViewType(value)}>
+              <SelectTrigger id="view_type">
+                <SelectValue placeholder="View Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="summary">Summary (One row per student)</SelectItem>
+                <SelectItem value="detailed">Detailed (One row per fee type)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div>
             <Label htmlFor="payment_status">Payment Status</Label>
             <Select value={paymentStatus} onValueChange={setPaymentStatus}>
@@ -274,12 +289,21 @@ export default function FeeStatusExport({ schoolId }: FeeStatusExportProps) {
         {/* Export Info */}
         <div className="text-sm text-muted-foreground space-y-1">
           <p><strong>Exported Data Includes:</strong></p>
-          <ul className="list-disc list-inside space-y-1 ml-2">
-            <li>Student details (Name, Admission Number, Grade, Section)</li>
-            <li>Fee information (Original Amount, Discount, Demand Amount)</li>
-            <li>Payment status (Paid Amount, Balance Amount, Status)</li>
-            <li>Due dates and last updated timestamps</li>
-          </ul>
+          {viewType === 'summary' ? (
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li><strong>One row per student</strong> with aggregated totals</li>
+              <li>Student details (Name, Admission Number, Grade, Section)</li>
+              <li>Total fee amounts (Original, Discount, Demand, Paid, Balance)</li>
+              <li>Overall payment status and last updated timestamp</li>
+            </ul>
+          ) : (
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li><strong>One row per student per fee type</strong> with detailed breakdown</li>
+              <li>Student details (Name, Admission Number, Grade, Section)</li>
+              <li>Individual fee information per type (Tuition, Activity, LMS, etc.)</li>
+              <li>Payment status per fee type with due dates</li>
+            </ul>
+          )}
         </div>
       </CardContent>
     </Card>

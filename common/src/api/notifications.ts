@@ -176,4 +176,174 @@ export const subscribeToNotifications = (userId: string, callback: (notification
       }
     )
     .subscribe();
+};
+
+// ============================================================================
+// PUSH NOTIFICATION FUNCTIONS (Web → Mobile Sync)
+// ============================================================================
+
+export interface BulkNotificationResult {
+  notifications_created: number;
+  push_notifications_queued: number;
+}
+
+/**
+ * Create bulk notifications with automatic push notification queuing
+ * This is the PRIMARY function to use for announcements, homework, etc.
+ * It creates in-app notifications AND queues push notifications automatically
+ */
+export const createBulkNotifications = async (
+  schoolId: string,
+  title: string,
+  message: string,
+  type: 'announcement' | 'post' | 'system' | 'exam' | 'homework',
+  targetAudience: 'all' | 'teachers' | 'parents' | 'students',
+  relatedId?: string
+): Promise<BulkNotificationResult> => {
+  const { data, error } = await supabase.rpc('create_bulk_notifications_with_push', {
+    p_school_id: schoolId,
+    p_title: title,
+    p_message: message,
+    p_type: type,
+    p_target_audience: targetAudience,
+    p_related_id: relatedId || null
+  });
+
+  if (error) {
+    console.error('Error creating bulk notifications:', error);
+    throw error;
+  }
+
+  const result = data[0] as BulkNotificationResult;
+  console.log(`✅ Created ${result.notifications_created} notifications, queued ${result.push_notifications_queued} push notifications`);
+
+  return result;
+};
+
+/**
+ * Send push notification to specific users
+ * Use this when you need to notify specific users (not based on role)
+ */
+export const sendPushToUsers = async (
+  userIds: string[],
+  title: string,
+  body: string,
+  data?: Record<string, any>
+): Promise<number> => {
+  const { data: result, error } = await supabase.rpc('send_push_to_users', {
+    p_user_ids: userIds,
+    p_title: title,
+    p_body: body,
+    p_data: data || {}
+  });
+
+  if (error) {
+    console.error('Error sending push to users:', error);
+    throw error;
+  }
+
+  console.log(`✅ Queued push notification for ${result} devices`);
+  return result as number;
+};
+
+/**
+ * Get users by audience (teachers, parents, students, or all)
+ * Useful for getting user IDs before sending targeted notifications
+ */
+export const getUsersByAudience = async (
+  schoolId: string,
+  audience: 'all' | 'teachers' | 'parents' | 'students'
+): Promise<Array<{ id: string; email: string; role: string }>> => {
+  const { data, error } = await supabase.rpc('get_users_by_audience', {
+    p_school_id: schoolId,
+    p_audience: audience
+  });
+
+  if (error) {
+    console.error('Error getting users by audience:', error);
+    throw error;
+  }
+
+  return data || [];
+};
+
+/**
+ * Get push notification queue stats
+ * Useful for monitoring and debugging
+ */
+export const getPushQueueStats = async () => {
+  const { data, error } = await supabase
+    .from('notification_queue_stats')
+    .select('*');
+
+  if (error) {
+    console.error('Error getting queue stats:', error);
+    throw error;
+  }
+
+  return data;
+};
+
+// ============================================================================
+// HELPER FUNCTIONS FOR SPECIFIC NOTIFICATION TYPES
+// ============================================================================
+
+/**
+ * Send announcement notification (Web + Mobile)
+ */
+export const sendAnnouncementNotification = async (
+  schoolId: string,
+  title: string,
+  content: string,
+  targetAudience: 'all' | 'teachers' | 'parents' | 'students' = 'all',
+  announcementId?: string
+) => {
+  return createBulkNotifications(
+    schoolId,
+    title,
+    content,
+    'announcement',
+    targetAudience,
+    announcementId
+  );
+};
+
+/**
+ * Send homework notification (Web + Mobile)
+ */
+export const sendHomeworkNotification = async (
+  schoolId: string,
+  title: string,
+  description: string,
+  targetAudience: 'students' | 'parents',
+  homeworkId?: string
+) => {
+  return createBulkNotifications(
+    schoolId,
+    `📚 New Homework: ${title}`,
+    description,
+    'homework',
+    targetAudience,
+    homeworkId
+  );
+};
+
+/**
+ * Send exam notification (Web + Mobile)
+ */
+export const sendExamNotification = async (
+  schoolId: string,
+  title: string,
+  details: string,
+  targetAudience: 'students' | 'parents',
+  examId?: string
+) => {
+  return createBulkNotifications(
+    schoolId,
+    `📝 ${title}`,
+    details,
+    'exam',
+    targetAudience,
+    examId
+  );
 }; 

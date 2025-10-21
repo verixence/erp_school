@@ -3,8 +3,8 @@ const IS_PREVIEW = process.env.EAS_BUILD_PROFILE === 'preview';
 
 export default {
   expo: {
-    name: IS_PRODUCTION ? 'ERP School' : 'ERP School (Dev)',
-    slug: 'erp-school-mobile',
+    name: IS_PRODUCTION ? 'CampusHoster' : 'CampusHoster (Dev)',
+    slug: 'campushoster-mobile',
     version: '1.0.0',
     orientation: 'portrait',
     icon: './assets/icon.png',
@@ -17,9 +17,9 @@ export default {
     assetBundlePatterns: ['**/*'],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: IS_PRODUCTION 
-        ? 'com.erpschool.mobile' 
-        : 'com.erpschool.mobile.dev',
+      bundleIdentifier: IS_PRODUCTION
+        ? 'com.campushoster.mobile'
+        : 'com.campushoster.mobile.dev',
       infoPlist: {
         NSCameraUsageDescription: 'This app uses the camera to upload profile pictures and assignment photos.',
         NSPhotoLibraryUsageDescription: 'This app needs access to photo library to upload images for assignments and profile pictures.',
@@ -32,20 +32,23 @@ export default {
         foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#8b5cf6'
       },
-      package: IS_PRODUCTION 
-        ? 'com.erpschool.mobile' 
-        : 'com.erpschool.mobile.dev',
+      package: IS_PRODUCTION
+        ? 'com.campushoster.mobile'
+        : 'com.campushoster.mobile.dev',
       versionCode: 1,
       permissions: [
         'android.permission.CAMERA',
         'android.permission.READ_EXTERNAL_STORAGE',
-        'android.permission.WRITE_EXTERNAL_STORAGE',
-        'android.permission.RECORD_AUDIO',
+        'android.permission.READ_MEDIA_IMAGES',
         'android.permission.VIBRATE',
         'android.permission.RECEIVE_BOOT_COMPLETED',
         'android.permission.WAKE_LOCK',
-        'android.permission.USE_FINGERPRINT',
-        'android.permission.USE_BIOMETRIC'
+        'android.permission.USE_BIOMETRIC',
+        'android.permission.POST_NOTIFICATIONS'
+      ],
+      blockedPermissions: [
+        'android.permission.RECORD_AUDIO',
+        'android.permission.WRITE_EXTERNAL_STORAGE'
       ]
     },
     web: {
@@ -78,8 +81,6 @@ export default {
     updates: {
       url: "https://u.expo.dev/dbfdc387-ef4d-4388-91e1-931baa301673"
     },
-    runtimeVersion: {
-      policy: 'sdkVersion'
-    }
+    runtimeVersion: '1.0.0'
   }
 };
