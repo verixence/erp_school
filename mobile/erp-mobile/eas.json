@@ -9,10 +9,12 @@
       "distribution": "internal",
       "env": {
         "EAS_BUILD_PROFILE": "development"
-      }
+      },
+      "node": "20.19.4"
     },
     "preview": {
       "distribution": "internal",
+      "credentialsSource": "remote",
       "env": {
         "EAS_BUILD_PROFILE": "preview",
         "EXPO_PUBLIC_SUPABASE_URL": "https://pyzdfteicahfzyuoxgwg.supabase.co",
@@ -25,7 +27,8 @@
       },
       "ios": {
         "simulator": true
-      }
+      },
+      "node": "20.19.4"
     },
     "production": {
       "env": {
@@ -40,7 +43,9 @@
       },
       "ios": {
         "simulator": false
-      }
+      },
+      "credentialsSource": "remote",
+      "node": "20.19.4"
     }
   },
   "submit": {

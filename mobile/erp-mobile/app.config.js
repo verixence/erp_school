@@ -3,9 +3,10 @@ const IS_PREVIEW = process.env.EAS_BUILD_PROFILE === 'preview';
 
 export default {
   expo: {
+    owner: 'verixence',
     name: IS_PRODUCTION ? 'CampusHoster' : 'CampusHoster (Dev)',
-    slug: 'campushoster-mobile',
-    version: '1.0.0',
+    slug: 'campus-hoster',
+    version: '1.0.1',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'automatic',
@@ -35,7 +36,7 @@ export default {
       package: IS_PRODUCTION
         ? 'com.campushoster.mobile'
         : 'com.campushoster.mobile.dev',
-      versionCode: 1,
+      versionCode: 2,
       permissions: [
         'android.permission.CAMERA',
         'android.permission.READ_EXTERNAL_STORAGE',
@@ -72,14 +73,11 @@ export default {
     ],
     extra: {
       eas: {
-        projectId: "dbfdc387-ef4d-4388-91e1-931baa301673"
+        projectId: 'bbddf204-1181-42b5-9ab4-5f8d5b4c769d'
       },
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
       environment: IS_PRODUCTION ? 'production' : IS_PREVIEW ? 'preview' : 'development'
-    },
-    updates: {
-      url: "https://u.expo.dev/dbfdc387-ef4d-4388-91e1-931baa301673"
     },
     runtimeVersion: '1.0.0'
   }

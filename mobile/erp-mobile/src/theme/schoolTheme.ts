@@ -26,7 +26,7 @@ export const schoolTheme = {
       main: '#4F46E5', // Indigo 600 - Professional authority
       light: '#6366F1', // Indigo 500
       dark: '#4338CA', // Indigo 700
-      gradient: ['#4F46E5', '#6366F1'],
+      gradient: ['#4F46E5', '#6366F1'] as const,
       lightBg: '#EEF2FF', // Indigo 50
     },
     parent: {

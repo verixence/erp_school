@@ -1,4 +1,4 @@
-package com.erpschool.mobile.dev
+package com.campushoster.mobile.dev
 
 import android.os.Build
 import android.os.Bundle
@@ -9,6 +9,8 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnable
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 
 import expo.modules.ReactActivityDelegateWrapper
+import com.campushoster.mobile.BuildConfig
+import com.campushoster.mobile.R
 
 class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
