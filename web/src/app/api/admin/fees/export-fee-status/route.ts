@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
     const headers = Object.keys(exportData[0]);
     const csvRows = [
       headers.join(','), // Header row
-      ...exportData.map(row =>
+      ...exportData.map((row: Record<string, any>) =>
         headers.map(header => {
           const value = row[header as keyof typeof row];
           // Escape commas and quotes in values
