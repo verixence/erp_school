@@ -122,8 +122,8 @@ export default function PrivacyPolicy() {
           <h2 className="text-2xl font-semibold text-purple-700 mb-4">11. Contact Us</h2>
           <p className="text-gray-700 mb-3">If you have questions about this Privacy Policy or wish to exercise your data rights, please contact us:</p>
           <ul className="list-none space-y-2 text-gray-700">
-            <li><strong>Email:</strong> privacy@campushoster.com</li>
-            <li><strong>Support:</strong> support@campushoster.com</li>
+            <li><strong>Email:</strong> privacy@verixence.com</li>
+            <li><strong>Support:</strong> support@verixence.com</li>
           </ul>
         </section>
 
