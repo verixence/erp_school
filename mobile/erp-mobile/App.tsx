@@ -8,6 +8,7 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { QueryProvider } from './src/contexts/QueryProvider';
 import { AppNavigator } from './src/navigation/AppNavigator';
@@ -51,12 +52,14 @@ export default function App() {
   }
 
   return (
-    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-      <QueryProvider>
-        <AuthProvider>
-          <AppNavigator />
-        </AuthProvider>
-      </QueryProvider>
-    </View>
+    <SafeAreaProvider>
+      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <QueryProvider>
+          <AuthProvider>
+            <AppNavigator />
+          </AuthProvider>
+        </QueryProvider>
+      </View>
+    </SafeAreaProvider>
   );
 }

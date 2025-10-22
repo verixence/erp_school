@@ -104,26 +104,16 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
-        release {
-            // EAS Build will automatically configure signing for production builds
-            // For local builds, you can configure your keystore here:
-            // storeFile file('keystores/campushoster-upload-key.keystore')
-            // storePassword System.getenv("KEYSTORE_PASSWORD") ?: 'your-password'
-            // keyAlias System.getenv("KEY_ALIAS") ?: 'campushoster-key'
-            // keyPassword System.getenv("KEY_PASSWORD") ?: 'your-password'
-        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Release builds will use EAS credentials when building with EAS
-            // or the signing config above for local builds
-            if (signingConfigs.release.storeFile != null) {
-                signingConfig signingConfigs.release
-            }
-            def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'true'
+            // Caution! In production, you need to generate your own keystore file.
+            // see https://reactnative.dev/docs/signed-apk-android.
+            signingConfig signingConfigs.debug
+            def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
@@ -139,15 +129,6 @@ android {
     }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = '17'
     }
 }
 

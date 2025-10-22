@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, SafeAreaView, TouchableOpacity, Alert, Switch } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, Switch } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
@@ -51,14 +52,12 @@ export const SettingsScreen: React.FC = () => {
           title: 'About',
           description: 'App version and information',
           icon: Info,
-          onPress: () => Alert.alert('ERP School Mobile', 'Version 1.0.0\nBuilt with ❤️ for education\n\nA comprehensive school management system designed to streamline communication between teachers, parents, and administrators.'),
-        },
+          onPress: () => Alert.alert('ERP School Mobile', 'Version 1.0.0\nBuilt with ❤️ for education\n\nA comprehensive school management system designed to streamline communication between teachers, parents, and administrators.')},
         {
           title: 'Help & Support',
           description: 'Contact school administration',
           icon: HelpCircle,
-          onPress: () => Alert.alert('Help & Support', 'For assistance, please contact your school administration or IT support team.'),
-        }
+          onPress: () => Alert.alert('Help & Support', 'For assistance, please contact your school administration or IT support team.')}
       ]
     }
   ];

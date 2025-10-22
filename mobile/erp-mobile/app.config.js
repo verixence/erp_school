@@ -50,7 +50,13 @@ export default {
       blockedPermissions: [
         'android.permission.RECORD_AUDIO',
         'android.permission.WRITE_EXTERNAL_STORAGE'
-      ]
+      ],
+      softwareKeyboardLayoutMode: 'pan',
+      statusBar: {
+        backgroundColor: '#8b5cf6',
+        barStyle: 'light-content',
+        translucent: false
+      }
     },
     web: {
       favicon: './assets/favicon.png'

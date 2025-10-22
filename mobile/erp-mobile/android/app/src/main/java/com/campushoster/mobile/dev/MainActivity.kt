@@ -11,7 +11,6 @@ import com.facebook.react.defaults.DefaultReactActivityDelegate
 
 import expo.modules.ReactActivityDelegateWrapper
 import com.campushoster.mobile.dev.BuildConfig
-import com.campushoster.mobile.dev.R
 
 class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {

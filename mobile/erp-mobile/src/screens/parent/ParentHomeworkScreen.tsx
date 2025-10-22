@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, SafeAreaView, TouchableOpacity, RefreshControl, Modal, Linking, TextInput, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Modal, Linking, TextInput, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
@@ -282,8 +283,7 @@ export const ParentHomeworkScreen: React.FC = () => {
           notes: notes || (submissionType === 'offline' ? 'Completed offline' : ''),
           status: 'submitted',
           submission_type: submissionType,
-          submitted_at: new Date().toISOString(),
-        }, {
+          submitted_at: new Date().toISOString()}, {
           onConflict: 'homework_id,student_id'
         });
 
@@ -297,8 +297,7 @@ export const ParentHomeworkScreen: React.FC = () => {
     },
     onError: (error: any) => {
       Alert.alert('Error', error.message || 'Failed to submit homework');
-    },
-  });
+    }});
 
   const resetSubmissionForm = () => {
     setSubmissionNotes('');
@@ -311,8 +310,7 @@ export const ParentHomeworkScreen: React.FC = () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/*'],
-        copyToCacheDirectory: true,
-      });
+        copyToCacheDirectory: true});
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setSelectedFile(result.assets[0]);

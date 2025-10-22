@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { ChevronLeft, Sun, Moon, Smartphone, Check } from 'lucide-react-native';
 import { useTheme, ColorScheme } from '../../hooks/useTheme';
@@ -14,20 +15,17 @@ export const ThemeSettingsScreen = () => {
       value: 'light',
       label: 'Light Mode',
       description: 'Always use light theme',
-      icon: Sun,
-    },
+      icon: Sun},
     {
       value: 'dark',
       label: 'Dark Mode',
       description: 'Always use dark theme',
-      icon: Moon,
-    },
+      icon: Moon},
     {
       value: 'auto',
       label: 'System Default',
       description: 'Match your device settings',
-      icon: Smartphone,
-    },
+      icon: Smartphone},
   ];
 
   return (
@@ -62,8 +60,7 @@ export const ThemeSettingsScreen = () => {
                 styles.optionCard,
                 {
                   backgroundColor: theme.colors.background.card,
-                  borderColor: isSelected ? theme.colors.primary.main : theme.colors.border.light,
-                },
+                  borderColor: isSelected ? theme.colors.primary.main : theme.colors.border.light},
                 isSelected && styles.optionCardSelected,
               ]}
               onPress={() => setTheme(option.value)}
@@ -74,8 +71,7 @@ export const ThemeSettingsScreen = () => {
                 {
                   backgroundColor: isSelected
                     ? theme.colors.primary.main + '15'
-                    : theme.colors.background.tertiary,
-                },
+                    : theme.colors.background.tertiary},
               ]}>
                 <IconComponent
                   size={24}
@@ -88,8 +84,7 @@ export const ThemeSettingsScreen = () => {
                   styles.optionLabel,
                   {
                     color: theme.colors.text.primary,
-                    fontFamily: theme.typography.fonts.semibold,
-                  },
+                    fontFamily: theme.typography.fonts.semibold},
                 ]}>
                   {option.label}
                 </Text>
@@ -97,8 +92,7 @@ export const ThemeSettingsScreen = () => {
                   styles.optionDescription,
                   {
                     color: theme.colors.text.secondary,
-                    fontFamily: theme.typography.fonts.regular,
-                  },
+                    fontFamily: theme.typography.fonts.regular},
                 ]}>
                   {option.description}
                 </Text>
@@ -132,82 +126,65 @@ export const ThemeSettingsScreen = () => {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1},
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
+    borderBottomWidth: 1},
   backButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center'},
   headerTitle: {
-    fontSize: 18,
-  },
+    fontSize: 18},
   content: {
     flex: 1,
-    padding: 20,
-  },
+    padding: 20},
   sectionTitle: {
     fontSize: 13,
     marginBottom: 12,
-    marginLeft: 4,
-  },
+    marginLeft: 4},
   optionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
-    borderWidth: 2,
-  },
+    borderWidth: 2},
   optionCardSelected: {
-    borderWidth: 2,
-  },
+    borderWidth: 2},
   iconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
-  },
+    marginRight: 16},
   optionContent: {
-    flex: 1,
-  },
+    flex: 1},
   optionLabel: {
     fontSize: 16,
-    marginBottom: 4,
-  },
+    marginBottom: 4},
   optionDescription: {
-    fontSize: 14,
-  },
+    fontSize: 14},
   checkContainer: {
     width: 28,
     height: 28,
     borderRadius: 14,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center'},
   infoCard: {
     marginTop: 24,
     padding: 16,
     borderRadius: 12,
-    borderWidth: 1,
-  },
+    borderWidth: 1},
   infoTitle: {
     fontSize: 16,
-    marginBottom: 8,
-  },
+    marginBottom: 8},
   infoText: {
     fontSize: 14,
-    lineHeight: 20,
-  },
-});
+    lineHeight: 20}});

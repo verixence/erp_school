@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, SafeAreaView, RefreshControl, TouchableOpacity, Dimensions, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Dimensions, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery } from '@tanstack/react-query';
@@ -519,8 +520,7 @@ export const ParentDashboardScreen: React.FC = () => {
                     title: 'Pending Homework',
                     message: `You have ${statsData.upcomingHomework} upcoming assignment${statsData.upcomingHomework > 1 ? 's' : ''} to review.`,
                     action: () => handleButtonPress(() => (navigation as any).navigate('AcademicsTab', { screen: 'Homework' })),
-                    actionLabel: 'View Homework',
-                  },
+                    actionLabel: 'View Homework'},
                 ]
               : []),
             ...(statsData.attendancePercentage < 75
@@ -531,8 +531,7 @@ export const ParentDashboardScreen: React.FC = () => {
                     title: 'Low Attendance',
                     message: `Attendance is at ${statsData.attendancePercentage}%. Please ensure regular attendance.`,
                     action: () => handleButtonPress(() => (navigation as any).navigate('AcademicsTab', { screen: 'Attendance' })),
-                    actionLabel: 'View Attendance',
-                  },
+                    actionLabel: 'View Attendance'},
                 ]
               : []),
           ].slice(0, 3)}
@@ -585,22 +584,19 @@ export const ParentDashboardScreen: React.FC = () => {
               type: 'attendance',
               title: 'Attendance Marked',
               description: currentChild ? `${currentChild.full_name} marked present today` : 'Child marked present today',
-              time: 'Today',
-            },
+              time: 'Today'},
             {
               id: '2',
               type: 'homework',
               title: 'New Homework',
               description: 'Mathematics assignment posted for review',
-              time: '2 hours ago',
-            },
+              time: '2 hours ago'},
             {
               id: '3',
               type: 'exam',
               title: 'Exam Results',
               description: 'Science test results available',
-              time: 'Yesterday',
-            },
+              time: 'Yesterday'},
           ]}
         />
 
@@ -711,26 +707,22 @@ export const ParentDashboardScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: schoolTheme.colors.background.main,
-  },
+    backgroundColor: schoolTheme.colors.background.main},
   header: {
     paddingTop: 10,
     paddingBottom: 24,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-  },
+    borderBottomRightRadius: 32},
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-  },
+    marginBottom: 12},
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-  },
+    flex: 1},
   avatarContainer: {
     width: 60,
     height: 60,
@@ -740,31 +732,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 16,
     borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
+    borderColor: 'rgba(255,255,255,0.5)'},
   avatarText: {
     color: 'white',
     fontSize: 20,
-    fontFamily: schoolTheme.typography.fonts.bold,
-  },
+    fontFamily: schoolTheme.typography.fonts.bold},
   greetingContainer: {
-    flex: 1,
-  },
+    flex: 1},
   greeting: {
     color: 'rgba(255,255,255,0.9)',
     fontSize: 16,
-    fontFamily: schoolTheme.typography.fonts.semibold,
-  },
+    fontFamily: schoolTheme.typography.fonts.semibold},
   userName: {
     color: 'white',
     fontSize: 26,
     fontFamily: schoolTheme.typography.fonts.bold,
-    marginTop: 2,
-  },
+    marginTop: 2},
   headerRight: {
     flexDirection: 'row',
-    gap: 12,
-  },
+    gap: 12},
   headerButton: {
     width: 48,
     height: 48,
@@ -773,8 +759,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
+    borderColor: 'rgba(255,255,255,0.3)'},
   notificationDot: {
     position: 'absolute',
     top: 8,
@@ -784,13 +769,11 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#EF4444',
     borderWidth: 2,
-    borderColor: 'white',
-  },
+    borderColor: 'white'},
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 10,
-  },
+    gap: 10},
   statCard: {
     borderRadius: 16,
     padding: 14,
@@ -798,52 +781,43 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.3)',
-    position: 'relative',
-  },
+    position: 'relative'},
   statHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 6,
-  },
+    marginBottom: 6},
   statWithProgress: {
-    marginBottom: 6,
-  },
+    marginBottom: 6},
   statNumber: {
     color: 'white',
     fontSize: 24,
-    fontFamily: schoolTheme.typography.fonts.bold,
-  },
+    fontFamily: schoolTheme.typography.fonts.bold},
   statLabel: {
     color: 'rgba(255,255,255,0.95)',
     fontSize: 12,
     marginTop: 3,
-    fontFamily: schoolTheme.typography.fonts.semibold,
-  },
+    fontFamily: schoolTheme.typography.fonts.semibold},
   statHelpText: {
     color: 'rgba(255,255,255,0.9)',
     fontSize: 10,
     textAlign: 'center',
     marginTop: 4,
     lineHeight: 13,
-    fontFamily: schoolTheme.typography.fonts.regular,
-  },
+    fontFamily: schoolTheme.typography.fonts.regular},
   lastUpdated: {
     color: 'rgba(255,255,255,0.7)',
     fontSize: 11,
     textAlign: 'center',
     marginTop: 12,
-    fontFamily: schoolTheme.typography.fonts.regular,
-  },
+    fontFamily: schoolTheme.typography.fonts.regular},
   childSelector: {
-    marginTop: 16,
-  },
+    marginTop: 16},
   childSelectorLabel: {
     fontSize: 14,
     fontFamily: schoolTheme.typography.fonts.medium,
     color: 'rgba(255,255,255,0.8)',
-    marginBottom: 8,
-  },
+    marginBottom: 8},
   childSelectorButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -853,45 +827,36 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
+    borderColor: 'rgba(255,255,255,0.2)'},
   childSelectorText: {
     fontSize: 16,
     color: 'white',
     marginLeft: 8,
-    fontFamily: schoolTheme.typography.fonts.medium,
-  },
+    fontFamily: schoolTheme.typography.fonts.medium},
   scrollView: {
-    flex: 1,
-  },
+    flex: 1},
   scrollContent: {
-    paddingTop: 20,
-  },
+    paddingTop: 20},
   section: {
     marginBottom: 28,
-    paddingHorizontal: 20,
-  },
+    paddingHorizontal: 20},
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-  },
+    marginBottom: 16},
   sectionTitle: {
     fontSize: 22,
     fontFamily: schoolTheme.typography.fonts.bold,
-    color: schoolTheme.colors.text.primary,
-  },
+    color: schoolTheme.colors.text.primary},
   sectionLink: {
     color: schoolTheme.colors.parent.main,
     fontSize: 14,
-    fontFamily: schoolTheme.typography.fonts.semibold,
-  },
+    fontFamily: schoolTheme.typography.fonts.semibold},
   primaryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
-  },
+    gap: 16},
   primaryCard: {
     width: (width - 56) / 2,
     height: 180,
@@ -902,12 +867,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.15,
     shadowRadius: 6,
-    elevation: 3,
-  },
+    elevation: 3},
   primaryCardContent: {
     flex: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center'},
   primaryIconContainer: {
     width: 48,
     height: 48,
@@ -915,19 +878,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
-  },
+    marginBottom: 14},
   primaryCardTitle: {
     color: 'white',
     fontSize: 18,
     fontFamily: schoolTheme.typography.fonts.bold,
-    marginBottom: 4,
-  },
+    marginBottom: 4},
   primaryCardSubtitle: {
     color: 'rgba(255,255,255,0.95)',
     fontSize: 13,
-    fontFamily: schoolTheme.typography.fonts.medium,
-  },
+    fontFamily: schoolTheme.typography.fonts.medium},
   badge: {
     position: 'absolute',
     top: 12,
@@ -938,18 +898,15 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderWidth: 2,
     borderColor: 'white',
-    ...schoolTheme.shadows.sm,
-  },
+    ...schoolTheme.shadows.sm},
   badgeText: {
     color: 'white',
     fontSize: 12,
-    fontFamily: schoolTheme.typography.fonts.bold,
-  },
+    fontFamily: schoolTheme.typography.fonts.bold},
   secondaryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-  },
+    gap: 12},
   secondaryCard: {
     width: (width - 64) / 3,
     borderRadius: 16,
@@ -957,21 +914,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'rgba(0,0,0,0.05)',
-    ...schoolTheme.shadows.sm,
-  },
+    ...schoolTheme.shadows.sm},
   secondaryIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
-  },
+    marginBottom: 8},
   secondaryCardTitle: {
     fontSize: 13,
     fontFamily: schoolTheme.typography.fonts.bold,
-    textAlign: 'center',
-  },
+    textAlign: 'center'},
   childCard: {
     backgroundColor: 'white',
     borderRadius: 12,
@@ -980,44 +934,37 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
-  },
+    elevation: 3},
   childCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
-  },
+    marginBottom: 8},
   childGrade: {
     fontSize: 16,
     fontFamily: schoolTheme.typography.fonts.bold,
-    color: '#1f2937',
-  },
+    color: '#1f2937'},
   activeBadge: {
     width: 20,
     height: 20,
     borderRadius: 10,
     backgroundColor: '#fef3c7',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center'},
   childName: {
     fontSize: 18,
     fontFamily: schoolTheme.typography.fonts.semibold,
     color: '#1f2937',
-    marginBottom: 4,
-  },
+    marginBottom: 4},
   childDetails: {
     fontSize: 12,
     fontFamily: schoolTheme.typography.fonts.regular,
     color: '#6b7280',
-    marginBottom: 12,
-  },
+    marginBottom: 12},
   childActions: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 4,
-  },
+    marginTop: 4},
   childActionBtn: {
     flex: 1,
     paddingVertical: 10,
@@ -1026,13 +973,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'column',
-    gap: 4,
-  },
+    gap: 4},
   childActionLabel: {
     color: 'white',
     fontSize: 10,
-    fontFamily: schoolTheme.typography.fonts.semibold,
-  },
+    fontFamily: schoolTheme.typography.fonts.semibold},
   emptyStateCard: {
     backgroundColor: 'white',
     borderRadius: 12,
@@ -1042,22 +987,19 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
-  },
+    elevation: 3},
   emptyStateTitle: {
     fontSize: 20,
     fontFamily: schoolTheme.typography.fonts.semibold,
     color: '#1f2937',
     marginBottom: 8,
-    textAlign: 'center',
-  },
+    textAlign: 'center'},
   emptyStateText: {
     fontSize: 16,
     fontFamily: schoolTheme.typography.fonts.regular,
     color: '#6b7280',
     textAlign: 'center',
-    lineHeight: 24,
-  },
+    lineHeight: 24},
   seeAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1068,12 +1010,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: schoolTheme.colors.parent.main + '10',
     borderWidth: 1,
-    borderColor: schoolTheme.colors.parent.main + '30',
-  },
+    borderColor: schoolTheme.colors.parent.main + '30'},
   seeAllText: {
     fontSize: 15,
     fontFamily: schoolTheme.typography.fonts.semibold,
     color: schoolTheme.colors.parent.main,
-    marginRight: 4,
-  },
-});
+    marginRight: 4}});
