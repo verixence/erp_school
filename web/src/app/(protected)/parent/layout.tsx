@@ -117,7 +117,7 @@ export default function ParentLayout({
                 <img
                   src="/logo.png"
                   alt="CampusHoster Logo"
-                  className="w-16 h-16 object-contain mr-3"
+                  className="w-20 h-20 object-contain mr-3"
                 />
                 <h2 className="text-xl font-bold text-foreground">Parent Portal</h2>
               </div>

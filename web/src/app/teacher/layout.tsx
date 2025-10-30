@@ -170,7 +170,7 @@ export default function TeacherLayout({
                 <img
                   src="/logo.png"
                   alt="CampusHoster Logo"
-                  className="w-16 h-16 object-contain mr-3"
+                  className="w-20 h-20 object-contain mr-3"
                 />
                 <div>
                   <h1 className="text-lg font-semibold text-foreground">Teacher Portal</h1>

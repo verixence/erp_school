@@ -61,7 +61,7 @@ export function CampusHeader({ brand, onMenuToggle }: CampusHeaderProps) {
     <motion.header
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="sticky top-0 z-40 w-full h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+      className="sticky top-0 z-40 w-full h-24 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
     >
       <div className="h-full">
         {/* Gradient bottom border */}
@@ -92,15 +92,15 @@ export function CampusHeader({ brand, onMenuToggle }: CampusHeaderProps) {
 
             {/* School info */}
             <div className="hidden sm:flex items-center space-x-3">
-              <div className="w-14 h-14 rounded-lg bg-primary/10 flex items-center justify-center">
+              <div className="w-20 h-20 rounded-lg bg-primary/10 flex items-center justify-center">
                 {brand.logo ? (
                   <img
                     src={brand.logo}
                     alt={brand.name || 'School Logo'}
-                    className="w-12 h-12 rounded object-cover"
+                    className="w-16 h-16 rounded object-cover"
                   />
                 ) : (
-                  <span className="text-primary font-semibold text-lg">
+                  <span className="text-primary font-semibold text-2xl">
                     {(brand.name || 'S').charAt(0)}
                   </span>
                 )}
