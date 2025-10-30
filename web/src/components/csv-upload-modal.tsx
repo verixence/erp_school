@@ -21,7 +21,7 @@ interface CSVUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   entity: 'sections' | 'students' | 'teachers';
-  onUpload: (data: any[]) => Promise<void>;
+  onUpload: (data: any[]) => Promise<void | any>;
 }
 
 const CSV_TEMPLATES = {
