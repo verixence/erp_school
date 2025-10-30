@@ -359,8 +359,16 @@ export default function SectionsPage() {
           teacherId = teachers.find(t => t.email === row.teacher_email)?.id || null;
         }
 
+        // Handle grade - keep as string for text values (NURSERY, LKG, etc.) or convert to number
+        let gradeValue = row.grade;
+        if (row.grade && !isNaN(row.grade)) {
+          gradeValue = parseInt(row.grade);
+        } else if (row.grade) {
+          gradeValue = row.grade.toString().toUpperCase();
+        }
+
         return {
-          grade: parseInt(row.grade),
+          grade: gradeValue,
           section: row.section.toUpperCase(),
           capacity: parseInt(row.capacity) || 30,
           class_teacher: teacherId,

@@ -171,10 +171,18 @@ async function bulkImportSections(data: any[], school_id: string) {
       }
 
       // Create section
+      // Handle grade - keep as string for text values (NURSERY, LKG, etc.) or convert to number
+      let gradeValue = row.grade;
+      if (row.grade && !isNaN(row.grade)) {
+        gradeValue = parseInt(row.grade);
+      } else if (row.grade) {
+        gradeValue = row.grade.toString().toUpperCase();
+      }
+
       const sectionData = {
         class_name: `Grade ${row.grade} - ${row.section}`,
-        grade: row.grade,
-        section: row.section,
+        grade: gradeValue,
+        section: row.section.toString().toUpperCase(),
         capacity: parseInt(row.capacity),
         teacher_id,
         school_id
