@@ -77,6 +77,7 @@ interface Teacher {
   first_name: string;
   last_name: string;
   email: string;
+  employee_id?: string;
 }
 
 const GRADES = [
@@ -173,11 +174,11 @@ export default function SectionsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('users')
-        .select('id, first_name, last_name, email')
+        .select('id, first_name, last_name, email, employee_id')
         .eq('school_id', user?.school_id)
         .eq('role', 'teacher')
         .order('first_name');
-      
+
       if (error) throw error;
       return data as Teacher[];
     },
@@ -348,15 +349,25 @@ export default function SectionsPage() {
 
   const handleBulkUpload = async (csvData: any[]) => {
     try {
-      const sectionsToCreate = csvData.map(row => ({
-        grade: parseInt(row.grade),
-        section: row.section.toUpperCase(),
-        capacity: parseInt(row.capacity) || 30,
-        class_teacher: row.teacher_email ? 
-          teachers.find(t => t.email === row.teacher_email)?.id || null : null,
-        school_id: user?.school_id,
-        students_count: 0,
-      }));
+      const sectionsToCreate = csvData.map(row => {
+        let teacherId = null;
+
+        // Try to find teacher by employee_id first, then fall back to email
+        if (row.teacher_employee_id) {
+          teacherId = teachers.find(t => t.employee_id === row.teacher_employee_id)?.id || null;
+        } else if (row.teacher_email) {
+          teacherId = teachers.find(t => t.email === row.teacher_email)?.id || null;
+        }
+
+        return {
+          grade: parseInt(row.grade),
+          section: row.section.toUpperCase(),
+          capacity: parseInt(row.capacity) || 30,
+          class_teacher: teacherId,
+          school_id: user?.school_id,
+          students_count: 0,
+        };
+      });
 
       const { error } = await supabase
         .from('sections')
@@ -674,7 +685,7 @@ export default function SectionsPage() {
                         <SelectItem value="none">No teacher assigned</SelectItem>
                         {getAvailableTeachers(editingSection?.id).map((teacher) => (
                           <SelectItem key={teacher.id} value={teacher.id}>
-                            {teacher.first_name} {teacher.last_name} - {teacher.email}
+                            {teacher.first_name} {teacher.last_name} {teacher.employee_id ? `- ${teacher.employee_id}` : ''}
                           </SelectItem>
                         ))}
                         {getAvailableTeachers(editingSection?.id).length === 0 && (

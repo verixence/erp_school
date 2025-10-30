@@ -137,9 +137,24 @@ async function bulkImportSections(data: any[], school_id: string) {
 
   for (const row of data) {
     try {
-      // Check if teacher exists if provided
+      // Check if teacher exists if provided (try employee_id first, then email)
       let teacher_id = null;
-      if (row.teacher_email) {
+
+      if (row.teacher_employee_id) {
+        const { data: teacher } = await supabase
+          .from('users')
+          .select('id')
+          .eq('employee_id', row.teacher_employee_id)
+          .eq('school_id', school_id)
+          .eq('role', 'teacher')
+          .single();
+
+        if (!teacher) {
+          errors.push(`Teacher with employee ID ${row.teacher_employee_id} not found`);
+          continue;
+        }
+        teacher_id = teacher.id;
+      } else if (row.teacher_email) {
         const { data: teacher } = await supabase
           .from('users')
           .select('id')
@@ -147,7 +162,7 @@ async function bulkImportSections(data: any[], school_id: string) {
           .eq('school_id', school_id)
           .eq('role', 'teacher')
           .single();
-        
+
         if (!teacher) {
           errors.push(`Teacher with email ${row.teacher_email} not found`);
           continue;

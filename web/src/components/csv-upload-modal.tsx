@@ -27,13 +27,14 @@ interface CSVUploadModalProps {
 const CSV_TEMPLATES = {
   sections: {
     filename: 'sections_template.csv',
-    headers: ['grade', 'section', 'capacity', 'teacher_email'],
+    headers: ['grade', 'section', 'capacity', 'teacher_employee_id', 'teacher_email'],
     example: [
-      'Grade,Section,Capacity,Teacher Email',
-      '1,A,30,john.doe@school.com',
-      '1,B,30,jane.smith@school.com',
-      '2,A,25,bob.wilson@school.com'
-    ]
+      'Grade,Section,Capacity,Teacher Employee ID,Teacher Email',
+      '1,A,30,EMP001,',
+      '1,B,30,T001,',
+      '2,A,25,,john.doe@school.com'
+    ],
+    description: 'Use Teacher Employee ID (preferred) or Teacher Email to assign class teachers. Employee ID takes priority if both are provided.'
   },
   students: {
     filename: 'students_template.csv',
