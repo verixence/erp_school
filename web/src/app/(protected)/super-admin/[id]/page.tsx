@@ -217,7 +217,7 @@ export default function EnhancedSchoolDetailsPage() {
   });
 
   const addAdminMutation = useMutation({
-    mutationFn: async (adminData: { email: string; password: string; role: string; permissions: Record<string, boolean> }) => {
+    mutationFn: async (adminData: { email?: string; password: string; role: string; permissions: Record<string, boolean>; useUsername?: boolean }) => {
       const response = await fetch('/api/admin/create-admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -227,13 +227,19 @@ export default function EnhancedSchoolDetailsPage() {
           role: adminData.role,
           permissions: adminData.permissions,
           schoolId: schoolId,
+          useUsername: adminData.useUsername,
         }),
       });
 
       const result = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(result.error || 'Failed to create administrator');
+      }
+
+      // Show the generated username to the user if username mode was used
+      if (result.username) {
+        toast.success(`Admin created successfully! Username: ${result.username}`);
       }
 
       return result;
@@ -1217,7 +1223,8 @@ export default function EnhancedSchoolDetailsPage() {
             onSubmit={(e) => {
               e.preventDefault();
               const formData = new FormData(e.currentTarget);
-              const email = formData.get('email') as string;
+              const useUsername = formData.get('loginType') === 'username';
+              const email = !useUsername ? (formData.get('email') as string) : undefined;
               const password = formData.get('password') as string;
               const role = formData.get('role') as string;
 
@@ -1240,6 +1247,7 @@ export default function EnhancedSchoolDetailsPage() {
                   password,
                   role,
                   permissions,
+                  useUsername,
                 });
               }
             }}
@@ -1248,15 +1256,59 @@ export default function EnhancedSchoolDetailsPage() {
             {!editingAdmin && (
               <>
                 <div>
+                  <label className="text-sm font-medium mb-2 block">Login Type</label>
+                  <div className="flex space-x-4">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="loginType"
+                        value="username"
+                        defaultChecked
+                        className="text-primary"
+                        onChange={(e) => {
+                          const emailInput = document.getElementById('admin-email-input') as HTMLInputElement;
+                          if (emailInput) {
+                            emailInput.required = !e.target.checked;
+                            emailInput.disabled = e.target.checked;
+                          }
+                        }}
+                      />
+                      <span className="text-sm">Username (Auto-generated)</span>
+                    </label>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="loginType"
+                        value="email"
+                        className="text-primary"
+                        onChange={(e) => {
+                          const emailInput = document.getElementById('admin-email-input') as HTMLInputElement;
+                          if (emailInput) {
+                            emailInput.required = e.target.checked;
+                            emailInput.disabled = !e.target.checked;
+                          }
+                        }}
+                      />
+                      <span className="text-sm">Email Address</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div>
                   <label className="text-sm font-medium">Email Address</label>
                   <input
+                    id="admin-email-input"
                     type="email"
                     name="email"
-                    required
-                    className="w-full mt-1 px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                    disabled
+                    className="w-full mt-1 px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
                     placeholder="admin@example.com"
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Leave empty to auto-generate username (recommended for admins without email)
+                  </p>
                 </div>
+
                 <div>
                   <label className="text-sm font-medium">Password</label>
                   <input

@@ -184,7 +184,11 @@ export function EnhancedSchoolForm({ open, onOpenChange, editMode = false, initi
 
           if (uploadError) {
             console.error('Logo upload error:', uploadError);
-            throw new Error('Failed to upload logo');
+            // Check if bucket doesn't exist
+            if (uploadError.message.includes('not found') || uploadError.message.includes('does not exist')) {
+              throw new Error('Storage bucket not configured. Please run setupSchoolLogosBucket() in browser console first.');
+            }
+            throw new Error(`Failed to upload logo: ${uploadError.message}`);
           }
 
           const { data: { publicUrl } } = supabase.storage
@@ -192,9 +196,10 @@ export function EnhancedSchoolForm({ open, onOpenChange, editMode = false, initi
             .getPublicUrl(fileName);
 
           finalLogoUrl = publicUrl;
-        } catch (error) {
+        } catch (error: any) {
           console.error('Logo upload failed:', error);
-          // Continue without logo if upload fails
+          // Show error to user but continue
+          alert(error.message || 'Logo upload failed. You can add it later from school settings.');
         } finally {
           setUploadingLogo(false);
         }
