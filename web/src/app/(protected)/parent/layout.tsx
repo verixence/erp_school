@@ -114,10 +114,10 @@ export default function ParentLayout({
             {/* Sidebar Header */}
             <div className="p-6 border-b border-border">
               <div className="flex items-center mb-3">
-                <img 
-                  src="/logo.png" 
-                  alt="CampusHoster Logo" 
-                  className="w-12 h-12 object-contain mr-3"
+                <img
+                  src="/logo.png"
+                  alt="CampusHoster Logo"
+                  className="w-16 h-16 object-contain mr-3"
                 />
                 <h2 className="text-xl font-bold text-foreground">Parent Portal</h2>
               </div>

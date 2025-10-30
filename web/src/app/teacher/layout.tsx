@@ -167,10 +167,10 @@ export default function TeacherLayout({
             {/* Sidebar Header */}
             <div className="px-6 py-4 border-b border-border">
               <div className="flex items-center">
-                <img 
-                  src="/logo.png" 
-                  alt="CampusHoster Logo" 
-                  className="w-12 h-12 object-contain mr-3"
+                <img
+                  src="/logo.png"
+                  alt="CampusHoster Logo"
+                  className="w-16 h-16 object-contain mr-3"
                 />
                 <div>
                   <h1 className="text-lg font-semibold text-foreground">Teacher Portal</h1>

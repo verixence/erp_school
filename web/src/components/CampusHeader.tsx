@@ -92,15 +92,15 @@ export function CampusHeader({ brand, onMenuToggle }: CampusHeaderProps) {
 
             {/* School info */}
             <div className="hidden sm:flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <div className="w-14 h-14 rounded-lg bg-primary/10 flex items-center justify-center">
                 {brand.logo ? (
-                  <img 
-                    src={brand.logo} 
-                    alt={brand.name || 'School Logo'} 
-                    className="w-6 h-6 rounded object-cover"
+                  <img
+                    src={brand.logo}
+                    alt={brand.name || 'School Logo'}
+                    className="w-12 h-12 rounded object-cover"
                   />
                 ) : (
-                  <span className="text-primary font-semibold text-sm">
+                  <span className="text-primary font-semibold text-lg">
                     {(brand.name || 'S').charAt(0)}
                   </span>
                 )}
