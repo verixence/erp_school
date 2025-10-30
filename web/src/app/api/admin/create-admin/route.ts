@@ -61,15 +61,16 @@ async function generateUsername(role: string, schoolId: string): Promise<string>
 
 export async function POST(request: NextRequest) {
   try {
-    const { 
-      email, 
-      password, 
-      role, 
-      permissions, 
+    const {
+      email,
+      username: providedUsername,
+      password,
+      role,
+      permissions,
       schoolId,
       first_name,
       last_name,
-      useUsername = true // New flag to enable username mode
+      useUsername = false // Flag to enable username mode
     } = await request.json();
 
     if (!password || !role || !permissions || !schoolId) {
@@ -82,9 +83,28 @@ export async function POST(request: NextRequest) {
     let finalEmail = email;
     let username = null;
 
-    // Generate username and dummy email if useUsername is true
+    // Use provided username or generate one if useUsername is true
     if (useUsername) {
-      username = await generateUsername('school_admin', schoolId);
+      if (providedUsername) {
+        // Check if username already exists
+        const { data: existingUser } = await supabaseAdmin
+          .from('users')
+          .select('username')
+          .eq('school_id', schoolId)
+          .eq('username', providedUsername)
+          .single();
+
+        if (existingUser) {
+          return NextResponse.json(
+            { error: 'Username already exists. Please choose a different username.' },
+            { status: 400 }
+          );
+        }
+        username = providedUsername;
+      } else {
+        // Auto-generate if no username provided
+        username = await generateUsername('school_admin', schoolId);
+      }
       finalEmail = `${username}@${schoolId}.local`;
     } else if (!email) {
       return NextResponse.json(

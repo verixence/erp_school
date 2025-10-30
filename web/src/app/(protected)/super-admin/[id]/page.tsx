@@ -217,12 +217,13 @@ export default function EnhancedSchoolDetailsPage() {
   });
 
   const addAdminMutation = useMutation({
-    mutationFn: async (adminData: { email?: string; password: string; role: string; permissions: Record<string, boolean>; useUsername?: boolean }) => {
+    mutationFn: async (adminData: { email?: string; username?: string; password: string; role: string; permissions: Record<string, boolean>; useUsername?: boolean }) => {
       const response = await fetch('/api/admin/create-admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: adminData.email,
+          username: adminData.username,
           password: adminData.password,
           role: adminData.role,
           permissions: adminData.permissions,
@@ -237,7 +238,7 @@ export default function EnhancedSchoolDetailsPage() {
         throw new Error(result.error || 'Failed to create administrator');
       }
 
-      // Show the generated username to the user if username mode was used
+      // Show the username to the user
       if (result.username) {
         toast.success(`Admin created successfully! Username: ${result.username}`);
       }
@@ -1225,6 +1226,7 @@ export default function EnhancedSchoolDetailsPage() {
               const formData = new FormData(e.currentTarget);
               const useUsername = formData.get('loginType') === 'username';
               const email = !useUsername ? (formData.get('email') as string) : undefined;
+              const username = useUsername ? (formData.get('username') as string) : undefined;
               const password = formData.get('password') as string;
               const role = formData.get('role') as string;
 
@@ -1244,6 +1246,7 @@ export default function EnhancedSchoolDetailsPage() {
               } else {
                 addAdminMutation.mutate({
                   email,
+                  username,
                   password,
                   role,
                   permissions,
@@ -1267,13 +1270,16 @@ export default function EnhancedSchoolDetailsPage() {
                         className="text-primary"
                         onChange={(e) => {
                           const emailInput = document.getElementById('admin-email-input') as HTMLInputElement;
-                          if (emailInput) {
+                          const usernameInput = document.getElementById('admin-username-input') as HTMLInputElement;
+                          if (emailInput && usernameInput) {
                             emailInput.required = !e.target.checked;
                             emailInput.disabled = e.target.checked;
+                            usernameInput.required = e.target.checked;
+                            usernameInput.disabled = !e.target.checked;
                           }
                         }}
                       />
-                      <span className="text-sm">Username (Auto-generated)</span>
+                      <span className="text-sm">Username</span>
                     </label>
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input
@@ -1283,15 +1289,33 @@ export default function EnhancedSchoolDetailsPage() {
                         className="text-primary"
                         onChange={(e) => {
                           const emailInput = document.getElementById('admin-email-input') as HTMLInputElement;
-                          if (emailInput) {
+                          const usernameInput = document.getElementById('admin-username-input') as HTMLInputElement;
+                          if (emailInput && usernameInput) {
                             emailInput.required = e.target.checked;
                             emailInput.disabled = !e.target.checked;
+                            usernameInput.required = !e.target.checked;
+                            usernameInput.disabled = e.target.checked;
                           }
                         }}
                       />
                       <span className="text-sm">Email Address</span>
                     </label>
                   </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Username</label>
+                  <input
+                    id="admin-username-input"
+                    type="text"
+                    name="username"
+                    required
+                    className="w-full mt-1 px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                    placeholder="e.g., admin01, principal_smith"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Enter a unique username for login (recommended for admins without email)
+                  </p>
                 </div>
 
                 <div>
@@ -1304,9 +1328,6 @@ export default function EnhancedSchoolDetailsPage() {
                     className="w-full mt-1 px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
                     placeholder="admin@example.com"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Leave empty to auto-generate username (recommended for admins without email)
-                  </p>
                 </div>
 
                 <div>
