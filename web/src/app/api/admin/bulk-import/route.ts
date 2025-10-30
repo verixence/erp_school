@@ -359,14 +359,20 @@ async function bulkImportTeachers(data: any[], school_id: string, useUsername: b
 
   for (const row of data) {
     try {
-      // Generate a temporary password
-      const tempPassword = 'temp' + Math.random().toString(36).slice(-8) + '!';
-      
+      // Use provided password or generate a temporary one
+      const tempPassword = row.password && row.password.trim()
+        ? row.password.trim()
+        : 'temp' + Math.random().toString(36).slice(-8) + '!';
+
       // Generate username if useUsername is enabled
       let username = null;
-      let finalEmail = row.email;
-      
+      let finalEmail = row.email || null;
+
       if (useUsername) {
+        username = await generateUsername('teacher', school_id, row.employee_id);
+        finalEmail = `${username}@${school_id}.local`;
+      } else if (!finalEmail) {
+        // If not using username and no email provided, generate dummy email
         username = await generateUsername('teacher', school_id, row.employee_id);
         finalEmail = `${username}@${school_id}.local`;
       }

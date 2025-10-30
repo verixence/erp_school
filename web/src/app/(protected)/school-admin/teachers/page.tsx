@@ -268,17 +268,20 @@ export default function TeachersPage() {
       const result = await response.json();
 
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
-      
+
       if (result.errors && result.errors.length > 0) {
         toast.error(`${result.errors.length} teachers failed to upload. Check console for details.`);
         console.error('Upload errors:', result.errors);
       }
-      
-      if (result.successful && result.successful.length > 0) {
-        toast.success(`${result.successful.length} teachers uploaded successfully!`);
+
+      if (result.imported && result.imported.length > 0) {
+        toast.success(`${result.imported.length} teachers uploaded successfully!`);
       }
 
       setIsBulkUploadOpen(false);
+
+      // Return the results for the modal to display
+      return result;
     } catch (error: any) {
       toast.error(`Bulk upload failed: ${error.message}`);
     }

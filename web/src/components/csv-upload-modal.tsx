@@ -48,13 +48,14 @@ const CSV_TEMPLATES = {
   },
   teachers: {
     filename: 'teachers_template.csv',
-    headers: ['first_name', 'last_name', 'email', 'phone', 'employee_id', 'department', 'subjects'],
+    headers: ['first_name', 'last_name', 'employee_id', 'email', 'phone', 'department', 'subjects', 'password'],
     example: [
-      'First Name,Last Name,Email,Phone,Employee ID,Department,Subjects',
-      'John,Doe,john.doe@school.com,123-456-7890,EMP001,Mathematics,Mathematics;Physics',
-      'Jane,Smith,jane.smith@school.com,098-765-4321,EMP002,English,English;Literature',
-      'Bob,Wilson,bob.wilson@school.com,555-123-4567,EMP003,Science,Science;Chemistry'
-    ]
+      'First Name,Last Name,Employee ID,Email,Phone,Department,Subjects,Password',
+      'John,Doe,EMP001,john.doe@school.com,123-456-7890,Mathematics,Mathematics;Physics,',
+      'Jane,Smith,EMP002,,098-765-4321,English,English;Literature,MyPass123!',
+      'Bob,Wilson,T001,,555-123-4567,Science,Science;Chemistry,'
+    ],
+    description: 'Employee ID will be used as username for login. Email is optional. Password is optional - if not provided, a temporary password will be generated.'
   },
 
 };
@@ -64,6 +65,8 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
   const [csvData, setCsvData] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [uploadResults, setUploadResults] = useState<any>(null);
+  const [showResults, setShowResults] = useState(false);
   const queryClient = useQueryClient();
 
   const template = CSV_TEMPLATES[entity];
@@ -170,7 +173,8 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
         case 'teachers':
           if (!row.first_name) errors.push(`Row ${rowNum}: First name is required`);
           if (!row.last_name) errors.push(`Row ${rowNum}: Last name is required`);
-          if (!row.email) errors.push(`Row ${rowNum}: Email is required`);
+          if (!row.employee_id) errors.push(`Row ${rowNum}: Employee ID is required (used as username)`);
+          // Email is optional - username will be used for login
           if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
             errors.push(`Row ${rowNum}: Invalid email format`);
           }
@@ -212,9 +216,17 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
 
     setIsProcessing(true);
     try {
-      await onUpload(csvData);
-      toast.success(`Successfully imported ${csvData.length} ${entity}`);
-      onClose();
+      const results = await onUpload(csvData);
+
+      if (results && results.imported && results.imported.length > 0) {
+        // Show results with credentials if available
+        setUploadResults(results);
+        setShowResults(true);
+      } else {
+        toast.success(`Successfully imported ${csvData.length} ${entity}`);
+        onClose();
+      }
+
       setFile(null);
       setCsvData([]);
       setErrors([]);
@@ -223,6 +235,34 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const downloadCredentials = () => {
+    if (!uploadResults || !uploadResults.imported) return;
+
+    const csvLines = ['Username,Password,Name,Employee ID'];
+    uploadResults.imported.forEach((item: any) => {
+      if (item.username && item.temp_password) {
+        const name = `${item.first_name} ${item.last_name}`;
+        csvLines.push(`${item.username},${item.temp_password},"${name}",${item.employee_id || ''}`);
+      }
+    });
+
+    const csvContent = csvLines.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${entity}_credentials_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast.success('Credentials downloaded successfully');
+  };
+
+  const handleCloseResults = () => {
+    setShowResults(false);
+    setUploadResults(null);
+    onClose();
   };
 
   const handleClose = () => {
@@ -316,6 +356,104 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Results Dialog */}
+      <Dialog open={showResults} onOpenChange={handleCloseResults}>
+        <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Upload Complete - Credentials Generated</DialogTitle>
+            <DialogDescription>
+              {uploadResults?.imported?.length || 0} {entity} imported successfully.
+              Download the credentials file to share login information.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto">
+            <div className="space-y-4">
+              {/* Summary */}
+              <div className="flex gap-4">
+                <div className="flex-1 p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm font-medium text-green-700">Successful</p>
+                  <p className="text-2xl font-bold text-green-900">
+                    {uploadResults?.imported?.length || 0}
+                  </p>
+                </div>
+                {uploadResults?.errors && uploadResults.errors.length > 0 && (
+                  <div className="flex-1 p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-sm font-medium text-red-700">Failed</p>
+                    <p className="text-2xl font-bold text-red-900">
+                      {uploadResults.errors.length}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Credentials Table */}
+              {uploadResults?.imported && uploadResults.imported.length > 0 && (
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-muted p-2 font-medium text-sm grid grid-cols-4 gap-2">
+                    <div>Name</div>
+                    <div>Username</div>
+                    <div>Password</div>
+                    <div>Employee ID</div>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {uploadResults.imported.map((item: any, index: number) => (
+                      <div key={index} className="p-2 border-t text-sm grid grid-cols-4 gap-2 hover:bg-muted/50">
+                        <div className="truncate">
+                          {item.first_name} {item.last_name}
+                        </div>
+                        <div className="font-mono text-xs">
+                          {item.username || 'N/A'}
+                        </div>
+                        <div className="font-mono text-xs">
+                          {item.temp_password || 'N/A'}
+                        </div>
+                        <div className="text-xs">
+                          {item.employee_id || 'N/A'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Errors */}
+              {uploadResults?.errors && uploadResults.errors.length > 0 && (
+                <div className="p-3 border border-red-200 rounded-lg bg-red-50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="h-4 w-4 text-red-500" />
+                    <span className="font-medium text-red-700">Import Errors</span>
+                  </div>
+                  <ul className="text-sm text-red-600 space-y-1 max-h-32 overflow-y-auto">
+                    {uploadResults.errors.slice(0, 10).map((error: string, index: number) => (
+                      <li key={index}>• {error}</li>
+                    ))}
+                    {uploadResults.errors.length > 10 && (
+                      <li>• ... and {uploadResults.errors.length - 10} more errors</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Save these credentials before closing
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleCloseResults} className="btn-outline-visible">
+                Close
+              </Button>
+              <Button onClick={downloadCredentials} className="btn-primary-visible">
+                <Download className="h-4 w-4 mr-2" />
+                Download Credentials
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 } 
