@@ -204,11 +204,19 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
   for (const row of data) {
     try {
       // Check if section exists
+      // Normalize grade for lookup
+      let lookupGrade = row.grade;
+      if (row.grade && !isNaN(row.grade)) {
+        lookupGrade = parseInt(row.grade);
+      } else if (row.grade) {
+        lookupGrade = row.grade.toString().toUpperCase();
+      }
+
       const { data: section } = await supabase
         .from('classes')
         .select('id')
-        .eq('grade', row.grade)
-        .eq('section', row.section)
+        .eq('grade', lookupGrade)
+        .eq('section', row.section.toString().toUpperCase())
         .eq('school_id', school_id)
         .single();
 
@@ -218,11 +226,19 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
       }
 
       // Create student
+      // Handle grade - keep as string for text values (NURSERY, LKG, etc.) or convert to number
+      let gradeValue = row.grade;
+      if (row.grade && !isNaN(row.grade)) {
+        gradeValue = parseInt(row.grade);
+      } else if (row.grade) {
+        gradeValue = row.grade.toString().toUpperCase();
+      }
+
       const studentData = {
         full_name: row.full_name,
         admission_no: row.admission_no,
-        grade: row.grade,
-        section: row.section,
+        grade: gradeValue,
+        section: row.section.toString().toUpperCase(),
         date_of_birth: row.date_of_birth,
         gender: row.gender.toLowerCase(),
         student_email: row.student_email || null,
@@ -242,42 +258,86 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
       }
 
       // Create and link parents if provided
-      if (row.parent_emails && student) {
-        const parentEmails = row.parent_emails.split(';').map((email: string) => email.trim());
+      if ((row.parent_emails || row.parent_phones || row.parent_usernames) && student) {
+        const parentEmails = (row.parent_emails || '').split(';').map((email: string) => email.trim()).filter(Boolean);
+        const parentUsernames = (row.parent_usernames || '').split(';').map((u: string) => u.trim()).filter(Boolean);
         const parentNames = (row.parent_names || '').split(';').map((name: string) => name.trim());
         const parentPhones = (row.parent_phones || '').split(';').map((phone: string) => phone.trim());
         const parentRelations = (row.parent_relations || '').split(';').map((relation: string) => relation.trim());
-        
-        for (let i = 0; i < parentEmails.length; i++) {
-          const email = parentEmails[i];
-          if (!email) continue;
-          
-          // Check if parent already exists
-          let { data: parent } = await supabase
-            .from('users')
-            .select('id')
-            .eq('email', email)
-            .eq('school_id', school_id)
-            .eq('role', 'parent')
-            .single();
+        const parentPasswords = (row.parent_passwords || '').split(';').map((pwd: string) => pwd.trim());
+
+        const maxParents = Math.max(parentEmails.length, parentUsernames.length, parentPhones.length, parentNames.length);
+
+        for (let i = 0; i < maxParents; i++) {
+          const email = parentEmails[i] || null;
+          const providedUsername = parentUsernames[i] || null;
+          const phone = parentPhones[i] || null;
+          const parentName = parentNames[i] || null;
+
+          // Skip if no identifier provided
+          if (!email && !providedUsername && !phone) continue;
+
+          // Check if parent already exists by username, email, or phone
+          let parent = null;
+
+          // Try to find by username first (most reliable)
+          if (providedUsername) {
+            const { data } = await supabase
+              .from('users')
+              .select('id')
+              .eq('username', providedUsername)
+              .eq('school_id', school_id)
+              .eq('role', 'parent')
+              .single();
+            parent = data;
+          }
+
+          // Fall back to email if username not found
+          if (!parent && email) {
+            const { data } = await supabase
+              .from('users')
+              .select('id')
+              .eq('email', email)
+              .eq('school_id', school_id)
+              .eq('role', 'parent')
+              .single();
+            parent = data;
+          }
+
+          // Fall back to phone if still not found
+          if (!parent && phone) {
+            const { data } = await supabase
+              .from('users')
+              .select('id')
+              .eq('phone', phone)
+              .eq('school_id', school_id)
+              .eq('role', 'parent')
+              .single();
+            parent = data;
+          }
 
           // Create parent if doesn't exist
           if (!parent) {
             try {
-              const parentName = parentNames[i] || `Parent of ${row.full_name}`;
-              const [first_name, ...lastNameParts] = parentName.split(' ');
+              const fullParentName = parentName || `Parent of ${row.full_name}`;
+              const [first_name, ...lastNameParts] = fullParentName.split(' ');
               const last_name = lastNameParts.join(' ') || '';
-              
-              // Generate temporary password
-              const tempPassword = 'temp' + Math.random().toString(36).slice(-8) + '!';
-              
-              // Generate username if useUsername is enabled
+
+              // Use provided password or generate temporary one
+              const tempPassword = parentPasswords[i] || 'temp' + Math.random().toString(36).slice(-8) + '!';
+
+              // Use provided username or generate one
               let username = null;
               let finalEmail = email;
-              
-              if (useUsername) {
+
+              if (providedUsername) {
+                // Use the provided username
+                username = providedUsername;
+                finalEmail = email || `${username}@${school_id}.local`;
+              } else if (useUsername || !email) {
+                // Generate username if useUsername is true or no email provided
                 username = await generateUsername('parent', school_id);
-                finalEmail = `${username}@${school_id}.local`;
+                finalEmail = email || `${username}@${school_id}.local`;
               }
 
               // Create auth user

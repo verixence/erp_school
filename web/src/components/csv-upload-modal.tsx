@@ -38,14 +38,15 @@ const CSV_TEMPLATES = {
   },
   students: {
     filename: 'students_template.csv',
-    headers: ['full_name', 'admission_no', 'grade', 'section', 'date_of_birth', 'gender', 'parent_names', 'parent_emails', 'parent_phones', 'parent_relations', 'student_email', 'student_phone'],
+    headers: ['full_name', 'admission_no', 'grade', 'section', 'date_of_birth', 'gender', 'parent_names', 'parent_usernames', 'parent_emails', 'parent_phones', 'parent_passwords', 'parent_relations', 'student_email', 'student_phone'],
     example: [
-      'Full Name,Admission No,Grade,Section,Date of Birth,Gender,Parent Names,Parent Emails,Parent Phones,Parent Relations,Student Email,Student Phone',
-      'Alice Johnson,STU001,1,A,2018-05-15,female,John Johnson;Mary Johnson,john.johnson@email.com;mary.johnson@email.com,123-456-7890;098-765-4321,father;mother,alice@school.com,',
-      'Bob Smith,STU002,1,A,2018-03-22,male,Robert Smith,robert.smith@email.com,555-123-4567,father,,',
-      'Carol Wilson,STU003,2,A,2017-08-10,female,Sarah Wilson,sarah.wilson@email.com,333-444-5555,mother,carol@school.com,123-456-7890',
-      'David Brown,STU004,1,A,2018-01-20,male,John Johnson;Mary Johnson,john.johnson@email.com;mary.johnson@email.com,123-456-7890;098-765-4321,father;mother,,'
-    ]
+      'Full Name,Admission No,Grade,Section,Date of Birth,Gender,Parent Names,Parent Usernames,Parent Emails,Parent Phones,Parent Passwords,Parent Relations,Student Email,Student Phone',
+      'Alice Johnson,STU001,1,A,2018-05-15,female,John Johnson;Mary Johnson,johnjohn,john@email.com,123-456-7890,,father;mother,alice@school.com,',
+      'Bob Smith,STU002,1,A,2018-03-22,male,Robert Smith,robert123,,555-123-4567,Pass123!,father,,',
+      'Carol Wilson,STU003,2,A,2017-08-10,female,Sarah Wilson,sarahw,sarah@email.com,333-444-5555,,mother,carol@school.com,',
+      'Emma Brown,STU005,2,A,2017-05-15,female,John Johnson;Mary Johnson,johnjohn,,123-456-7890,,father;mother,,'
+    ],
+    description: 'Use semicolons (;) to separate multiple parents. Parent usernames are optional - if not provided, will auto-generate. Email is optional. If same parent for multiple children, use same username/email/phone. System will link to existing parent account.'
   },
   teachers: {
     filename: 'teachers_template.csv',
