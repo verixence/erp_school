@@ -1231,10 +1231,28 @@ export default function EnhancedSchoolDetailsPage() {
               const role = formData.get('role') as string;
 
               const permissions = {
+                // User Management
                 manage_users: formData.get('manage_users') === 'on',
+                manage_admissions: formData.get('manage_admissions') === 'on',
+                manage_leave_requests: formData.get('manage_leave_requests') === 'on',
+                // Academic Management
                 manage_sections: formData.get('manage_sections') === 'on',
                 manage_timetable: formData.get('manage_timetable') === 'on',
+                manage_exams: formData.get('manage_exams') === 'on',
+                manage_marks: formData.get('manage_marks') === 'on',
+                manage_attendance: formData.get('manage_attendance') === 'on',
+                manage_homework: formData.get('manage_homework') === 'on',
+                // Finance & Operations
+                manage_fees: formData.get('manage_fees') === 'on',
+                manage_expenses: formData.get('manage_expenses') === 'on',
+                manage_inventory: formData.get('manage_inventory') === 'on',
+                view_financial_reports: formData.get('view_financial_reports') === 'on',
+                // Communication & Reports
+                manage_announcements: formData.get('manage_announcements') === 'on',
+                manage_community: formData.get('manage_community') === 'on',
+                manage_gallery: formData.get('manage_gallery') === 'on',
                 view_analytics: formData.get('view_analytics') === 'on',
+                manage_settings: formData.get('manage_settings') === 'on',
               };
 
               if (editingAdmin) {
@@ -1359,23 +1377,96 @@ export default function EnhancedSchoolDetailsPage() {
 
             <div>
               <label className="text-sm font-medium mb-3 block">Permissions</label>
-              <div className="space-y-2">
-                {[
-                  { key: 'manage_users', label: 'Manage Users (Teachers, Students, Parents)' },
-                  { key: 'manage_sections', label: 'Manage Sections & Classes' },
-                  { key: 'manage_timetable', label: 'Manage Timetable' },
-                  { key: 'view_analytics', label: 'View Analytics & Reports' },
-                ].map((permission) => (
-                  <label key={permission.key} className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      name={permission.key}
-                      defaultChecked={editingAdmin?.permissions?.[permission.key] || true}
-                      className="rounded border-border"
-                    />
-                    <span className="text-sm">{permission.label}</span>
-                  </label>
-                ))}
+              <div className="space-y-3">
+                <div className="border-b pb-2">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">User Management</p>
+                  <div className="space-y-2">
+                    {[
+                      { key: 'manage_users', label: 'Manage Users (Teachers, Students, Parents)' },
+                      { key: 'manage_admissions', label: 'Manage Admission Enquiries' },
+                      { key: 'manage_leave_requests', label: 'Manage Leave Requests' },
+                    ].map((permission) => (
+                      <label key={permission.key} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          name={permission.key}
+                          defaultChecked={editingAdmin?.permissions?.[permission.key] !== false}
+                          className="rounded border-border"
+                        />
+                        <span className="text-sm">{permission.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border-b pb-2">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Academic Management</p>
+                  <div className="space-y-2">
+                    {[
+                      { key: 'manage_sections', label: 'Manage Sections & Classes' },
+                      { key: 'manage_timetable', label: 'Manage Timetable' },
+                      { key: 'manage_exams', label: 'Manage Exams & Assessments' },
+                      { key: 'manage_marks', label: 'Manage Marks & Grades' },
+                      { key: 'manage_attendance', label: 'Manage Attendance' },
+                      { key: 'manage_homework', label: 'Manage Homework' },
+                    ].map((permission) => (
+                      <label key={permission.key} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          name={permission.key}
+                          defaultChecked={editingAdmin?.permissions?.[permission.key] !== false}
+                          className="rounded border-border"
+                        />
+                        <span className="text-sm">{permission.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border-b pb-2">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Finance & Operations</p>
+                  <div className="space-y-2">
+                    {[
+                      { key: 'manage_fees', label: 'Manage Fees & Payments' },
+                      { key: 'manage_expenses', label: 'Manage Expenses & Claims' },
+                      { key: 'manage_inventory', label: 'Manage Inventory' },
+                      { key: 'view_financial_reports', label: 'View Financial Reports' },
+                    ].map((permission) => (
+                      <label key={permission.key} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          name={permission.key}
+                          defaultChecked={editingAdmin?.permissions?.[permission.key] !== false}
+                          className="rounded border-border"
+                        />
+                        <span className="text-sm">{permission.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Communication & Reports</p>
+                  <div className="space-y-2">
+                    {[
+                      { key: 'manage_announcements', label: 'Manage Announcements' },
+                      { key: 'manage_community', label: 'Manage Community Posts' },
+                      { key: 'manage_gallery', label: 'Manage Gallery' },
+                      { key: 'view_analytics', label: 'View Analytics & Reports' },
+                      { key: 'manage_settings', label: 'Manage School Settings' },
+                    ].map((permission) => (
+                      <label key={permission.key} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          name={permission.key}
+                          defaultChecked={editingAdmin?.permissions?.[permission.key] !== false}
+                          className="rounded border-border"
+                        />
+                        <span className="text-sm">{permission.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
