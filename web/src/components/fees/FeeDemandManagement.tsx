@@ -95,20 +95,32 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
 
   const loadClasses = async () => {
     try {
-      const { data: sectionsData } = await supabase
-        .from('sections')
+      // Get unique grades from students table directly (which uses TEXT grade column)
+      const { data: studentsData } = await supabase
+        .from('students')
         .select('grade')
         .eq('school_id', schoolId)
-        .order('grade');
+        .not('grade', 'is', null);
 
-      if (sectionsData) {
-        const uniqueGrades = [...new Set(sectionsData.map(s => s.grade?.toString()).filter(Boolean))];
+      if (studentsData) {
+        // Extract unique grades
+        const uniqueGrades = [...new Set(studentsData.map(s => s.grade).filter(Boolean))];
+
+        // Sort text grades (NURSERY, LKG, UKG) first, then numeric grades
         uniqueGrades.sort((a, b) => {
-          const numA = parseInt(a!.replace(/[^0-9]/g, '')) || 0;
-          const numB = parseInt(b!.replace(/[^0-9]/g, '')) || 0;
-          if (numA && numB) return numA - numB;
-          return a!.localeCompare(b!);
+          const numA = parseInt(a!.replace(/[^0-9]/g, ''));
+          const numB = parseInt(b!.replace(/[^0-9]/g, ''));
+
+          // Both are text grades
+          if (isNaN(numA) && isNaN(numB)) return a!.localeCompare(b!);
+          // a is text, b is numeric - text comes first
+          if (isNaN(numA)) return -1;
+          // a is numeric, b is text - text comes first
+          if (isNaN(numB)) return 1;
+          // Both are numeric
+          return numA - numB;
         });
+
         setClasses(uniqueGrades.map(grade => ({ grade: grade! })));
       }
     } catch (error) {
@@ -118,15 +130,17 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
 
   const loadSections = async () => {
     try {
-      const { data: sectionsData } = await supabase
-        .from('sections')
+      // Get unique sections from students table for the selected grade
+      const { data: studentsData } = await supabase
+        .from('students')
         .select('section')
         .eq('school_id', schoolId)
         .eq('grade', selectedClass)
-        .order('section');
+        .not('section', 'is', null);
 
-      if (sectionsData) {
-        const uniqueSections = [...new Set(sectionsData.map(s => s.section).filter(Boolean))];
+      if (studentsData) {
+        const uniqueSections = [...new Set(studentsData.map(s => s.section).filter(Boolean))];
+        uniqueSections.sort();
         setSections(uniqueSections.map(section => ({ section: section! })));
       }
     } catch (error) {
@@ -160,7 +174,7 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
 
     setLoading(true);
     try {
-      // Load fee structures for this class and academic year
+      // Load fee structures for this class and academic year (case-insensitive)
       const { data: structuresData } = await supabase
         .from('fee_structures')
         .select(`
@@ -173,7 +187,7 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
           )
         `)
         .eq('school_id', schoolId)
-        .eq('grade', selectedClass)
+        .ilike('grade', selectedClass)
         .eq('academic_year', selectedAcademicYear)
         .eq('is_active', true);
 
@@ -192,22 +206,23 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
           demandsMap.set(demand.fee_structure_id, {
             id: demand.id,
             fee_structure_id: demand.fee_structure_id,
-            original_amount: demand.original_amount,
-            discount_amount: demand.discount_amount,
-            discount_reason: demand.discount_reason,
-            demand_amount: demand.demand_amount
+            original_amount: parseFloat(demand.original_amount) || 0,
+            discount_amount: parseFloat(demand.discount_amount) || 0,
+            discount_reason: demand.discount_reason || '',
+            demand_amount: parseFloat(demand.demand_amount) || 0
           });
         });
 
         // Initialize demands for structures that don't have custom demands yet
         (structuresData || []).forEach((structure: any) => {
           if (!demandsMap.has(structure.id)) {
+            const amount = parseFloat(structure.amount) || 0;
             demandsMap.set(structure.id, {
               fee_structure_id: structure.id,
-              original_amount: structure.amount,
+              original_amount: amount,
               discount_amount: 0,
               discount_reason: '',
-              demand_amount: structure.amount
+              demand_amount: amount
             });
           }
         });
@@ -452,7 +467,7 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
                             max={demand.original_amount}
                             step="0.01"
                             className="text-right font-mono"
-                            value={demand.discount_amount}
+                            value={demand.discount_amount ?? 0}
                             onChange={(e) => updateDemand(structure.id, 'discount_amount', e.target.value)}
                           />
                         </td>
@@ -460,7 +475,7 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
                           <Input
                             type="text"
                             placeholder="Enter reason (optional)"
-                            value={demand.discount_reason}
+                            value={demand.discount_reason ?? ''}
                             onChange={(e) => updateDemand(structure.id, 'discount_reason', e.target.value)}
                           />
                         </td>

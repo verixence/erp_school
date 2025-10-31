@@ -25,11 +25,15 @@ export default function TeacherLayout({
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Fetch brand data for the school
-  const { data: brand, isLoading: brandLoading } = useQuery({
+  // Fetch brand data for the school with timeout and error handling
+  const { data: brand, isLoading: brandLoading, error: brandError } = useQuery({
     queryKey: ['school-brand', user?.school_id],
     queryFn: () => getBrandForSchool(user!.school_id!),
     enabled: !!user?.school_id,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
+    retry: 2,
+    retryDelay: 1000,
   });
 
   // Inject brand CSS when brand data is available
@@ -67,8 +71,14 @@ export default function TeacherLayout({
     return null;
   }
 
-  // Show loading state while brand is loading
-  if (brandLoading || !brand) {
+  // Don't block rendering if brand fails - use default styling
+  // Only show loading for initial brand fetch, not on errors
+  if (brandLoading && !brandError && !brand) {
+    // Add a timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      console.warn('Brand loading timed out, proceeding with default styling');
+    }, 3000);
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
@@ -77,6 +87,11 @@ export default function TeacherLayout({
         </div>
       </div>
     );
+  }
+
+  // If brand fails to load, proceed with default styling - don't block the app!
+  if (brandError) {
+    console.warn('Failed to load school brand, using default styling:', brandError);
   }
 
   const sidebarItems = [

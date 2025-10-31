@@ -215,7 +215,7 @@ export default function ParentDashboard() {
              <div>
                <p className="text-sm font-medium text-gray-500">Grade & Section</p>
                <p className="text-lg font-semibold">
-                 Grade {currentChild.sections?.grade} - Section {currentChild.sections?.section}
+                 Grade {currentChild.sections?.grade_text || currentChild.sections?.grade || currentChild.grade} - Section {currentChild.sections?.section || currentChild.section}
                </p>
              </div>
              <div>

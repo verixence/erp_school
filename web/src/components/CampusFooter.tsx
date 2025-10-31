@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import type { Brand } from '@erp/common';
 
 interface CampusFooterProps {
-  brand: Brand;
+  brand: Brand | null | undefined;
 }
 
 export function CampusFooter({ brand }: CampusFooterProps) {
@@ -17,7 +17,7 @@ export function CampusFooter({ brand }: CampusFooterProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center text-xs text-muted-foreground space-y-1">
           <div className="font-medium">
-            {brand.name} · {brand.address}
+            {brand?.name || 'School'} · {brand?.address || ''}
           </div>
           <div>
             Powered by{' '}

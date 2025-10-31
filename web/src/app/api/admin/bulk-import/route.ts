@@ -171,25 +171,32 @@ async function bulkImportSections(data: any[], school_id: string) {
       }
 
       // Create section
-      // Handle grade - keep as string for text values (NURSERY, LKG, etc.) or convert to number
-      let gradeValue = row.grade;
+      // Handle grade - numeric grades go in 'grade' column, text grades go in 'grade_text' column
+      let gradeColumn = null;
+      let gradeTextColumn = null;
+
       if (row.grade && !isNaN(row.grade)) {
-        gradeValue = parseInt(row.grade);
+        gradeColumn = parseInt(row.grade);
       } else if (row.grade) {
-        gradeValue = row.grade.toString().toUpperCase();
+        gradeTextColumn = row.grade.toString().toLowerCase();
       }
 
-      const sectionData = {
-        class_name: `Grade ${row.grade} - ${row.section}`,
-        grade: gradeValue,
+      const sectionData: any = {
         section: row.section.toString().toUpperCase(),
         capacity: parseInt(row.capacity),
-        teacher_id,
+        class_teacher: teacher_id,
         school_id
       };
 
+      // Add either grade or grade_text based on the type
+      if (gradeColumn !== null) {
+        sectionData.grade = gradeColumn;
+      } else if (gradeTextColumn !== null) {
+        sectionData.grade_text = gradeTextColumn;
+      }
+
       const { error } = await supabase
-        .from('classes')
+        .from('sections')
         .insert(sectionData);
 
       if (error) {
@@ -220,13 +227,32 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
         lookupGrade = row.grade.toString().toUpperCase();
       }
 
-      const { data: section } = await supabase
-        .from('classes')
+      // Query sections table and handle both numeric and text grades
+      let section = null;
+
+      // First try matching with grade_text (for text grades like NURSERY, LKG, UKG)
+      const { data: textGradeSection } = await supabase
+        .from('sections')
         .select('id')
-        .eq('grade', lookupGrade)
+        .eq('grade_text', lookupGrade.toString().toLowerCase())
         .eq('section', row.section.toString().toUpperCase())
         .eq('school_id', school_id)
-        .single();
+        .maybeSingle();
+
+      section = textGradeSection;
+
+      // If not found and grade is numeric, try matching with integer grade column
+      if (!section && !isNaN(lookupGrade as any)) {
+        const { data: numericGradeSection } = await supabase
+          .from('sections')
+          .select('id')
+          .eq('grade', parseInt(lookupGrade as string))
+          .eq('section', row.section.toString().toUpperCase())
+          .eq('school_id', school_id)
+          .maybeSingle();
+
+        section = numericGradeSection;
+      }
 
       if (!section) {
         errors.push(`Student ${row.full_name}: Section ${row.grade}-${row.section} does not exist. Please create the section first.`);
@@ -247,6 +273,7 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
         admission_no: row.admission_no,
         grade: gradeValue,
         section: row.section.toString().toUpperCase(),
+        section_id: section.id,
         date_of_birth: row.date_of_birth,
         gender: row.gender.toLowerCase(),
         student_email: row.student_email || null,

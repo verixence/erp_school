@@ -57,15 +57,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Transform data to match ApplyPayment component format
+    // Return raw data for FeeDemandManagement component
     const transformedData = (data || []).map((demand: any) => ({
       id: demand.id,
-      fee_structure_id: demand.fee_structure_id, // Include for matching with fee structures
-      fee_type: demand.fee_structures?.fee_categories?.name || 'Unknown',
-      due_date: null, // Due date is not mandatory in fee demands
-      total_amount: demand.original_amount || 0,
-      discount: demand.discount_amount || 0,
+      fee_structure_id: demand.fee_structure_id,
+      student_id: demand.student_id,
+      academic_year: demand.academic_year,
+      original_amount: demand.original_amount || 0,
+      discount_amount: demand.discount_amount || 0,
+      discount_reason: demand.discount_reason || '',
       demand_amount: demand.demand_amount || 0,
+      due_date: demand.due_date || null,
+      // Additional fields for ApplyPayment compatibility
+      fee_type: demand.fee_structures?.fee_categories?.name || 'Unknown',
+      total_amount: demand.original_amount || 0, // Map to ApplyPayment interface
+      discount: demand.discount_amount || 0, // Map to ApplyPayment interface
       paid_amount: demand.paid_amount || 0,
       balance_amount: demand.balance_amount || 0,
       payment_status: demand.payment_status || 'pending'

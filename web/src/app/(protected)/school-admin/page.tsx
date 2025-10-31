@@ -163,7 +163,11 @@ export default function SchoolAdminDashboard() {
     queryKey: ['dashboard-stats', user?.school_id],
     queryFn: () => fetchDashboardStats(user!.school_id!),
     enabled: !!user?.school_id,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    staleTime: 2 * 60 * 1000, // Cache for 2 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes (reduced from 30 seconds)
+    refetchOnWindowFocus: false, // Don't refetch when user switches back to tab
+    retry: 2,
   });
 
   if (isLoading) {

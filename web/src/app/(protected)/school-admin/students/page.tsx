@@ -228,32 +228,36 @@ function StudentsPageContent() {
     }
 
     try {
-      // Use the database function for bulk creating students with smart parent handling
-      const { data, error } = await supabase.rpc('bulk_create_students_with_parents', {
-        p_school_id: user?.school_id,
-        p_students: csvData
+      // Use the API route for bulk creating students with parent auth accounts
+      const response = await fetch('/api/admin/bulk-import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          entity: 'students',
+          data: csvData,
+          school_id: user?.school_id,
+          useUsername: true // Enable username-based login for parents
+        }),
       });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Import failed');
+      }
 
-      const result = data as {
-        success_count: number;
-        error_count: number;
-        results: Array<{ admission_no: string; status: string; error?: string }>;
-      };
+      const result = await response.json();
 
       queryClient.invalidateQueries({ queryKey: ['students'] });
       queryClient.invalidateQueries({ queryKey: ['parents'] });
-      
-      if (result.error_count > 0) {
-        const errors = result.results
-          .filter(r => r.status === 'error')
-          .map(r => `${r.admission_no}: ${r.error}`)
-          .join('\n');
-        
-        toast.error(`${result.success_count} students created successfully, ${result.error_count} failed:\n${errors}`);
+
+      if (result.errors && result.errors.length > 0) {
+        const errorMessages = result.errors.slice(0, 5).join('\n');
+        const remaining = result.errors.length > 5 ? `\n... and ${result.errors.length - 5} more errors` : '';
+        toast.error(`${result.imported?.length || 0} students imported. ${result.errors.length} errors:\n${errorMessages}${remaining}`);
       } else {
-        toast.success(`Successfully imported ${result.success_count} students with parent accounts and linkings.`);
+        toast.success(`Successfully imported ${result.imported?.length || 0} students with parent accounts.`);
       }
     } catch (error: any) {
       toast.error(`Bulk upload failed: ${error.message}`);

@@ -269,7 +269,7 @@ export default function TeacherDashboard() {
                   >
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-semibold">
-                        Grade {section.grade} - Section {section.section}
+                        Grade {section.grade_text || section.grade} - Section {section.section}
                       </h3>
                       {section.class_teacher === user?.id && (
                         <Badge variant="secondary" className="text-xs">

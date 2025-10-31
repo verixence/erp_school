@@ -26,7 +26,8 @@ import TeacherAnalytics from './teacher-analytics';
 
 interface Section {
   id: string;
-  grade: number;
+  grade: number | null;
+  grade_text: string | null;
   section: string;
 }
 
@@ -64,6 +65,14 @@ interface TimetableCell {
   teacher_id?: string | null;
   teacher_name?: string;
 }
+
+// Helper function to format grade display (handles both numeric and text grades)
+const formatGradeDisplay = (section: Section | undefined) => {
+  if (!section) return '';
+  // Use grade_text if available (for NURSERY, LKG, UKG), otherwise use numeric grade
+  const gradeValue = section.grade_text || section.grade;
+  return gradeValue ? String(gradeValue).toUpperCase() : '';
+};
 
 export default function TimetablePage() {
   const { user } = useAuth();
@@ -128,12 +137,13 @@ export default function TimetablePage() {
     queryKey: ['sections', user?.school_id],
     queryFn: async () => {
       if (!user?.school_id) return [];
-      
+
       const { data, error } = await supabase
         .from('sections')
-        .select('id, grade, section')
+        .select('id, grade, grade_text, section')
         .eq('school_id', user.school_id)
-        .order('grade', { ascending: true })
+        .order('grade', { ascending: true, nullsFirst: false })
+        .order('grade_text', { ascending: true, nullsFirst: false })
         .order('section', { ascending: true });
 
       if (error) throw error;
@@ -142,8 +152,9 @@ export default function TimetablePage() {
     enabled: !!user?.school_id,
   });
 
-  // Get the selected section's grade
-  const selectedSectionGrade = sections.find(s => s.id === selectedSection)?.grade;
+  // Get the selected section's grade (use grade_text for text grades like NURSERY, or grade for numeric)
+  const selectedSectionObj = sections.find(s => s.id === selectedSection);
+  const selectedSectionGrade = selectedSectionObj?.grade || selectedSectionObj?.grade_text;
 
   // Get school period configuration for the selected section's grade
   const { data: periodConfig = [] } = useQuery({
@@ -645,7 +656,7 @@ export default function TimetablePage() {
                     whileTap={{ scale: 0.98 }}
                   >
                     <div className="text-center">
-                      <div className="font-semibold">Grade {section.grade}</div>
+                      <div className="font-semibold">Grade {formatGradeDisplay(section)}</div>
                       <div className="text-sm text-gray-600">Section {section.section}</div>
                     </div>
                   </motion.button>
@@ -669,7 +680,7 @@ export default function TimetablePage() {
                   Timetable Grid
                   {selectedSectionData && (
                     <span className="ml-2 text-base font-normal text-gray-600">
-                      - Grade {selectedSectionData.grade} Section {selectedSectionData.section}
+                      - Grade {formatGradeDisplay(selectedSectionData)} Section {selectedSectionData.section}
                     </span>
                   )}
                 </div>
@@ -782,7 +793,7 @@ export default function TimetablePage() {
                     Before creating timetables, you need to configure your school's period timings.
                     {selectedSectionData && (
                       <span className="block mt-2 text-sm">
-                        Selected: <strong>Grade {selectedSectionData.grade} Section {selectedSectionData.section}</strong>
+                        Selected: <strong>Grade {formatGradeDisplay(selectedSectionData)} Section {selectedSectionData.section}</strong>
                       </span>
                     )}
                   </p>
@@ -793,7 +804,7 @@ export default function TimetablePage() {
                         <div className="text-left">
                           <h4 className="font-medium text-amber-900">Setup Required</h4>
                           <p className="text-sm text-amber-700 mt-1">
-                            Configure period timings for Grade {selectedSectionData?.grade || 'this grade'} in the Timing Settings tab before creating timetables.
+                            Configure period timings for Grade {formatGradeDisplay(selectedSectionData) || 'this grade'} in the Timing Settings tab before creating timetables.
                           </p>
                         </div>
                       </div>
@@ -980,7 +991,7 @@ export default function TimetablePage() {
                         .filter(section => section.id !== selectedSection)
                         .map((section) => (
                           <option key={section.id} value={section.id}>
-                            Grade {section.grade} - Section {section.section}
+                            Grade {formatGradeDisplay(section)} - Section {section.section}
                           </option>
                         ))}
                     </select>

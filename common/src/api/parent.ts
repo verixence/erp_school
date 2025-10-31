@@ -26,6 +26,7 @@ export const useChildren = (parentId?: string) => {
           *,
           sections!inner(
             grade,
+            grade_text,
             section,
             school_id
           )
@@ -35,7 +36,7 @@ export const useChildren = (parentId?: string) => {
         .order('full_name', { ascending: true });
 
       if (error) throw error;
-      return data as (Student & { sections: { grade: number; section: string; school_id: string } })[];
+      return data as (Student & { sections: { grade: number; grade_text?: string; section: string; school_id: string } })[];
     },
     enabled: !!parentId,
   });
@@ -85,6 +86,7 @@ export const useChildHomework = (studentId?: string) => {
           *,
           sections!inner(
             grade,
+            grade_text,
             section,
             school_id
           )
@@ -94,8 +96,9 @@ export const useChildHomework = (studentId?: string) => {
 
       if (studentError) throw studentError;
 
-      // Construct section format to match homework table (e.g., "1 A")
-      const homeworkSection = `${student.sections.grade} ${student.sections.section}`;
+      // Construct section format to match homework table (e.g., "1 A" or "NURSERY A")
+      const gradeValue = student.sections.grade_text || student.sections.grade;
+      const homeworkSection = `${gradeValue} ${student.sections.section}`;
 
       const { data, error } = await supabase
         .from('homeworks')
@@ -202,10 +205,13 @@ export const useParentDashboardStats = (parentId?: string) => {
       // Get section information for homework queries
       const { data: sectionsData } = await supabase
         .from('sections')
-        .select('id, grade, section')
+        .select('id, grade, grade_text, section')
         .in('id', [...new Set(children.map(c => c.section_id))]);
 
-      const homeworkSections = sectionsData?.map(s => `${s.grade} ${s.section}`) || [];
+      const homeworkSections = sectionsData?.map(s => {
+        const gradeValue = s.grade_text || s.grade;
+        return `${gradeValue} ${s.section}`;
+      }) || [];
 
       // Get upcoming homework count (next 7 days)
       const nextWeek = new Date();

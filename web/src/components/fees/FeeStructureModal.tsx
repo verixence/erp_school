@@ -28,7 +28,6 @@ interface FeeStructure {
 interface FeeItem {
   fee_category_id: string;
   amount: string;
-  due_date: string;
 }
 
 interface FeeStructureModalProps {
@@ -65,26 +64,37 @@ export default function FeeStructureModal({ schoolId, grade, academicYear, mode,
       // Load sections directly from Supabase client (same as student form)
       const { data: sectionsData, error: sectionsError } = await supabase
         .from('sections')
-        .select('id, grade, section')
+        .select('id, grade, grade_text, section')
         .eq('school_id', schoolId)
-        .order('grade')
+        .order('grade', { ascending: true, nullsFirst: false })
+        .order('grade_text', { ascending: true, nullsFirst: false })
         .order('section');
 
       if (sectionsError) {
         console.error('Error fetching sections:', sectionsError);
       }
 
-      // Extract unique grades from sections
+      // Extract unique grades from sections (use grade_text for text grades like NURSERY, or grade for numeric)
       const uniqueGrades = sectionsData
-        ? [...new Set(sectionsData.map(s => s.grade?.toString()).filter(Boolean))]
+        ? [...new Set(sectionsData.map(s => {
+            const gradeValue = s.grade_text || s.grade?.toString();
+            return gradeValue;
+          }).filter(Boolean))]
         : [];
 
-      // Sort grades properly
+      // Sort grades properly - text grades first, then numeric
       uniqueGrades.sort((a, b) => {
-        const numA = parseInt(a!.replace(/[^0-9]/g, '')) || 0;
-        const numB = parseInt(b!.replace(/[^0-9]/g, '')) || 0;
-        if (numA && numB) return numA - numB;
-        return a!.localeCompare(b!);
+        const numA = parseInt(a!.replace(/[^0-9]/g, ''));
+        const numB = parseInt(b!.replace(/[^0-9]/g, ''));
+
+        // Both are text grades
+        if (isNaN(numA) && isNaN(numB)) return a!.localeCompare(b!);
+        // a is text, b is numeric - text grades come first
+        if (isNaN(numA)) return -1;
+        // a is numeric, b is text - numeric grades come after
+        if (isNaN(numB)) return 1;
+        // Both are numeric
+        return numA - numB;
       });
 
       const classesWithGrades = uniqueGrades.map(grade => ({ grade: grade! }));
@@ -107,8 +117,7 @@ export default function FeeStructureModal({ schoolId, grade, academicYear, mode,
 
           const items = structures.map(s => ({
             fee_category_id: s.fee_category_id,
-            amount: s.amount.toString(),
-            due_date: ''
+            amount: s.amount.toString()
           }));
 
           setFeeItems(items);
@@ -127,7 +136,7 @@ export default function FeeStructureModal({ schoolId, grade, academicYear, mode,
   }, [schoolId, selectedClass, selectedYear]);
 
   const addFeeItem = () => {
-    setFeeItems([...feeItems, { fee_category_id: '', amount: '', due_date: '' }]);
+    setFeeItems([...feeItems, { fee_category_id: '', amount: '' }]);
   };
 
   const removeFeeItem = (index: number) => {
@@ -301,7 +310,6 @@ export default function FeeStructureModal({ schoolId, grade, academicYear, mode,
                 <tr>
                   <th className="px-4 py-3 text-left font-medium">Fee Type</th>
                   <th className="px-4 py-3 text-right font-medium">Amount</th>
-                  <th className="px-4 py-3 text-left font-medium">Due Date</th>
                   {!isViewOnly && <th className="px-4 py-3 text-center font-medium">Action</th>}
                 </tr>
               </thead>
@@ -342,17 +350,6 @@ export default function FeeStructureModal({ schoolId, grade, academicYear, mode,
                         />
                       )}
                     </td>
-                    <td className="px-4 py-3">
-                      {isViewOnly ? (
-                        <span>{item.due_date || 'N/A'}</span>
-                      ) : (
-                        <Input
-                          type="date"
-                          value={item.due_date}
-                          onChange={(e) => updateFeeItem(index, 'due_date', e.target.value)}
-                        />
-                      )}
-                    </td>
                     {!isViewOnly && (
                       <td className="px-4 py-3 text-center">
                         <Button
@@ -369,7 +366,7 @@ export default function FeeStructureModal({ schoolId, grade, academicYear, mode,
                 ))}
                 {!isViewOnly && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-3 text-center">
+                    <td colSpan={3} className="px-4 py-3 text-center">
                       <Button
                         size="sm"
                         variant="outline"
@@ -393,7 +390,6 @@ export default function FeeStructureModal({ schoolId, grade, academicYear, mode,
                 <tr>
                   <th className="px-4 py-3 text-left font-medium">Fee Type</th>
                   <th className="px-4 py-3 text-right font-medium">Amount</th>
-                  <th className="px-4 py-3 text-left font-medium">Due Date</th>
                   {!isViewOnly && <th className="px-4 py-3 text-center font-medium">Action</th>}
                 </tr>
               </thead>
@@ -401,7 +397,6 @@ export default function FeeStructureModal({ schoolId, grade, academicYear, mode,
                 <tr className="bg-slate-100">
                   <td className="px-4 py-3 font-bold">Total Amount</td>
                   <td className="px-4 py-3 text-right font-bold">{calculateTotal().toFixed(2)}</td>
-                  <td className="px-4 py-3"></td>
                   {!isViewOnly && <td className="px-4 py-3"></td>}
                 </tr>
               </tbody>

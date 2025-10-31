@@ -68,6 +68,11 @@ const WEEKDAYS = [
 
 const GRADE_GROUPS = [
   { value: 'all', label: 'All Grades (Default)', description: 'Default timing for all grades', icon: Globe },
+  { value: 'nursery', label: 'Nursery', description: 'Nursery specific', icon: Target },
+  { value: 'lkg', label: 'LKG', description: 'Lower Kindergarten specific', icon: Target },
+  { value: 'ukg', label: 'UKG', description: 'Upper Kindergarten specific', icon: Target },
+  { value: 'ppe1', label: 'PPE-1', description: 'Pre-Primary 1 specific', icon: Target },
+  { value: 'ppe2', label: 'PPE-2', description: 'Pre-Primary 2 specific', icon: Target },
   { value: '1-5', label: 'Primary (1-5)', description: 'Grades 1 to 5', icon: Users },
   { value: '6-10', label: 'Middle/High (6-10)', description: 'Grades 6 to 10', icon: Users },
   { value: '11-12', label: 'Senior (11-12)', description: 'Grades 11 to 12', icon: Users },
@@ -936,32 +941,38 @@ export default function TimingSettings() {
               <div>
                 <h3 className="font-medium mb-4">Select Working Days</h3>
                 <div className="grid grid-cols-7 gap-2">
-                  {WEEKDAYS.map((day) => (
-                    <button
-                      key={day.id}
-                      className={`p-3 text-sm border rounded-lg transition-all ${
-                        wizardData.workingDays.includes(day.id)
-                          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                      onClick={() => {
-                        const newDays = wizardData.workingDays.includes(day.id)
-                          ? wizardData.workingDays.filter(d => d !== day.id)
-                          : [...wizardData.workingDays, day.id];
-                        setWizardData({ ...wizardData, workingDays: newDays });
-                      }}
-                    >
-                      <div className="font-medium">{day.short}</div>
-                      <div className="text-xs">{day.name}</div>
-                    </button>
-                  ))}
+                  {WEEKDAYS.map((day) => {
+                    const isSelected = wizardData.workingDays.includes(day.id);
+                    return (
+                      <button
+                        key={day.id}
+                        className={`p-3 text-sm border-2 rounded-lg transition-all relative ${
+                          isSelected
+                            ? 'border-indigo-600 bg-indigo-600 text-white shadow-md'
+                            : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-400 hover:bg-indigo-50'
+                        }`}
+                        onClick={() => {
+                          const newDays = isSelected
+                            ? wizardData.workingDays.filter(d => d !== day.id)
+                            : [...wizardData.workingDays, day.id];
+                          setWizardData({ ...wizardData, workingDays: newDays });
+                        }}
+                      >
+                        {isSelected && (
+                          <CheckCircle className="w-4 h-4 absolute top-1 right-1" />
+                        )}
+                        <div className="font-medium">{day.short}</div>
+                        <div className="text-xs">{day.name}</div>
+                      </button>
+                    );
+                  })}
                 </div>
-                
+
                 <div className="flex justify-between mt-6">
                   <Button variant="outline" onClick={() => setWizardStep(1)}>
                     Back
                   </Button>
-                  <Button 
+                  <Button
                     onClick={async () => {
                       await createFromTemplate(wizardData.template, selectedGradeGroup);
                       queryClient.invalidateQueries({ queryKey: ['school-period-settings'] });

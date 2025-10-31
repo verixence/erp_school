@@ -74,7 +74,7 @@ export default function TeacherTimetable() {
         .from('periods')
         .select(`
           *,
-          sections!inner(id, grade, section, school_id)
+          sections!inner(id, grade, grade_text, section, school_id)
         `)
         .eq('teacher_id', user.id)
         .eq('sections.school_id', user.school_id)
@@ -82,11 +82,11 @@ export default function TeacherTimetable() {
         .order('period_no', { ascending: true });
 
       if (error) throw error;
-      
+
       // Transform data to match expected format
       return data.map((period: any) => ({
         ...period,
-        section: `Grade ${period.sections.grade} ${period.sections.section}`
+        section: `Grade ${period.sections.grade_text || period.sections.grade} ${period.sections.section}`
       })) as Timetable[];
     },
     enabled: !!user?.id,

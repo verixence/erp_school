@@ -68,7 +68,7 @@ export default function ParentTimetable() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
-              {currentChild.full_name} - Grade {currentChild.sections?.grade}
+              {currentChild.full_name} - Grade {currentChild.sections?.grade_text || currentChild.sections?.grade}
             </CardTitle>
           </CardHeader>
         </Card>

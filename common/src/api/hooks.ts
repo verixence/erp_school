@@ -90,6 +90,7 @@ export const useTeacherSections = (teacherId?: string) => {
           sections!inner(
             id,
             grade,
+            grade_text,
             section,
             school_id,
             class_teacher,
@@ -99,11 +100,12 @@ export const useTeacherSections = (teacherId?: string) => {
         .eq('teacher_id', teacherId);
 
       if (error) throw error;
-      
+
       // Transform the data to match the expected Section interface
       const sectionsData = data?.map((item: any) => ({
         id: item.sections.id,
         grade: item.sections.grade,
+        grade_text: item.sections.grade_text,
         section: item.sections.section,
         school_id: item.sections.school_id,
         class_teacher: item.sections.class_teacher,
@@ -145,7 +147,7 @@ export const useTeacherTimetable = (teacherId?: string, options?: QueryOptions) 
         .from('periods')
         .select(`
           *,
-          sections!inner(id, grade, section, school_id)
+          sections!inner(id, grade, grade_text, section, school_id)
         `)
         .eq('teacher_id', teacherId)
         .order('weekday', { ascending: true })
@@ -154,11 +156,11 @@ export const useTeacherTimetable = (teacherId?: string, options?: QueryOptions) 
       const { data, error } = await query;
 
       if (error) throw error;
-      
+
       // Transform data to match expected format
       return data.map((period: any) => ({
         ...period,
-        section: `Grade ${period.sections.grade} ${period.sections.section}`
+        section: `Grade ${period.sections.grade_text || period.sections.grade} ${period.sections.section}`
       })) as Timetable[];
     },
     enabled: !!teacherId,

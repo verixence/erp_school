@@ -25,6 +25,7 @@ export type ExamType =
 export interface Section {
   id: string;
   grade: number;
+  grade_text?: string; // For text grades like NURSERY, LKG, UKG, PPE-1, PPE-2
   section: string;
   capacity: number;
   class_teacher?: string;

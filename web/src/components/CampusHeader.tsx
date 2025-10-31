@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 interface CampusHeaderProps {
-  brand: Brand;
+  brand: Brand | null | undefined;
   onMenuToggle: () => void;
 }
 
@@ -93,7 +93,7 @@ export function CampusHeader({ brand, onMenuToggle }: CampusHeaderProps) {
             {/* School info */}
             <div className="hidden sm:flex items-center space-x-3">
               <div className="w-20 h-20 rounded-lg bg-primary/10 flex items-center justify-center">
-                {brand.logo ? (
+                {brand?.logo ? (
                   <img
                     src={brand.logo}
                     alt={brand.name || 'School Logo'}
@@ -101,13 +101,13 @@ export function CampusHeader({ brand, onMenuToggle }: CampusHeaderProps) {
                   />
                 ) : (
                   <span className="text-primary font-semibold text-2xl">
-                    {(brand.name || 'S').charAt(0)}
+                    {(brand?.name || 'S').charAt(0)}
                   </span>
                 )}
               </div>
               <div>
                 <h1 className="font-semibold text-sm text-foreground">
-                  {brand.name || 'School Dashboard'}
+                  {brand?.name || 'School Dashboard'}
                 </h1>
                 <p className="text-xs text-muted-foreground hidden lg:block">
                   School Management

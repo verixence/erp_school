@@ -10,12 +10,14 @@ import { Label } from '@/components/ui/label';
 import {
   CreditCard, FileText, Receipt, Settings, PieChart,
   DollarSign, RefreshCw, Building2, CheckSquare,
-  BarChart3, TrendingUp, Calculator, Wallet, ArrowLeft, Plus
+  BarChart3, TrendingUp, Calculator, Wallet, ArrowLeft, Plus,
+  Eye, Edit, Trash2, Save, Calendar
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
 import FeeStructureList from '@/components/fees/FeeStructureList';
 import FeeDemandManagement from '@/components/fees/FeeDemandManagement';
+import PaymentScheduleManagement from '@/components/fees/PaymentScheduleManagement';
 import ApplyPayment from '@/components/fees/ApplyPayment';
 import ExpenseTypeList from '@/components/fees/accounts/ExpenseTypeList';
 import BankMasterList from '@/components/fees/accounts/BankMasterList';
@@ -25,6 +27,7 @@ import AdminExpenseManagement from '@/components/fees/AdminExpenseManagement';
 import TransactionReports from '@/components/reports/TransactionReports';
 import FeeStatusExport from '@/components/fees/FeeStatusExport';
 import CarryForwardDues from '@/components/fees/CarryForwardDues';
+import ReceiptHistory from '@/components/fees/ReceiptHistory';
 
 interface DashboardStats {
   total_outstanding: number;
@@ -85,7 +88,7 @@ interface FeeStructureItem {
 
 type DashboardSection = 'accounts' | 'settings' | 'reports' | 'main';
 type AccountsView = 'apply-payment' | 'claim' | 'expenses' | 'receipts';
-type SettingsView = 'fee-types' | 'fee-structures' | 'fee-demand' | 'expense-types' | 'bank-master' | 'cheque-register' | 'export-fee-status' | 'carry-forward';
+type SettingsView = 'fee-types' | 'fee-structures' | 'fee-demand' | 'payment-schedule' | 'expense-types' | 'bank-master' | 'cheque-register' | 'export-fee-status' | 'carry-forward';
 type ReportsView = 'transactions';
 
 export default function FeeManagementUnified() {
@@ -137,10 +140,13 @@ export default function FeeManagementUnified() {
 
   // Fee Type form state
   const [showFeeTypeForm, setShowFeeTypeForm] = useState(false);
+  const [editingFeeType, setEditingFeeType] = useState<FeeCategory | null>(null);
   const [feeTypeForm, setFeeTypeForm] = useState({
     name: '',
     description: ''
   });
+  const [showFeeTypeDetails, setShowFeeTypeDetails] = useState(false);
+  const [selectedFeeType, setSelectedFeeType] = useState<FeeCategory | null>(null);
 
   // Fee Structure form state
   const [showFeeStructureForm, setShowFeeStructureForm] = useState(false);
@@ -336,8 +342,14 @@ export default function FeeManagementUnified() {
 
     setSaving(true);
     try {
-      const response = await fetch(`/api/admin/fees/categories?school_id=${schoolId}`, {
-        method: 'POST',
+      const url = editingFeeType
+        ? `/api/admin/fees/categories/${editingFeeType.id}?school_id=${schoolId}`
+        : `/api/admin/fees/categories?school_id=${schoolId}`;
+
+      const method = editingFeeType ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: feeTypeForm.name,
@@ -346,17 +358,58 @@ export default function FeeManagementUnified() {
       });
 
       if (response.ok) {
-        toast.success('Fee type created successfully!');
+        toast.success(editingFeeType ? 'Fee type updated successfully!' : 'Fee type created successfully!');
         setFeeTypeForm({ name: '', description: '' });
         setShowFeeTypeForm(false);
+        setEditingFeeType(null);
         await loadDashboardData();
       } else {
         const error = await response.json();
-        toast.error(error.error || 'Failed to create fee type');
+        toast.error(error.error || `Failed to ${editingFeeType ? 'update' : 'create'} fee type`);
       }
     } catch (error) {
-      console.error('Error creating fee type:', error);
-      toast.error('Failed to create fee type');
+      console.error('Error saving fee type:', error);
+      toast.error(`Failed to ${editingFeeType ? 'update' : 'create'} fee type`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleViewFeeType = (category: FeeCategory) => {
+    setSelectedFeeType(category);
+    setShowFeeTypeDetails(true);
+  };
+
+  const handleEditFeeType = (category: FeeCategory) => {
+    setEditingFeeType(category);
+    setFeeTypeForm({
+      name: category.name,
+      description: category.description || ''
+    });
+    setShowFeeTypeForm(true);
+  };
+
+  const handleDeleteFeeType = async (categoryId: string) => {
+    if (!confirm('Are you sure you want to delete this fee type? This action cannot be undone.')) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/admin/fees/categories/${categoryId}?school_id=${schoolId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        toast.success('Fee type deleted successfully!');
+        await loadDashboardData();
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to delete fee type');
+      }
+    } catch (error) {
+      console.error('Error deleting fee type:', error);
+      toast.error('Failed to delete fee type');
     } finally {
       setSaving(false);
     }
@@ -621,16 +674,24 @@ export default function FeeManagementUnified() {
                 <BarChart3 className="h-6 w-6 text-purple-500" />
                 <span className="text-sm font-medium text-center">Fee Structure</span>
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="h-20 flex flex-col items-center justify-center space-y-2"
                 onClick={() => navigateToSection('settings', 'fee-demand')}
               >
                 <DollarSign className="h-6 w-6 text-green-500" />
                 <span className="text-sm font-medium text-center">Fee Demand</span>
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
+                className="h-20 flex flex-col items-center justify-center space-y-2"
+                onClick={() => navigateToSection('settings', 'payment-schedule')}
+              >
+                <Calendar className="h-6 w-6 text-indigo-500" />
+                <span className="text-sm font-medium text-center">Payment Schedule</span>
+              </Button>
+              <Button
+                variant="outline"
                 className="h-20 flex flex-col items-center justify-center space-y-2"
                 onClick={() => navigateToSection('settings', 'expense-types')}
               >
@@ -748,13 +809,8 @@ export default function FeeManagementUnified() {
             {accountsView === 'expenses' && schoolId && (
               <AdminExpenseManagement schoolId={schoolId} />
             )}
-            {accountsView === 'receipts' && (
-              <div className="text-center py-8">
-                <Receipt className="h-12 w-12 text-cyan-500 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold mb-2">Receipt Management</h3>
-                <p className="text-muted-foreground mb-4">Manage and track payment receipts</p>
-                <Button>Upload Receipt</Button>
-              </div>
+            {accountsView === 'receipts' && schoolId && (
+              <ReceiptHistory schoolId={schoolId} />
             )}
           </CardContent>
         </Card>
@@ -783,6 +839,7 @@ export default function FeeManagementUnified() {
             { key: 'fee-types', label: 'Fee Types', icon: FileText },
             { key: 'fee-structures', label: 'Structures', icon: BarChart3 },
             { key: 'fee-demand', label: 'Fee Demand', icon: DollarSign },
+            { key: 'payment-schedule', label: 'Payment Schedule', icon: Calendar },
             { key: 'expense-types', label: 'Expense Types', icon: PieChart },
             { key: 'bank-master', label: 'Bank Master', icon: Building2 },
             { key: 'cheque-register', label: 'Cheque Register', icon: CheckSquare },
@@ -815,7 +872,14 @@ export default function FeeManagementUnified() {
                     <h3 className="text-xl font-semibold text-blue-600">Fee Type List</h3>
                     <p className="text-muted-foreground">Manage different types of fees</p>
                   </div>
-                  <Button onClick={() => setShowFeeTypeForm(true)} className="bg-blue-600 hover:bg-blue-700">
+                  <Button
+                    onClick={() => {
+                      setEditingFeeType(null);
+                      setFeeTypeForm({ name: '', description: '' });
+                      setShowFeeTypeForm(true);
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
                     <Plus className="h-4 w-4 mr-2" />
                     New
                   </Button>
@@ -838,17 +902,33 @@ export default function FeeManagementUnified() {
                           <td className="px-4 py-3 text-sm text-gray-600">{category.description}</td>
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-center gap-2">
-                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50"
+                                onClick={() => handleViewFeeType(category)}
+                              >
+                                <Eye className="h-4 w-4" />
                                 <span className="sr-only">View</span>
-                                👁️
                               </Button>
-                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-green-600 hover:bg-green-50">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-green-600 hover:bg-green-50"
+                                onClick={() => handleEditFeeType(category)}
+                              >
+                                <Edit className="h-4 w-4" />
                                 <span className="sr-only">Edit</span>
-                                ✏️
                               </Button>
-                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-red-600 hover:bg-red-50"
+                                onClick={() => handleDeleteFeeType(category.id)}
+                                disabled={saving}
+                              >
+                                <Trash2 className="h-4 w-4" />
                                 <span className="sr-only">Delete</span>
-                                🗑️
                               </Button>
                             </div>
                           </td>
@@ -875,11 +955,53 @@ export default function FeeManagementUnified() {
                   </div>
                 </div>
 
-                {/* Add Fee Type Form Modal */}
+                {/* View Fee Type Details Modal */}
+                {showFeeTypeDetails && selectedFeeType && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+                      <h3 className="text-lg font-semibold mb-4 text-blue-600">Fee Type Details</h3>
+                      <div className="space-y-4">
+                        <div>
+                          <Label className="text-gray-600">Fee Type Name</Label>
+                          <p className="font-medium text-gray-900 mt-1">{selectedFeeType.name}</p>
+                        </div>
+                        <div>
+                          <Label className="text-gray-600">Description</Label>
+                          <p className="text-gray-900 mt-1">{selectedFeeType.description || 'No description provided'}</p>
+                        </div>
+                        <div>
+                          <Label className="text-gray-600">Status</Label>
+                          <Badge className="mt-1 bg-green-100 text-green-800">
+                            {selectedFeeType.is_mandatory ? 'Mandatory' : 'Optional'}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 mt-6">
+                        <Button variant="outline" onClick={() => setShowFeeTypeDetails(false)}>
+                          Close
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setShowFeeTypeDetails(false);
+                            handleEditFeeType(selectedFeeType);
+                          }}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Add/Edit Fee Type Form Modal */}
                 {showFeeTypeForm && (
                   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-                      <h3 className="text-lg font-semibold mb-4 text-blue-600">Fee Type Setup Info</h3>
+                      <h3 className="text-lg font-semibold mb-4 text-blue-600">
+                        {editingFeeType ? 'Edit Fee Type' : 'Fee Type Setup Info'}
+                      </h3>
                       <div className="space-y-4">
                         <div>
                           <Label htmlFor="fee-type-name">Fee Type Name*</Label>
@@ -902,15 +1024,28 @@ export default function FeeManagementUnified() {
                         </div>
                       </div>
                       <div className="flex justify-end gap-2 mt-6">
-                        <Button variant="outline" onClick={() => setShowFeeTypeForm(false)}>
-                          ← Back
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setShowFeeTypeForm(false);
+                            setEditingFeeType(null);
+                            setFeeTypeForm({ name: '', description: '' });
+                          }}
+                        >
+                          <ArrowLeft className="h-4 w-4 mr-2" />
+                          Back
                         </Button>
-                        <Button 
-                          onClick={handleFeeTypeSubmit} 
+                        <Button
+                          onClick={handleFeeTypeSubmit}
                           disabled={!feeTypeForm.name.trim() || saving}
                           className="bg-green-600 hover:bg-green-700"
                         >
-                          {saving ? 'Saving...' : '💾 Save'}
+                          {saving ? 'Saving...' : (
+                            <>
+                              <Save className="h-4 w-4 mr-2" />
+                              Save
+                            </>
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -923,6 +1058,9 @@ export default function FeeManagementUnified() {
             )}
             {settingsView === 'fee-demand' && schoolId && (
               <FeeDemandManagement schoolId={schoolId} />
+            )}
+            {settingsView === 'payment-schedule' && schoolId && (
+              <PaymentScheduleManagement schoolId={schoolId} />
             )}
             {settingsView === 'expense-types' && schoolId && (
               <ExpenseTypeList schoolId={schoolId} />

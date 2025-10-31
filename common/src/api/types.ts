@@ -19,6 +19,7 @@ export interface School {
 export interface Section {
   id: string;
   grade: string;
+  grade_text?: string; // For text grades like NURSERY, LKG, UKG, PPE-1, PPE-2
   section: string;
   subject?: string;
   teacher_id?: string;

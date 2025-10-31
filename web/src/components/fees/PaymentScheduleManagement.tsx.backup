@@ -1,0 +1,621 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Calendar, Plus, Eye, Edit, Trash2, Bell, Clock, RefreshCw, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase-client';
+import { format } from 'date-fns';
+
+interface PaymentSchedule {
+  id: string;
+  schedule_name: string;
+  description?: string;
+  academic_year: string;
+  due_date: string;
+  grace_period_days: number;
+  late_fee_applicable: boolean;
+  status: string;
+  created_at: string;
+  fee_schedule_grades?: { grade: string }[];
+  fee_schedule_items?: {
+    id: string;
+    fee_category_id: string;
+    amount_override?: number;
+    fee_categories: { id: string; name: string };
+  }[];
+  fee_schedule_reminders?: {
+    id: string;
+    reminder_type: string;
+    days_before: number;
+    notification_channels: string[];
+    is_active: boolean;
+  }[];
+}
+
+interface FeeCategory {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+interface Reminder {
+  reminder_type: string;
+  days_before: number;
+  notification_channels: string[];
+  is_active: boolean;
+}
+
+interface PaymentScheduleManagementProps {
+  schoolId: string;
+}
+
+export default function PaymentScheduleManagement({ schoolId }: PaymentScheduleManagementProps) {
+  const [schedules, setSchedules] = useState<PaymentSchedule[]>([]);
+  const [categories, setCategories] = useState<FeeCategory[]>([]);
+  const [sections, setSections] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create');
+  const [selectedSchedule, setSelectedSchedule] = useState<PaymentSchedule | null>(null);
+
+  // Form state
+  const [formData, setFormData] = useState({
+    schedule_name: '',
+    description: '',
+    academic_year: '',
+    due_date: '',
+    grace_period_days: 0,
+    late_fee_applicable: true,
+    selectedGrades: [] as string[],
+    selectedFees: [] as string[],
+    reminders: [] as Reminder[]
+  });
+
+  const currentYear = new Date().getFullYear();
+  const academicYears = [
+    `${currentYear}-${currentYear + 1}`,
+    `${currentYear + 1}-${currentYear + 2}`,
+    `${currentYear - 1}-${currentYear}`
+  ];
+
+  // Preset reminders
+  const presetReminders: Reminder[] = [
+    { reminder_type: 'before_due', days_before: 7, notification_channels: ['in_app', 'push'], is_active: true },
+    { reminder_type: 'before_due', days_before: 1, notification_channels: ['in_app', 'push'], is_active: true },
+    { reminder_type: 'on_due', days_before: 0, notification_channels: ['in_app', 'push'], is_active: true },
+    { reminder_type: 'after_due', days_before: -3, notification_channels: ['in_app', 'push'], is_active: true }
+  ];
+
+  useEffect(() => {
+    loadData();
+  }, [schoolId]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      // Load schedules
+      const schedulesRes = await fetch(`/api/admin/fees/payment-schedules?school_id=${schoolId}`);
+      const schedulesData = await schedulesRes.json();
+      setSchedules(schedulesData.data || []);
+
+      // Load fee categories
+      const categoriesRes = await fetch(`/api/admin/fees/categories?school_id=${schoolId}`);
+      const categoriesData = await categoriesRes.json();
+      setCategories(categoriesData.data || []);
+
+      // Load sections to get grades
+      const { data: sectionsData } = await supabase
+        .from('sections')
+        .select('id, grade, grade_text, section')
+        .eq('school_id', schoolId)
+        .order('grade', { ascending: true, nullsFirst: false })
+        .order('grade_text', { ascending: true, nullsFirst: false });
+
+      const uniqueGrades = [...new Set(
+        (sectionsData || []).map(s => s.grade_text || s.grade?.toString()).filter(Boolean)
+      )];
+
+      // Sort grades
+      uniqueGrades.sort((a, b) => {
+        const numA = parseInt(a!.replace(/[^0-9]/g, ''));
+        const numB = parseInt(b!.replace(/[^0-9]/g, ''));
+        if (isNaN(numA) && isNaN(numB)) return a!.localeCompare(b!);
+        if (isNaN(numA)) return -1;
+        if (isNaN(numB)) return 1;
+        return numA - numB;
+      });
+
+      setSections(uniqueGrades.map(g => ({ grade: g })));
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast.error('Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = () => {
+    setModalMode('create');
+    setSelectedSchedule(null);
+    setFormData({
+      schedule_name: '',
+      description: '',
+      academic_year: academicYears[0],
+      due_date: '',
+      grace_period_days: 5,
+      late_fee_applicable: true,
+      selectedGrades: [],
+      selectedFees: [],
+      reminders: [...presetReminders]
+    });
+    setShowModal(true);
+  };
+
+  const handleEdit = (schedule: PaymentSchedule) => {
+    setModalMode('edit');
+    setSelectedSchedule(schedule);
+    setFormData({
+      schedule_name: schedule.schedule_name,
+      description: schedule.description || '',
+      academic_year: schedule.academic_year,
+      due_date: schedule.due_date,
+      grace_period_days: schedule.grace_period_days,
+      late_fee_applicable: schedule.late_fee_applicable,
+      selectedGrades: schedule.fee_schedule_grades?.map(g => g.grade) || [],
+      selectedFees: schedule.fee_schedule_items?.map(i => i.fee_category_id) || [],
+      reminders: schedule.fee_schedule_reminders || [...presetReminders]
+    });
+    setShowModal(true);
+  };
+
+  const handleView = (schedule: PaymentSchedule) => {
+    setModalMode('view');
+    setSelectedSchedule(schedule);
+    setShowModal(true);
+  };
+
+  const handleDelete = async (scheduleId: string) => {
+    if (!confirm('Are you sure you want to delete this payment schedule? This will also delete all associated reminders.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/fees/payment-schedules/${scheduleId}?school_id=${schoolId}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) {
+        toast.success('Payment schedule deleted successfully');
+        loadData();
+      } else {
+        toast.error('Failed to delete payment schedule');
+      }
+    } catch (error) {
+      console.error('Error deleting schedule:', error);
+      toast.error('Failed to delete payment schedule');
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.schedule_name || !formData.academic_year || !formData.due_date) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    if (formData.selectedGrades.length === 0) {
+      toast.error('Please select at least one grade');
+      return;
+    }
+
+    if (formData.selectedFees.length === 0) {
+      toast.error('Please select at least one fee type');
+      return;
+    }
+
+    try {
+      const payload = {
+        school_id: schoolId,
+        schedule_name: formData.schedule_name,
+        description: formData.description,
+        academic_year: formData.academic_year,
+        due_date: formData.due_date,
+        grace_period_days: formData.grace_period_days,
+        late_fee_applicable: formData.late_fee_applicable,
+        grades: formData.selectedGrades,
+        fee_items: formData.selectedFees.map(feeId => ({
+          fee_category_id: feeId,
+          is_mandatory: true
+        })),
+        reminders: formData.reminders
+      };
+
+      const url = modalMode === 'edit' && selectedSchedule
+        ? `/api/admin/fees/payment-schedules/${selectedSchedule.id}?school_id=${schoolId}`
+        : `/api/admin/fees/payment-schedules?school_id=${schoolId}`;
+
+      const method = modalMode === 'edit' ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        toast.success(`Payment schedule ${modalMode === 'edit' ? 'updated' : 'created'} successfully`);
+        setShowModal(false);
+        loadData();
+      } else {
+        const error = await res.json();
+        toast.error(error.error || `Failed to ${modalMode === 'edit' ? 'update' : 'create'} payment schedule`);
+      }
+    } catch (error) {
+      console.error('Error saving schedule:', error);
+      toast.error(`Failed to ${modalMode === 'edit' ? 'update' : 'create'} payment schedule`);
+    }
+  };
+
+  const toggleGrade = (grade: string) => {
+    setFormData(prev => ({
+      ...prev,
+      selectedGrades: prev.selectedGrades.includes(grade)
+        ? prev.selectedGrades.filter(g => g !== grade)
+        : [...prev.selectedGrades, grade]
+    }));
+  };
+
+  const toggleFee = (feeId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      selectedFees: prev.selectedFees.includes(feeId)
+        ? prev.selectedFees.filter(f => f !== feeId)
+        : [...prev.selectedFees, feeId]
+    }));
+  };
+
+  const toggleReminder = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      reminders: prev.reminders.map((r, i) =>
+        i === index ? { ...r, is_active: !r.is_active } : r
+      )
+    }));
+  };
+
+  const getReminderLabel = (reminder: Reminder) => {
+    const days = Math.abs(reminder.days_before);
+    if (reminder.days_before > 0) return `${days} day${days > 1 ? 's' : ''} before due date`;
+    if (reminder.days_before === 0) return 'On due date';
+    return `${days} day${days > 1 ? 's' : ''} after due date (overdue)`;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-xl font-semibold text-blue-600">Payment Schedule Management</h3>
+          <p className="text-muted-foreground">Schedule when fees should be collected with automated reminders</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={loadData} className="bg-green-600 text-white hover:bg-green-700">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+          <Button onClick={handleCreate} className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="h-4 w-4 mr-2" />
+            New Schedule
+          </Button>
+        </div>
+      </div>
+
+      {/* Schedules Table */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-700 text-white">
+                <tr>
+                  <th className="px-4 py-3 text-center font-medium">Sl No</th>
+                  <th className="px-4 py-3 text-left font-medium">Schedule Name</th>
+                  <th className="px-4 py-3 text-left font-medium">Academic Year</th>
+                  <th className="px-4 py-3 text-left font-medium">Due Date</th>
+                  <th className="px-4 py-3 text-left font-medium">Grades</th>
+                  <th className="px-4 py-3 text-center font-medium">Reminders</th>
+                  <th className="px-4 py-3 text-center font-medium">Status</th>
+                  <th className="px-4 py-3 text-center font-medium">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {schedules.map((schedule, index) => (
+                  <tr key={schedule.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-center">{index + 1}</td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium">{schedule.schedule_name}</div>
+                      {schedule.description && (
+                        <div className="text-xs text-gray-500">{schedule.description}</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">{schedule.academic_year}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-4 w-4 text-gray-400" />
+                        {format(new Date(schedule.due_date), 'dd MMM yyyy')}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Grace: {schedule.grace_period_days} days
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {schedule.fee_schedule_grades?.slice(0, 3).map(g => (
+                          <Badge key={g.grade} variant="outline" className="text-xs">
+                            {g.grade}
+                          </Badge>
+                        ))}
+                        {schedule.fee_schedule_grades && schedule.fee_schedule_grades.length > 3 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{schedule.fee_schedule_grades.length - 3}
+                          </Badge>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <Bell className="h-4 w-4 text-blue-500" />
+                        <span className="text-sm font-medium">
+                          {schedule.fee_schedule_reminders?.filter(r => r.is_active).length || 0}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <Badge
+                        className={
+                          schedule.status === 'active'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }
+                      >
+                        {schedule.status}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50"
+                          onClick={() => handleView(schedule)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 text-green-600 hover:bg-green-50"
+                          onClick={() => handleEdit(schedule)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 text-red-600 hover:bg-red-50"
+                          onClick={() => handleDelete(schedule.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {schedules.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                      No payment schedules found. Click "New Schedule" to create one.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Create/Edit Modal */}
+      {showModal && (modalMode === 'create' || modalMode === 'edit') && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-blue-600">
+                  {modalMode === 'create' ? 'Create Payment Schedule' : 'Edit Payment Schedule'}
+                </h3>
+                <Button variant="ghost" size="sm" onClick={() => setShowModal(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Basic Info */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="schedule_name">Schedule Name*</Label>
+                    <Input
+                      id="schedule_name"
+                      value={formData.schedule_name}
+                      onChange={(e) => setFormData({ ...formData, schedule_name: e.target.value })}
+                      placeholder="e.g., First Term Fees"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="academic_year">Academic Year*</Label>
+                    <Select
+                      value={formData.academic_year}
+                      onValueChange={(value) => setFormData({ ...formData, academic_year: value })}
+                    >
+                      <SelectTrigger id="academic_year">
+                        <SelectValue placeholder="Select year" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {academicYears.map((year) => (
+                          <SelectItem key={year} value={year}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  <Input
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Optional description"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="due_date">Due Date*</Label>
+                    <Input
+                      id="due_date"
+                      type="date"
+                      value={formData.due_date}
+                      onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="grace_period">Grace Period (days)</Label>
+                    <Input
+                      id="grace_period"
+                      type="number"
+                      min="0"
+                      value={formData.grace_period_days}
+                      onChange={(e) => setFormData({ ...formData, grace_period_days: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+
+                {/* Select Grades */}
+                <div>
+                  <Label>Select Grades*</Label>
+                  <div className="grid grid-cols-4 gap-2 mt-2">
+                    {sections.map((section) => (
+                      <label key={section.grade} className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.selectedGrades.includes(section.grade)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFormData({
+                                ...formData,
+                                selectedGrades: [...formData.selectedGrades, section.grade]
+                              });
+                            } else {
+                              setFormData({
+                                ...formData,
+                                selectedGrades: formData.selectedGrades.filter(g => g !== section.grade)
+                              });
+                            }
+                          }}
+                          className="rounded"
+                        />
+                        <span className="text-sm">{section.grade}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Select Fee Types */}
+                <div>
+                  <Label>Select Fee Types*</Label>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    {categories.map((category) => (
+                      <label key={category.id} className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.selectedFees.includes(category.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFormData({
+                                ...formData,
+                                selectedFees: [...formData.selectedFees, category.id]
+                              });
+                            } else {
+                              setFormData({
+                                ...formData,
+                                selectedFees: formData.selectedFees.filter(f => f !== category.id)
+                              });
+                            }
+                          }}
+                          className="rounded"
+                        />
+                        <span className="text-sm">{category.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Reminders */}
+                <div>
+                  <Label>Reminder Settings</Label>
+                  <div className="space-y-2 mt-2">
+                    {formData.reminders.map((reminder, index) => (
+                      <div key={index} className="flex items-center space-x-4 p-3 bg-gray-50 rounded">
+                        <input
+                          type="checkbox"
+                          checked={reminder.is_active}
+                          onChange={(e) => {
+                            const newReminders = [...formData.reminders];
+                            newReminders[index].is_active = e.target.checked;
+                            setFormData({ ...formData, reminders: newReminders });
+                          }}
+                          className="rounded"
+                        />
+                        <Bell className="h-4 w-4 text-gray-400" />
+                        <span className="text-sm flex-1">
+                          {reminder.days_before > 0 && `${reminder.days_before} days before due date`}
+                          {reminder.days_before === 0 && 'On due date'}
+                          {reminder.days_before < 0 && `${Math.abs(reminder.days_before)} days after due date`}
+                        </span>
+                        <Badge variant="outline" className="text-xs">
+                          {reminder.notification_channels.join(', ')}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-6">
+                <Button variant="outline" onClick={() => setShowModal(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-700">
+                  {modalMode === 'create' ? 'Create Schedule' : 'Update Schedule'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

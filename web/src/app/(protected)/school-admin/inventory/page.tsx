@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import {
   PackageMinus,
   PackageCheck,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase-client';
+import { useAuth } from '@/hooks/use-auth';
 import InventoryCategoryList from '@/components/inventory/InventoryCategoryList';
 import InventoryItemList from '@/components/inventory/InventoryItemList';
 import InventoryIssuanceList from '@/components/inventory/InventoryIssuanceList';
@@ -29,33 +29,12 @@ type Section = 'dashboard' | 'items' | 'issuances' | 'transactions' | 'settings'
 
 export default function InventoryManagementPage() {
   const [activeSection, setActiveSection] = useState<Section>('dashboard');
-  const [schoolId, setSchoolId] = useState<string | null>(null);
+  const { user } = useAuth(); // Use the existing useAuth hook instead of manual fetching
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('school_id')
-          .eq('id', user.id)
-          .single();
-
-        if (userData?.school_id) {
-          setSchoolId(userData.school_id);
-        }
-      }
-    };
-
-    fetchUser();
-  }, []);
+  const schoolId = user?.school_id;
 
   // Fetch dashboard data
-  const { data: dashboardData, isLoading: dashboardLoading } = useQuery({
+  const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError } = useQuery({
     queryKey: ['inventory-dashboard', schoolId],
     queryFn: async () => {
       if (!schoolId) return null;
@@ -64,14 +43,35 @@ export default function InventoryManagementPage() {
       return res.json();
     },
     enabled: !!schoolId,
+    staleTime: 2 * 60 * 1000, // Cache for 2 minutes
+    retry: 2,
   });
 
-  if (!schoolId) {
+  if (!user || !schoolId) {
     return (
       <div className="p-6">
         <Card>
           <CardContent className="pt-6">
-            <p className="text-center text-muted-foreground">Loading...</p>
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading school data...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show error if dashboard data fails to load
+  if (dashboardError) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center text-destructive">
+              <p className="font-semibold mb-2">Failed to load inventory dashboard</p>
+              <p className="text-sm text-muted-foreground">Please try refreshing the page</p>
+            </div>
           </CardContent>
         </Card>
       </div>

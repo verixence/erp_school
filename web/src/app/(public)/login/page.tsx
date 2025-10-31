@@ -19,12 +19,17 @@ export default function LoginPage() {
     // First, find the user by username to get their email
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('email, id, username, first_name, last_name, role, school_id')
+      .select('email, id, username, first_name, last_name, role, school_id, status')
       .eq('username', username)
       .single();
 
     if (userError || !userData) {
       throw new Error('Invalid username or password');
+    }
+
+    // Check if user account is inactive
+    if (userData.status === 'inactive') {
+      throw new Error('Your account has been deactivated. Please contact your school administrator.');
     }
 
     // Use the found email to sign in with Supabase Auth
@@ -69,12 +74,19 @@ export default function LoginPage() {
         // Get user data from database
         const { data: dbUserData, error: userError } = await supabase
           .from('users')
-          .select('id, role, email, username, first_name, last_name')
+          .select('id, role, email, username, first_name, last_name, status')
           .eq('id', data.user?.id)
           .single();
 
         if (userError || !dbUserData) {
           setMessage('User not found in the system. Please contact an administrator.');
+          return;
+        }
+
+        // Check if user account is inactive
+        if (dbUserData.status === 'inactive') {
+          await supabase.auth.signOut();
+          setMessage('Your account has been deactivated. Please contact your school administrator.');
           return;
         }
 

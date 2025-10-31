@@ -136,6 +136,8 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
               <div class="header-content">
                 <h1>${lastPaymentReceipt.school.name}</h1>
                 <p>${lastPaymentReceipt.school.address}</p>
+                ${lastPaymentReceipt.school.phone ? `<p>Phone: ${lastPaymentReceipt.school.phone}</p>` : ''}
+                ${lastPaymentReceipt.school.email ? `<p>Email: ${lastPaymentReceipt.school.email}</p>` : ''}
                 <p class="title">FEE PAYMENT RECEIPT</p>
               </div>
             </div>
@@ -157,6 +159,8 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
                 <p><strong>Name:</strong> ${lastPaymentReceipt.student.full_name}</p>
                 <p><strong>Admission No:</strong> ${lastPaymentReceipt.student.admission_no}</p>
                 <p><strong>Class:</strong> ${lastPaymentReceipt.student.grade} - ${lastPaymentReceipt.student.section}</p>
+                ${lastPaymentReceipt.student.parent_name ? `<p><strong>Parent/Guardian:</strong> ${lastPaymentReceipt.student.parent_name}</p>` : ''}
+                ${lastPaymentReceipt.student.parent_phone ? `<p><strong>Contact:</strong> ${lastPaymentReceipt.student.parent_phone}</p>` : ''}
               </div>
             </div>
 
@@ -260,9 +264,9 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('sections')
-        .select('section')
+        .select('id, section, grade_text')
         .eq('school_id', schoolId)
-        .eq('grade', selectedClass)
+        .ilike('grade_text', selectedClass)
         .order('section', { ascending: true });
 
       if (error) throw error;
@@ -277,7 +281,22 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
     queryFn: async () => {
       let query = supabase
         .from('students')
-        .select('id, full_name, admission_no, grade, section')
+        .select(`
+          id,
+          full_name,
+          admission_no,
+          grade,
+          section,
+          student_parents (
+            users (
+              id,
+              first_name,
+              last_name,
+              phone,
+              email
+            )
+          )
+        `)
         .eq('school_id', schoolId)
         .eq('status', 'active');
 
@@ -312,7 +331,7 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
           )
         `)
         .eq('school_id', schoolId)
-        .eq('grade', selectedStudent?.grade)
+        .ilike('grade', selectedStudent?.grade)
         .eq('is_active', true);
 
       if (error) throw error;
@@ -381,27 +400,76 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
       }
       return response.json();
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ['fee-demands', schoolId, selectedStudent?.id] });
       toast.success('Payment applied successfully');
       setShowPaymentDialog(false);
 
       // Store receipt data and show receipt dialog
-      setLastPaymentReceipt({
-        student: selectedStudent,
+      const parentInfo = selectedStudent?.student_parents?.[0]?.users;
+      const receiptNo = result.receipt_no || `RCP-${Date.now()}`;
+      const parentName = parentInfo ? `${parentInfo.first_name || ''} ${parentInfo.last_name || ''}`.trim() : '';
+
+      const receiptData = {
+        student: {
+          ...selectedStudent,
+          parent_name: parentName,
+          parent_phone: parentInfo?.phone || ''
+        },
         demand: selectedDemand,
         payment: {
           ...paymentForm,
-          receipt_no: result.receipt_no || `RCP-${Date.now()}`
+          receipt_no: receiptNo
         },
         school: {
           name: schoolData?.name || 'School Name',
           address: formatAddress(schoolData?.address),
+          phone: schoolData?.phone_number || '',
+          email: schoolData?.email_address || '',
           logo_url: schoolData?.logo_url
         }
-      });
+      };
+
+      setLastPaymentReceipt(receiptData);
       setShowReceiptDialog(true);
       resetPaymentForm();
+
+      // Save receipt to database
+      try {
+        await fetch(`/api/admin/fees/receipts?school_id=${schoolId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            student_id: selectedStudent?.id,
+            receipt_no: receiptNo,
+            student_name: selectedStudent?.full_name,
+            student_admission_no: selectedStudent?.admission_no,
+            student_grade: selectedStudent?.grade,
+            student_section: selectedStudent?.section,
+            parent_name: parentName || null,
+            parent_phone: parentInfo?.phone || null,
+            parent_email: parentInfo?.email || null,
+            payment_method: paymentForm.payment_method,
+            payment_date: paymentForm.payment_date,
+            reference_number: paymentForm.reference_number || null,
+            notes: paymentForm.notes || null,
+            receipt_items: {
+              fee_type: selectedDemand?.fee_type,
+              amount: paymentForm.amount,
+              demand_id: selectedDemand?.id
+            },
+            total_amount: paymentForm.amount,
+            school_name: schoolData?.name,
+            school_address: formatAddress(schoolData?.address),
+            school_phone: schoolData?.phone_number || null,
+            school_email: schoolData?.email_address || null,
+            school_logo_url: schoolData?.logo_url || null
+          })
+        });
+      } catch (error) {
+        console.error('Failed to save receipt to database:', error);
+        // Don't show error to user - receipt is still displayed
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -629,7 +697,7 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
                 Pay Selected ({selectedDemands.size}) - ₹
                 {feeDemands
                   .filter(d => selectedDemands.has(d.id))
-                  .reduce((sum, d) => sum + d.balance_amount, 0)
+                  .reduce((sum, d) => sum + (d.balance_amount || 0), 0)
                   .toFixed(2)}
               </Button>
             )}
@@ -711,11 +779,11 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
                           </TableCell>
                           <TableCell>{demand.fee_type}</TableCell>
                           <TableCell>{demand.due_date ? new Date(demand.due_date).toLocaleDateString('en-GB') : '-'}</TableCell>
-                          <TableCell>{demand.total_amount.toFixed(2)}</TableCell>
+                          <TableCell>{(demand.total_amount || 0).toFixed(2)}</TableCell>
                           <TableCell>{demand.discount || 0}</TableCell>
-                          <TableCell>{demand.demand_amount.toFixed(2)}</TableCell>
-                          <TableCell>{demand.paid_amount.toFixed(2)}</TableCell>
-                          <TableCell>{demand.balance_amount.toFixed(2)}</TableCell>
+                          <TableCell>{(demand.demand_amount || 0).toFixed(2)}</TableCell>
+                          <TableCell>{(demand.paid_amount || 0).toFixed(2)}</TableCell>
+                          <TableCell>{(demand.balance_amount || 0).toFixed(2)}</TableCell>
                           <TableCell>
                             <span
                               className={`px-2 py-1 rounded text-xs ${
@@ -770,7 +838,7 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
                   {selectedDemand.due_date && (
                     <div key="due-date"><strong>Due Date:</strong> {new Date(selectedDemand.due_date).toLocaleDateString('en-GB')}</div>
                   )}
-                  <div key="balance"><strong>Balance Amount:</strong> ₹{selectedDemand.balance_amount.toFixed(2)}</div>
+                  <div key="balance"><strong>Balance Amount:</strong> ₹{(selectedDemand.balance_amount || 0).toFixed(2)}</div>
                 </div>
               </div>
             )}
@@ -848,8 +916,8 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
       </Dialog>
 
       {/* Receipt Dialog */}
-      <Dialog open={showReceiptDialog} onOpenChange={setShowReceiptDialog}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <Dialog open={showReceiptDialog} onOpenChange={(open) => setShowReceiptDialog(open)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" onPointerDownOutside={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>Payment Receipt</DialogTitle>
           </DialogHeader>
@@ -860,6 +928,12 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
               <div className="text-center border-b-2 pb-4">
                 <h1 className="text-3xl font-bold">{lastPaymentReceipt.school.name}</h1>
                 <p className="text-gray-600">{lastPaymentReceipt.school.address}</p>
+                {lastPaymentReceipt.school.phone && (
+                  <p className="text-gray-600">Phone: {lastPaymentReceipt.school.phone}</p>
+                )}
+                {lastPaymentReceipt.school.email && (
+                  <p className="text-gray-600">Email: {lastPaymentReceipt.school.email}</p>
+                )}
                 <p className="text-lg font-semibold mt-2">FEE PAYMENT RECEIPT</p>
               </div>
 
@@ -884,6 +958,12 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
                   <p><strong>Name:</strong> {lastPaymentReceipt.student.full_name}</p>
                   <p><strong>Admission No:</strong> {lastPaymentReceipt.student.admission_no}</p>
                   <p><strong>Class:</strong> {lastPaymentReceipt.student.grade} - {lastPaymentReceipt.student.section}</p>
+                  {lastPaymentReceipt.student.parent_name && (
+                    <p><strong>Parent/Guardian:</strong> {lastPaymentReceipt.student.parent_name}</p>
+                  )}
+                  {lastPaymentReceipt.student.parent_phone && (
+                    <p><strong>Contact:</strong> {lastPaymentReceipt.student.parent_phone}</p>
+                  )}
                 </div>
               </div>
 
@@ -945,10 +1025,25 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowReceiptDialog(false)}>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowReceiptDialog(false);
+              }}
+            >
               Close
             </Button>
-            <Button onClick={printReceipt}>
+            <Button 
+              type="button" 
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                printReceipt();
+              }}
+            >
               <Printer className="h-4 w-4 mr-2" />
               Print Receipt
             </Button>
@@ -1015,8 +1110,16 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
               setSelectedDemands(new Set());
 
               // Show consolidated receipt
-              setLastPaymentReceipt({
-                student: selectedStudent,
+              const parentInfo = selectedStudent?.student_parents?.[0]?.users;
+              const receiptNo = result.receipt_no || `RCP-${Date.now()}`;
+              const parentName = parentInfo ? `${parentInfo.first_name || ''} ${parentInfo.last_name || ''}`.trim() : '';
+
+              const receiptData = {
+                student: {
+                  ...selectedStudent,
+                  parent_name: parentName,
+                  parent_phone: parentInfo?.phone || ''
+                },
                 payments: payments.map(p => ({
                   ...p,
                   demand: feeDemands.find(d => d.id === p.fee_demand_id)
@@ -1025,15 +1128,56 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
                 payment: {
                   ...paymentForm,
                   amount: totalPayment,
-                  receipt_no: result.receipt_no || `RCP-${Date.now()}`
+                  receipt_no: receiptNo
                 },
                 school: {
                   name: schoolData?.name || 'School Name',
-                  address: typeof schoolData?.address === 'string' ? schoolData.address : JSON.stringify(schoolData?.address || {}),
+                  address: formatAddress(schoolData?.address),
+                  phone: schoolData?.phone_number || '',
+                  email: schoolData?.email_address || '',
                   logo_url: schoolData?.logo_url
                 }
-              });
+              };
+
+              setLastPaymentReceipt(receiptData);
               setShowReceiptDialog(true);
+
+              // Save receipt to database
+              try {
+                await fetch(`/api/admin/fees/receipts?school_id=${schoolId}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    student_id: selectedStudent?.id,
+                    receipt_no: receiptNo,
+                    student_name: selectedStudent?.full_name,
+                    student_admission_no: selectedStudent?.admission_no,
+                    student_grade: selectedStudent?.grade,
+                    student_section: selectedStudent?.section,
+                    parent_name: parentName || null,
+                    parent_phone: parentInfo?.phone || null,
+                    parent_email: parentInfo?.email || null,
+                    payment_method: paymentForm.payment_method,
+                    payment_date: paymentForm.payment_date,
+                    reference_number: paymentForm.reference_number || null,
+                    notes: paymentForm.notes || null,
+                    receipt_items: payments.map(p => ({
+                      fee_type: feeDemands.find(d => d.id === p.fee_demand_id)?.fee_type,
+                      amount: p.amount,
+                      demand_id: p.fee_demand_id
+                    })),
+                    total_amount: totalPayment,
+                    school_name: schoolData?.name,
+                    school_address: formatAddress(schoolData?.address),
+                    school_phone: schoolData?.phone_number || null,
+                    school_email: schoolData?.email_address || null,
+                    school_logo_url: schoolData?.logo_url || null
+                  })
+                });
+              } catch (error) {
+                console.error('Failed to save receipt to database:', error);
+                // Don't show error to user - receipt is still displayed
+              }
 
             } catch (error: any) {
               toast.error(error.message);
@@ -1045,7 +1189,7 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
                 {feeDemands.filter(d => selectedDemands.has(d.id)).map(demand => (
                   <div key={demand.id} className="grid grid-cols-3 gap-2 items-center text-sm">
                     <span className="font-medium">{demand.fee_type}</span>
-                    <span className="text-gray-600">Balance: ₹{demand.balance_amount.toFixed(2)}</span>
+                    <span className="text-gray-600">Balance: ₹{(demand.balance_amount || 0).toFixed(2)}</span>
                     <div className="flex items-center gap-1">
                       <span className="text-gray-600">₹</span>
                       <Input
