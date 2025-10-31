@@ -19,10 +19,10 @@ const supabaseAdmin = createClient(
 // GET - Get a specific payment schedule
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     const { data, error } = await supabaseAdmin
       .from('fee_collection_schedules')
@@ -78,10 +78,10 @@ export async function GET(
 // PUT - Update a payment schedule
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     const {
       schedule_name,
@@ -293,10 +293,10 @@ export async function PUT(
 // DELETE - Delete a payment schedule
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     // The database will cascade delete related records
     const { error } = await supabaseAdmin

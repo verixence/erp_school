@@ -329,9 +329,9 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
             name,
             description
           )
-        `)
+        `        )
         .eq('school_id', schoolId)
-        .ilike('grade', selectedStudent?.grade)
+        .ilike('grade', selectedStudent?.grade || '')
         .eq('is_active', true);
 
       if (error) throw error;
@@ -406,7 +406,7 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
       setShowPaymentDialog(false);
 
       // Store receipt data and show receipt dialog
-      const parentInfo = selectedStudent?.student_parents?.[0]?.users;
+      const parentInfo = (selectedStudent as any)?.student_parents?.[0]?.users;
       const receiptNo = result.receipt_no || `RCP-${Date.now()}`;
       const parentName = parentInfo ? `${parentInfo.first_name || ''} ${parentInfo.last_name || ''}`.trim() : '';
 
@@ -1110,7 +1110,7 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
               setSelectedDemands(new Set());
 
               // Show consolidated receipt
-              const parentInfo = selectedStudent?.student_parents?.[0]?.users;
+              const parentInfo = (selectedStudent as any)?.student_parents?.[0]?.users;
               const receiptNo = result.receipt_no || `RCP-${Date.now()}`;
               const parentName = parentInfo ? `${parentInfo.first_name || ''} ${parentInfo.last_name || ''}`.trim() : '';
 

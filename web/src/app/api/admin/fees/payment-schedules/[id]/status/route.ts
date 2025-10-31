@@ -4,9 +4,10 @@ import { createClient } from '@/lib/supabase-server';
 // GET /api/admin/fees/payment-schedules/[id]/status - Get payment status for a schedule
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     const { searchParams } = new URL(request.url);
     const schoolId = searchParams.get('school_id');
@@ -36,7 +37,7 @@ export async function GET(
           due_date
         )
       `)
-      .eq('schedule_id', params.id)
+      .eq('schedule_id', id)
       .order('payment_status', { ascending: true })
       .order('students(full_name)', { ascending: true });
 
@@ -61,9 +62,10 @@ export async function GET(
 // PATCH /api/admin/fees/payment-schedules/[id]/status - Update schedule status
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     const { searchParams } = new URL(request.url);
     const schoolId = searchParams.get('school_id');
@@ -87,7 +89,7 @@ export async function PATCH(
     const { error } = await supabase
       .from('fee_collection_schedules')
       .update({ status })
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('school_id', schoolId);
 
     if (error) {

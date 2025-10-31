@@ -4,9 +4,10 @@ import { createClient } from '@/lib/supabase-server';
 // POST /api/admin/fees/payment-schedules/[id]/send-reminder - Manually send reminders
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     const { searchParams } = new URL(request.url);
     const schoolId = searchParams.get('school_id');
@@ -20,7 +21,7 @@ export async function POST(
 
     // Call the database function to process reminders for this specific schedule
     const { data, error } = await supabase.rpc('process_schedule_reminders', {
-      p_schedule_id: params.id
+      p_schedule_id: id
     });
 
     if (error) {
@@ -35,7 +36,7 @@ export async function POST(
     await supabase
       .from('fee_collection_schedules')
       .update({ last_reminder_sent_at: new Date().toISOString() })
-      .eq('id', params.id);
+      .eq('id', id);
 
     return NextResponse.json({
       message: 'Reminders sent successfully',

@@ -1,12 +1,13 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/admin/fees/receipts/[id] - Fetch a specific receipt
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const searchParams = request.nextUrl.searchParams;
     const schoolId = searchParams.get('school_id');
 
@@ -22,7 +23,7 @@ export async function GET(
     const { data, error } = await supabase
       .from('fee_receipts')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('school_id', schoolId)
       .single();
 
