@@ -25,7 +25,7 @@ import {
   Key,
   UserX
 } from 'lucide-react';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface Parent {
   id: string;

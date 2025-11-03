@@ -13,7 +13,7 @@ import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { formatDate } from '@/lib/utils';
 import { EnhancedSchoolForm } from '@/components/enhanced-school-form';
 import { DeleteSchoolModal } from '@/components/ui/delete-school-modal';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface School {
   id: string;

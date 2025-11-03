@@ -20,7 +20,7 @@ import {
   Settings
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import TimingSettings from './timing-settings';
 import TeacherAnalytics from './teacher-analytics';
 

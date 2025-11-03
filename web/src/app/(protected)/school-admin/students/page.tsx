@@ -28,7 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface Student {
   id: string;

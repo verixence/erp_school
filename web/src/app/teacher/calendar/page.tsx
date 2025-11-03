@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Calendar as CalendarIcon, Clock, MapPin, Search, Filter, CalendarDays } from 'lucide-react'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface CalendarEvent {
   id: string

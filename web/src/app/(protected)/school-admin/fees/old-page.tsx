@@ -29,7 +29,7 @@ import {
   Send
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 
 interface FeeCategory {
   id: string;

@@ -21,7 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
 interface AttendanceSettings {

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Search, MessageSquare, Plus, Calendar, Clock, Reply, Mail, Phone, Star, AlertCircle, CheckCircle } from 'lucide-react'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase-client'
 

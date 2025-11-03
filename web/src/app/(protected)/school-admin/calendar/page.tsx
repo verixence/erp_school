@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar, Plus, Edit, Trash2, CalendarDays, Clock, MapPin, Eye, EyeOff, Repeat, AlertCircle, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useAuth } from '@/hooks/use-auth'
-import { toast } from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface CalendarEvent {
   id: string
