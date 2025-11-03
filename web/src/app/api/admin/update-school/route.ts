@@ -20,10 +20,10 @@ const supabaseAdmin = createClient(
 
 export async function PUT(request: NextRequest) {
   try {
-    const { 
+    const {
       id,
-      name, 
-      domain, 
+      name,
+      domain,
       // Enhanced school details
       logo_url,
       website_url,
@@ -36,6 +36,9 @@ export async function PUT(request: NextRequest) {
       theme_colors,
       school_type,
       board_affiliation,
+      board_type,
+      state_board_type,
+      assessment_pattern,
       establishment_year,
       total_capacity,
       description,
@@ -106,6 +109,9 @@ export async function PUT(request: NextRequest) {
         theme_colors: theme_colors || defaultThemeColors,
         school_type: school_type || 'public',
         board_affiliation: board_affiliation || null,
+        board_type: board_type || null,
+        state_board_type: state_board_type || null,
+        assessment_pattern: assessment_pattern || null,
         establishment_year: establishment_year ? parseInt(establishment_year) : null,
         total_capacity: total_capacity ? parseInt(total_capacity) : null,
         description: description || null,

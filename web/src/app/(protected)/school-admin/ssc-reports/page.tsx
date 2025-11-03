@@ -102,7 +102,7 @@ export default function SSCReportsPage() {
 
   // Get grades from sections
   const grades = useMemo(() => {
-    const uniqueGrades = [...new Set(sections.map(section => section.grade))];
+    const uniqueGrades = [...new Set(sections.map(section => section.grade).filter(grade => grade != null))];
     return uniqueGrades.sort((a, b) => a - b);
   }, [sections]);
 
@@ -216,6 +216,11 @@ export default function SSCReportsPage() {
         return;
       }
 
+      // Extract parent name from student_parents relationship
+      const parentName = report.student?.student_parents?.[0]?.parent
+        ? `${report.student.student_parents[0].parent.first_name} ${report.student.student_parents[0].parent.last_name}`
+        : '';
+
       const reportData = {
         student: {
           id: report.student_id,
@@ -223,6 +228,8 @@ export default function SSCReportsPage() {
           admission_no: report.student?.admission_no || '',
           section: report.student?.section || '',
           grade: report.student?.grade || '',
+          father_name: parentName,
+          mother_name: '',
         },
         school: {
           name: school.name,
@@ -243,13 +250,13 @@ export default function SSCReportsPage() {
         overall_grade: report.overall_grade,
         overall_remark: report.overall_remark,
         attendance: report.attendance_data,
-        grading_legend: report.report_type === 'FA' 
+        grading_legend: report.report_type === 'FA'
           ? [
               { min: 19, max: 20, grade: "O", remark: "Outstanding" },
-              { min: 15, max: 18, grade: "A", remark: "Very Good" },
+              { min: 15, max: 18, grade: "A", remark: "Excellent Progress" },
               { min: 11, max: 14, grade: "B", remark: "Good" },
               { min: 6, max: 10, grade: "C", remark: "Pass" },
-              { min: 0, max: 5, grade: "D", remark: "Work Hard" }
+              { min: 0, max: 5, grade: "D", remark: "Needs Improvement" }
             ]
           : [
               { min: 540, max: 600, grade: "O", remark: "Outstanding" },
@@ -685,9 +692,9 @@ export default function SSCReportsPage() {
                                     </Badge>
                                   </div>
                                 </TableCell>
-                                <TableCell className="text-center">{report.total_marks}</TableCell>
-                                <TableCell className="text-center">{report.obtained_marks}</TableCell>
-                                <TableCell className="text-center">{report.percentage.toFixed(1)}%</TableCell>
+                                <TableCell className="text-center">{report.total_marks || 0}</TableCell>
+                                <TableCell className="text-center">{report.obtained_marks || 0}</TableCell>
+                                <TableCell className="text-center">{report.percentage ? report.percentage.toFixed(1) : '0.0'}%</TableCell>
                                 <TableCell className="text-center">
                                   {report.overall_grade && (
                                     <Badge className="bg-blue-100 text-blue-800">

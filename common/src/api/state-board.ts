@@ -116,6 +116,12 @@ export interface StateBoardReport {
     admission_no?: string;
     section?: string;
     grade?: string;
+    student_parents?: Array<{
+      parent: {
+        first_name: string;
+        last_name: string;
+      };
+    }>;
   };
   exam_group?: StateBoardExamGroup;
 }
@@ -200,10 +206,10 @@ export function calculateOverallGrade(
  */
 export const DEFAULT_FA_GRADING: GradeBand[] = [
   { min: 19, max: 20, grade: "O", remark: "Outstanding" },
-  { min: 15, max: 18, grade: "A", remark: "Very Good" },
+  { min: 15, max: 18, grade: "A", remark: "Excellent Progress" },
   { min: 11, max: 14, grade: "B", remark: "Good" },
   { min: 6, max: 10, grade: "C", remark: "Pass" },
-  { min: 0, max: 5, grade: "D", remark: "Work Hard" }
+  { min: 0, max: 5, grade: "D", remark: "Needs Improvement" }
 ];
 
 export const DEFAULT_SA_GRADING: GradeBand[] = [
@@ -557,7 +563,19 @@ export const useStateBoardReports = (schoolId?: string, examGroupId?: string, st
         .from('state_board_reports')
         .select(`
           *,
-          student:students(id, full_name, admission_no, section, grade),
+          student:students(
+            id,
+            full_name,
+            admission_no,
+            section,
+            grade,
+            student_parents(
+              parent:users!student_parents_parent_id_fkey(
+                first_name,
+                last_name
+              )
+            )
+          ),
           exam_group:exam_groups(id, name, assessment_type, assessment_number)
         `)
         .order('generated_at', { ascending: false });
@@ -685,9 +703,9 @@ export const useGenerateStateBoardReports = () => {
             if (assessmentType === 'FA') {
               // For FA, calculate average marks (since each subject is out of 20)
               const averageMarks = totalObtained / subjectMarks.length;
-              const overallGradeInfo = gradeBands.find(band => 
+              const overallGradeInfo = gradeBands.find(band =>
                 averageMarks >= band.min && averageMarks <= band.max
-              ) || { grade: 'D', remark: 'Work Hard' };
+              ) || { grade: 'D', remark: 'Needs Improvement' };
               
               overallGrade = overallGradeInfo.grade;
               overallRemark = overallGradeInfo.remark;

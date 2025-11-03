@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -47,6 +48,9 @@ interface FormData {
   description: string;
   school_type: string;
   board_affiliation: string;
+  board_type: string;
+  state_board_type: string;
+  assessment_pattern: string;
   establishment_year: string;
   total_capacity: string;
   logo_url: string;
@@ -86,6 +90,9 @@ const initialFormData: FormData = {
   description: '',
   school_type: 'public',
   board_affiliation: '',
+  board_type: '',
+  state_board_type: '',
+  assessment_pattern: '',
   establishment_year: '',
   total_capacity: '',
   logo_url: '',
@@ -131,6 +138,9 @@ export function EnhancedSchoolForm({ open, onOpenChange, editMode = false, initi
       description: initialData.description || '',
       school_type: initialData.school_type || 'public',
       board_affiliation: initialData.board_affiliation || '',
+      board_type: initialData.board_type || '',
+      state_board_type: initialData.state_board_type || '',
+      assessment_pattern: initialData.assessment_pattern || '',
       establishment_year: initialData.establishment_year?.toString() || '',
       total_capacity: initialData.total_capacity?.toString() || '',
       logo_url: initialData.logo_url || '',
@@ -545,6 +555,67 @@ export function EnhancedSchoolForm({ open, onOpenChange, editMode = false, initi
                   placeholder="1000"
                   className="mt-1"
                 />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="board_type">Board Type</Label>
+                <Select
+                  value={formData.board_type || 'none'}
+                  onValueChange={(value) => updateFormData({ board_type: value === 'none' ? '' : value })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select board type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="CBSE">CBSE</SelectItem>
+                    <SelectItem value="ICSE">ICSE</SelectItem>
+                    <SelectItem value="State Board">State Board</SelectItem>
+                    <SelectItem value="IB">IB (International Baccalaureate)</SelectItem>
+                    <SelectItem value="IGCSE">IGCSE</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="state_board_type">State Board Type (if applicable)</Label>
+                <Select
+                  value={formData.state_board_type || 'none'}
+                  onValueChange={(value) => updateFormData({ state_board_type: value === 'none' ? '' : value })}
+                  disabled={formData.board_type !== 'State Board'}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select state board" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="Telangana">Telangana State Board</SelectItem>
+                    <SelectItem value="Andhra Pradesh">Andhra Pradesh State Board</SelectItem>
+                    <SelectItem value="Karnataka">Karnataka State Board</SelectItem>
+                    <SelectItem value="Tamil Nadu">Tamil Nadu State Board</SelectItem>
+                    <SelectItem value="Maharashtra">Maharashtra State Board</SelectItem>
+                    <SelectItem value="Other">Other State Board</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="assessment_pattern">Assessment Pattern</Label>
+                <Select
+                  value={formData.assessment_pattern || 'none'}
+                  onValueChange={(value) => updateFormData({ assessment_pattern: value === 'none' ? '' : value })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select pattern" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="CBSE_Grading">CBSE Grading (FA/SA with GPA)</SelectItem>
+                    <SelectItem value="State_FA_SA">State Board FA/SA (Telangana/AP Style)</SelectItem>
+                    <SelectItem value="Continuous">Continuous Comprehensive Evaluation (CCE)</SelectItem>
+                    <SelectItem value="Traditional">Traditional (Term-based)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>

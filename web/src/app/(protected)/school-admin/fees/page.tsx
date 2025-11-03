@@ -31,11 +31,19 @@ import ReceiptHistory from '@/components/fees/ReceiptHistory';
 
 interface DashboardStats {
   total_outstanding: number;
+  total_collected: number;
   monthly_collections: number;
   overdue_count: number;
   recent_payments: number;
   total_students: number;
   pending_invoices: number;
+  students_fully_paid: number;
+  students_with_pending: number;
+  payment_status_breakdown: {
+    paid: number;
+    partial: number;
+    pending: number;
+  };
 }
 
 interface FeeCategory {
@@ -229,11 +237,19 @@ export default function FeeManagementUnified() {
       // Set fallback data on error
       setDashboardStats({
         total_outstanding: 0,
+        total_collected: 0,
         monthly_collections: 0,
         overdue_count: 0,
         recent_payments: 0,
         total_students: 0,
-        pending_invoices: 0
+        pending_invoices: 0,
+        students_fully_paid: 0,
+        students_with_pending: 0,
+        payment_status_breakdown: {
+          paid: 0,
+          partial: 0,
+          pending: 0
+        }
       });
     } finally {
       setLoading(false);
@@ -496,8 +512,8 @@ export default function FeeManagementUnified() {
                   {/* Pie Chart using conic-gradient */}
                   <div className="relative w-40 h-40 flex-shrink-0">
                     {(() => {
-                      const total = dashboardStats.total_outstanding + dashboardStats.monthly_collections;
-                      const collectedPercent = total > 0 ? (dashboardStats.monthly_collections / total) * 100 : 0;
+                      const total = dashboardStats.total_outstanding + dashboardStats.total_collected;
+                      const collectedPercent = total > 0 ? (dashboardStats.total_collected / total) * 100 : 0;
                       return (
                         <>
                           <div
@@ -528,7 +544,7 @@ export default function FeeManagementUnified() {
                         <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                         <span className="text-sm">Collected</span>
                       </div>
-                      <span className="text-sm font-semibold">₹{dashboardStats.monthly_collections.toLocaleString()}</span>
+                      <span className="text-sm font-semibold">₹{dashboardStats.total_collected.toLocaleString()}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -552,7 +568,7 @@ export default function FeeManagementUnified() {
                   {/* Pie Chart using conic-gradient */}
                   <div className="relative w-40 h-40 flex-shrink-0">
                     {(() => {
-                      const paidUp = dashboardStats.total_students - dashboardStats.pending_invoices;
+                      const paidUp = dashboardStats.students_fully_paid || 0;
                       const paidPercent = dashboardStats.total_students > 0
                         ? (paidUp / dashboardStats.total_students) * 100
                         : 0;
@@ -586,14 +602,14 @@ export default function FeeManagementUnified() {
                         <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                         <span className="text-sm">Paid Up</span>
                       </div>
-                      <span className="text-sm font-semibold">{dashboardStats.total_students - dashboardStats.pending_invoices}</span>
+                      <span className="text-sm font-semibold">{dashboardStats.students_fully_paid || 0}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
                         <span className="text-sm">Pending Payments</span>
                       </div>
-                      <span className="text-sm font-semibold">{dashboardStats.pending_invoices}</span>
+                      <span className="text-sm font-semibold">{dashboardStats.students_with_pending || 0}</span>
                     </div>
                   </div>
                 </div>

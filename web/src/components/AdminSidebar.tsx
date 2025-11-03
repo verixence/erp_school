@@ -179,6 +179,14 @@ export function AdminSidebar({ brand, isOpen, onClose }: AdminSidebarProps) {
         </SidebarLink>
 
         <SidebarLink
+          href="/school-admin/calendar"
+          icon={Calendar}
+          isActive={pathname.startsWith("/school-admin/calendar")}
+        >
+          Academic Calendar
+        </SidebarLink>
+
+        <SidebarLink
           href="/school-admin/exams"
           icon={BookOpen}
           isActive={pathname.startsWith("/school-admin/exams")}

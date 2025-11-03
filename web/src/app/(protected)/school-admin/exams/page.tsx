@@ -473,7 +473,50 @@ export default function ExamsPage() {
       }
     }
 
-    // Check for datetime conflicts
+    // ============================================
+    // ENHANCED VALIDATION - PRODUCTION READY
+    // ============================================
+
+    // 1. Validate max marks and pass marks
+    if (!paperFormData.max_marks || paperFormData.max_marks <= 0 || paperFormData.max_marks > 1000) {
+      toast.error('Max marks must be between 1 and 1000');
+      return;
+    }
+
+    if (!paperFormData.pass_marks || paperFormData.pass_marks < 0 || paperFormData.pass_marks >= paperFormData.max_marks) {
+      toast.error('Pass marks must be between 0 and less than max marks');
+      return;
+    }
+
+    // 2. Check for duplicate subject (CRITICAL - Prevents data integrity issues)
+    const duplicateCheck = (() => {
+      const duplicate = allExamPapers.find(paper =>
+        paper.exam_group_id === selectedExamGroup &&
+        paper.section === paperFormData.section &&
+        paper.subject.toLowerCase() === paperFormData.subject.toLowerCase() &&
+        (!editingPaper || paper.id !== editingPaper.id)
+      );
+
+      if (duplicate) {
+        return {
+          exists: true,
+          date: duplicate.exam_date,
+          time: duplicate.exam_time
+        };
+      }
+
+      return { exists: false };
+    })();
+
+    if (duplicateCheck.exists) {
+      toast.error(
+        `⚠️ Duplicate Exam Found!\n\n${paperFormData.subject} exam already exists for ${paperFormData.section} in this exam group.\n\n${duplicateCheck.date ? `Scheduled on: ${new Date(duplicateCheck.date).toLocaleDateString()}` : 'Date: Not set yet'}\n${duplicateCheck.time ? `Time: ${duplicateCheck.time}` : ''}\n\nPlease edit the existing exam instead of creating a new one.`,
+        { duration: 6000 }
+      );
+      return;
+    }
+
+    // 3. Check for datetime conflicts (students having two exams at same time)
     if (paperFormData.exam_date && paperFormData.exam_time) {
       const conflict = checkDateTimeConflict(
         paperFormData.section,
@@ -485,7 +528,84 @@ export default function ExamsPage() {
 
       if (conflict) {
         toast.error(
-          `Schedule conflict! ${conflict.subject} exam is already scheduled for ${paperFormData.section} on ${new Date(conflict.date).toLocaleDateString()} at ${conflict.time} (${conflict.duration} minutes).`
+          `⏰ Schedule Conflict!\n\nStudents in ${paperFormData.section} already have ${conflict.subject} exam scheduled at this time.\n\nDate: ${new Date(conflict.date).toLocaleDateString()}\nTime: ${conflict.time}\nDuration: ${conflict.duration} minutes\n\nPlease choose a different date/time.`,
+          { duration: 6000 }
+        );
+        return;
+      }
+    }
+
+    // 4. Check for teacher availability conflicts
+    if (paperFormData.teacher_id && paperFormData.exam_date && paperFormData.exam_time) {
+      const teacherConflict = (() => {
+        const newStart = new Date(`${paperFormData.exam_date}T${paperFormData.exam_time}`);
+        const newEnd = new Date(newStart.getTime() + (paperFormData.duration_minutes || 180) * 60000);
+
+        for (const paper of allExamPapers) {
+          if (editingPaper && paper.id === editingPaper.id) continue;
+          if (paper.teacher_id !== paperFormData.teacher_id) continue;
+          if (!paper.exam_date || !paper.exam_time) continue;
+
+          const existingStart = new Date(`${paper.exam_date}T${paper.exam_time}`);
+          const existingEnd = new Date(existingStart.getTime() + paper.duration_minutes * 60000);
+
+          // Check for overlap
+          if (newStart < existingEnd && newEnd > existingStart) {
+            return {
+              hasConflict: true,
+              exam: `${paper.subject} (${paper.section})`,
+              date: paper.exam_date,
+              time: paper.exam_time
+            };
+          }
+        }
+
+        return { hasConflict: false };
+      })();
+
+      if (teacherConflict.hasConflict) {
+        const conflictDate = teacherConflict.date ? new Date(teacherConflict.date).toLocaleDateString() : 'N/A';
+        toast.error(
+          `👨‍🏫 Teacher Conflict!\n\nSelected teacher is already assigned to another exam:\n${teacherConflict.exam}\n\nDate: ${conflictDate}\nTime: ${teacherConflict.time}\n\nPlease choose a different teacher or change the exam time.`,
+          { duration: 6000 }
+        );
+        return;
+      }
+    }
+
+    // 5. Check for venue conflicts
+    if (paperFormData.venue && paperFormData.exam_date && paperFormData.exam_time) {
+      const venueConflict = (() => {
+        const newStart = new Date(`${paperFormData.exam_date}T${paperFormData.exam_time}`);
+        const newEnd = new Date(newStart.getTime() + (paperFormData.duration_minutes || 180) * 60000);
+
+        for (const paper of allExamPapers) {
+          if (editingPaper && paper.id === editingPaper.id) continue;
+          if (!paper.venue || paper.venue.toLowerCase() !== paperFormData.venue.toLowerCase()) continue;
+          if (!paper.exam_date || !paper.exam_time) continue;
+
+          const existingStart = new Date(`${paper.exam_date}T${paper.exam_time}`);
+          const existingEnd = new Date(existingStart.getTime() + paper.duration_minutes * 60000);
+
+          // Check for overlap
+          if (newStart < existingEnd && newEnd > existingStart) {
+            return {
+              hasConflict: true,
+              exam: `${paper.subject} (${paper.section})`,
+              date: paper.exam_date,
+              time: paper.exam_time
+            };
+          }
+        }
+
+        return { hasConflict: false };
+      })();
+
+      if (venueConflict.hasConflict) {
+        const conflictDate = venueConflict.date ? new Date(venueConflict.date).toLocaleDateString() : 'N/A';
+        toast.error(
+          `🏛️ Venue Conflict!\n\n${paperFormData.venue} is already booked for:\n${venueConflict.exam}\n\nDate: ${conflictDate}\nTime: ${venueConflict.time}\n\nPlease choose a different venue or time.`,
+          { duration: 6000 }
         );
         return;
       }

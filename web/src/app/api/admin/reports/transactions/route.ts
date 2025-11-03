@@ -26,102 +26,75 @@ export async function GET(request: NextRequest) {
     // Collect all transactions
     const transactions: any[] = [];
 
-    // 1. Fetch Fee Payments from student_fee_demands (Income)
+    // 1. Fetch Fee Receipts (Income) - Primary source with receipt numbers
     if (!type || type === 'all' || type === 'income') {
-      const { data: payments, error: paymentsError } = await supabase
-        .from('student_fee_demands')
+      const { data: receipts, error: receiptsError } = await supabase
+        .from('fee_receipts')
         .select(`
           id,
-          student_id,
-          paid_amount,
-          updated_at,
-          payment_status,
-          students (
-            id,
-            full_name
-          )
+          receipt_no,
+          receipt_date,
+          student_name,
+          total_amount,
+          payment_method
         `)
-        .eq('school_id', schoolId)
-        .in('payment_status', ['paid', 'partial'])
-        .gt('paid_amount', 0);
+        .eq('school_id', schoolId);
 
-      console.log('Fee payments query:', {
-        schoolId,
-        paymentsError,
-        paymentsCount: payments?.length,
-        payments: payments?.slice(0, 2)
-      });
-
-      if (paymentsError) {
-        console.error('Error fetching fee payments:', paymentsError);
-      }
-
-      if (!paymentsError && payments) {
-        payments.forEach((payment: any) => {
-          const studentName = payment.students?.full_name || 'Unknown Student';
-
+      if (!receiptsError && receipts && receipts.length > 0) {
+        receipts.forEach((receipt: any) => {
           transactions.push({
-            id: payment.id,
-            date: payment.updated_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+            id: receipt.id,
+            date: receipt.receipt_date?.split('T')[0] || new Date().toISOString().split('T')[0],
             type: 'income',
             category: 'Fee Payment',
-            description: `Fee payment from ${studentName}`,
-            reference: '-',
-            payment_method: 'cash',
-            amount: parseFloat(payment.paid_amount || 0),
+            description: `Fee payment from ${receipt.student_name || 'Unknown Student'}`,
+            reference: receipt.receipt_no || '-',
+            payment_method: receipt.payment_method || 'cash',
+            amount: parseFloat(receipt.total_amount || 0),
             debit: 0,
-            credit: parseFloat(payment.paid_amount || 0),
+            credit: parseFloat(receipt.total_amount || 0),
             status: 'completed',
-            notes: payment.payment_status === 'partial' ? 'Partial payment' : null
+            notes: null
           });
         });
-      }
-
-      // Also fetch from fee_payments table (linked to invoices)
-      const { data: feePayments, error: feePaymentsError } = await supabase
-        .from('fee_payments')
-        .select(`
-          id,
-          payment_number,
-          amount,
-          payment_method,
-          payment_reference,
-          status,
-          processed_at,
-          notes,
-          fee_invoices!inner (
+      } else {
+        // Fallback: Fetch from student_fee_demands if no receipts exist
+        const { data: payments, error: paymentsError } = await supabase
+          .from('student_fee_demands')
+          .select(`
             id,
-            invoice_number,
-            school_id,
             student_id,
-            students (
-              id,
+            paid_amount,
+            updated_at,
+            payment_status,
+            students!inner (
               full_name
             )
-          )
-        `)
-        .eq('fee_invoices.school_id', schoolId)
-        .eq('status', 'success');
+          `)
+          .eq('school_id', schoolId)
+          .in('payment_status', ['paid', 'partial'])
+          .gt('paid_amount', 0);
 
-      if (!feePaymentsError && feePayments) {
-        feePayments.forEach((payment: any) => {
-          const studentName = payment.fee_invoices?.students?.full_name || 'Unknown Student';
+        if (!paymentsError && payments) {
+          payments.forEach((payment: any) => {
+            const studentName = payment.students?.full_name || 'Unknown Student';
 
-          transactions.push({
-            id: payment.id,
-            date: payment.processed_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-            type: 'income',
-            category: 'Fee Payment',
-            description: `Invoice payment from ${studentName}`,
-            reference: payment.payment_number || payment.payment_reference || '-',
-            payment_method: payment.payment_method || 'cash',
-            amount: parseFloat(payment.amount || 0),
-            debit: 0,
-            credit: parseFloat(payment.amount || 0),
-            status: 'completed',
-            notes: payment.notes
+            transactions.push({
+              id: payment.id,
+              date: payment.updated_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+              type: 'income',
+              category: 'Fee Payment',
+              description: `Fee payment from ${studentName}`,
+              reference: '-',
+              payment_method: 'cash',
+              amount: parseFloat(payment.paid_amount || 0),
+              debit: 0,
+              credit: parseFloat(payment.paid_amount || 0),
+              status: 'completed',
+              notes: payment.payment_status === 'partial' ? 'Partial payment' : null
+            });
           });
-        });
+        }
       }
     }
 

@@ -262,11 +262,12 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
   const { data: sectionsData } = useQuery({
     queryKey: ['sections', schoolId, selectedClass],
     queryFn: async () => {
+      // Query by grade (numeric or text) - sections table has a 'grade' column
       const { data, error } = await supabase
         .from('sections')
-        .select('id, section, grade_text')
+        .select('id, section, grade, grade_text')
         .eq('school_id', schoolId)
-        .ilike('grade_text', selectedClass)
+        .eq('grade', selectedClass)
         .order('section', { ascending: true });
 
       if (error) throw error;
@@ -619,7 +620,7 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
                 </SelectTrigger>
                 <SelectContent>
                   {classes.map((cls: any) => (
-                    <SelectItem key={cls.id} value={cls.grade}>
+                    <SelectItem key={cls.grade} value={cls.grade}>
                       Class {cls.grade}
                     </SelectItem>
                   ))}
@@ -864,10 +865,10 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="cheque">Cheque</SelectItem>
-                    <SelectItem value="online">Online Transfer</SelectItem>
-                    <SelectItem value="card">Card</SelectItem>
+                    <SelectItem key="cash" value="cash">Cash</SelectItem>
+                    <SelectItem key="cheque" value="cheque">Cheque</SelectItem>
+                    <SelectItem key="online" value="online">Online Transfer</SelectItem>
+                    <SelectItem key="card" value="card">Card</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1240,10 +1241,10 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="cheque">Cheque</SelectItem>
-                    <SelectItem value="online">Online Transfer</SelectItem>
-                    <SelectItem value="card">Card</SelectItem>
+                    <SelectItem key="cash" value="cash">Cash</SelectItem>
+                    <SelectItem key="cheque" value="cheque">Cheque</SelectItem>
+                    <SelectItem key="online" value="online">Online Transfer</SelectItem>
+                    <SelectItem key="card" value="card">Card</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

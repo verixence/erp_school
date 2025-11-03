@@ -65,6 +65,9 @@ interface School {
   } | null;
   school_type: string | null;
   board_affiliation: string | null;
+  board_type: string | null;
+  state_board_type: string | null;
+  assessment_pattern: string | null;
   establishment_year: number | null;
   total_capacity: number | null;
   description: string | null;
@@ -1185,6 +1188,9 @@ export default function EnhancedSchoolDetailsPage() {
             description: school.description || '',
             school_type: school.school_type || 'public',
             board_affiliation: school.board_affiliation || '',
+            board_type: school.board_type || '',
+            state_board_type: school.state_board_type || '',
+            assessment_pattern: school.assessment_pattern || '',
             establishment_year: school.establishment_year?.toString() || '',
             total_capacity: school.total_capacity?.toString() || '',
             logo_url: school.logo_url || '',

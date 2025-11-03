@@ -7,7 +7,7 @@ export interface Notification {
   user_id: string;
   title: string;
   message: string;
-  type: 'announcement' | 'post' | 'system' | 'exam' | 'homework';
+  type: 'announcement' | 'post' | 'system' | 'exam' | 'homework' | 'event';
   related_id?: string;
   is_read: boolean;
   created_at: string;
@@ -19,7 +19,7 @@ export interface CreateNotificationData {
   user_id: string;
   title: string;
   message: string;
-  type: 'announcement' | 'post' | 'system' | 'exam' | 'homework';
+  type: 'announcement' | 'post' | 'system' | 'exam' | 'homework' | 'event';
   related_id?: string;
   expires_at?: string;
 }
@@ -189,14 +189,14 @@ export interface BulkNotificationResult {
 
 /**
  * Create bulk notifications with automatic push notification queuing
- * This is the PRIMARY function to use for announcements, homework, etc.
+ * This is the PRIMARY function to use for announcements, homework, events, etc.
  * It creates in-app notifications AND queues push notifications automatically
  */
 export const createBulkNotifications = async (
   schoolId: string,
   title: string,
   message: string,
-  type: 'announcement' | 'post' | 'system' | 'exam' | 'homework',
+  type: 'announcement' | 'post' | 'system' | 'exam' | 'homework' | 'event',
   targetAudience: 'all' | 'teachers' | 'parents' | 'students',
   relatedId?: string
 ): Promise<BulkNotificationResult> => {
@@ -345,5 +345,25 @@ export const sendExamNotification = async (
     'exam',
     targetAudience,
     examId
+  );
+};
+
+/**
+ * Send calendar event notification (Web + Mobile)
+ */
+export const sendEventNotification = async (
+  schoolId: string,
+  eventTitle: string,
+  eventDetails: string,
+  targetAudience: 'all' | 'teachers' | 'parents' = 'all',
+  eventId?: string
+) => {
+  return createBulkNotifications(
+    schoolId,
+    `📅 ${eventTitle}`,
+    eventDetails,
+    'event',
+    targetAudience,
+    eventId
   );
 }; 

@@ -10,9 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Calendar, Plus, Edit, Trash2, CalendarDays, Clock, MapPin, Eye, EyeOff, Repeat, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Calendar, Plus, Edit, Trash2, CalendarDays, Clock, MapPin, Eye, EyeOff, Repeat, AlertCircle, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useAuth } from '@/hooks/use-auth'
+import { toast } from 'react-hot-toast'
 
 interface CalendarEvent {
   id: string
@@ -33,13 +34,15 @@ interface CalendarEvent {
 }
 
 const EVENT_TYPES = [
-  { value: 'academic', label: 'Academic', color: 'bg-blue-500' },
-  { value: 'sports', label: 'Sports', color: 'bg-green-500' },
-  { value: 'cultural', label: 'Cultural', color: 'bg-purple-500' },
-  { value: 'meeting', label: 'Meeting', color: 'bg-orange-500' },
-  { value: 'holiday', label: 'Holiday', color: 'bg-red-500' },
-  { value: 'exam', label: 'Exam', color: 'bg-yellow-500' },
-  { value: 'other', label: 'Other', color: 'bg-gray-500' }
+  { value: 'academic', label: 'Academic', color: '#3B82F6' }, // blue-500
+  { value: 'sports', label: 'Sports', color: '#10B981' }, // green-500
+  { value: 'cultural', label: 'Cultural', color: '#A855F7' }, // purple-500
+  { value: 'meeting', label: 'Meeting', color: '#F97316' }, // orange-500
+  { value: 'holiday', label: 'Holiday', color: '#EF4444' }, // red-500
+  { value: 'exam', label: 'Exam', color: '#EAB308' }, // yellow-500
+  { value: 'ptm', label: 'Parent-Teacher Meeting', color: '#8B5CF6' }, // violet-500
+  { value: 'assembly', label: 'Assembly', color: '#06B6D4' }, // cyan-500
+  { value: 'other', label: 'Other', color: '#6B7280' } // gray-500
 ]
 
 const RECURRENCE_PATTERNS = [
@@ -53,12 +56,13 @@ export default function CalendarManagement() {
   const { user, isLoading: authLoading } = useAuth()
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const [showCreateEvent, setShowCreateEvent] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  
+
   const [newEvent, setNewEvent] = useState({
     title: '',
     description: '',
@@ -90,21 +94,46 @@ export default function CalendarManagement() {
         setEvents(data.data || [])
       } else {
         const error = await response.json()
-        alert(error.error || 'Failed to fetch events')
+        toast.error(error.error || 'Failed to fetch events')
       }
     } catch (error) {
-      alert('Failed to fetch events')
+      toast.error('Failed to fetch events')
     } finally {
       setLoading(false)
     }
   }
 
+  const validateForm = () => {
+    if (!newEvent.title.trim()) {
+      toast.error('Please enter an event title')
+      return false
+    }
+    if (!newEvent.event_date) {
+      toast.error('Please select an event date')
+      return false
+    }
+    if (newEvent.start_time && newEvent.end_time) {
+      if (newEvent.start_time >= newEvent.end_time) {
+        toast.error('End time must be after start time')
+        return false
+      }
+    }
+    if (newEvent.is_recurring && !newEvent.recurrence_end_date) {
+      toast.error('Please specify an end date for recurring events')
+      return false
+    }
+    return true
+  }
+
   const createEvent = async () => {
     if (!user?.school_id || !user?.id) {
-      alert('Authentication required')
+      toast.error('Authentication required')
       return
     }
 
+    if (!validateForm()) return
+
+    setSubmitting(true)
     try {
       const eventData = {
         ...newEvent,
@@ -126,7 +155,7 @@ export default function CalendarManagement() {
       })
 
       if (response.ok) {
-        alert('Event created successfully')
+        toast.success('Event created successfully')
         setShowCreateEvent(false)
         resetForm()
         fetchEvents()
@@ -135,13 +164,18 @@ export default function CalendarManagement() {
         throw new Error(error.error || 'Failed to create event')
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to create event')
+      toast.error(error instanceof Error ? error.message : 'Failed to create event')
+    } finally {
+      setSubmitting(false)
     }
   }
 
   const updateEvent = async () => {
     if (!editingEvent || !user?.school_id) return
 
+    if (!validateForm()) return
+
+    setSubmitting(true)
     try {
       const eventData = {
         ...newEvent,
@@ -163,8 +197,9 @@ export default function CalendarManagement() {
       })
 
       if (response.ok) {
-        alert('Event updated successfully')
+        toast.success('Event updated successfully')
         setEditingEvent(null)
+        setShowCreateEvent(false)
         resetForm()
         fetchEvents()
       } else {
@@ -172,7 +207,9 @@ export default function CalendarManagement() {
         throw new Error(error.error || 'Failed to update event')
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to update event')
+      toast.error(error instanceof Error ? error.message : 'Failed to update event')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -186,14 +223,14 @@ export default function CalendarManagement() {
       })
 
       if (response.ok) {
-        alert('Event deleted successfully')
+        toast.success('Event deleted successfully')
         fetchEvents()
       } else {
         const error = await response.json()
-        alert(error.error || 'Failed to delete event')
+        toast.error(error.error || 'Failed to delete event')
       }
     } catch (error) {
-      alert('Failed to delete event')
+      toast.error('Failed to delete event')
     }
   }
 
@@ -212,14 +249,14 @@ export default function CalendarManagement() {
       })
 
       if (response.ok) {
-        alert(`Event ${!event.is_published ? 'published' : 'unpublished'} successfully`)
+        toast.success(`Event ${!event.is_published ? 'published' : 'unpublished'} successfully`)
         fetchEvents()
       } else {
         const error = await response.json()
-        alert(error.error || 'Failed to update event status')
+        toast.error(error.error || 'Failed to update event status')
       }
     } catch (error) {
-      alert('Failed to update event status')
+      toast.error('Failed to update event status')
     }
   }
 
@@ -238,6 +275,7 @@ export default function CalendarManagement() {
       recurrence_pattern: 'weekly',
       recurrence_end_date: ''
     })
+    setEditingEvent(null)
   }
 
   const openEditDialog = (event: CalendarEvent) => {
@@ -262,7 +300,14 @@ export default function CalendarManagement() {
   const getEventTypeBadge = (type: string) => {
     const eventType = EVENT_TYPES.find(t => t.value === type)
     return (
-      <Badge variant="secondary" style={{ backgroundColor: eventType?.color + '20', color: eventType?.color }}>
+      <Badge
+        variant="secondary"
+        style={{
+          backgroundColor: eventType?.color + '20',
+          color: eventType?.color,
+          borderColor: eventType?.color
+        }}
+      >
         {eventType?.label || type}
       </Badge>
     )
@@ -290,7 +335,7 @@ export default function CalendarManagement() {
     const today = new Date()
     const nextWeek = new Date()
     nextWeek.setDate(today.getDate() + 7)
-    
+
     return events.filter(event => {
       const eventDate = new Date(event.event_date)
       return eventDate >= today && eventDate <= nextWeek && event.is_published
@@ -305,19 +350,19 @@ export default function CalendarManagement() {
     const lastDay = new Date(year, month + 1, 0)
     const daysInMonth = lastDay.getDate()
     const startingDayOfWeek = firstDay.getDay()
-    
+
     const days: (number | null)[] = []
-    
+
     // Add empty cells for days before the month starts
     for (let i = 0; i < startingDayOfWeek; i++) {
       days.push(null)
     }
-    
+
     // Add the days of the month
     for (let i = 1; i <= daysInMonth; i++) {
       days.push(i)
     }
-    
+
     return days
   }
 
@@ -357,7 +402,7 @@ export default function CalendarManagement() {
 
   const CalendarGrid = () => {
     const days = getDaysInMonth(currentDate)
-    
+
     return (
       <div className="bg-white rounded-lg border">
         {/* Calendar Header */}
@@ -366,23 +411,23 @@ export default function CalendarManagement() {
             {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
           </h2>
           <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => navigateMonth('prev')}
             >
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setCurrentDate(new Date())}
             >
               Today
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => navigateMonth('next')}
             >
               <ChevronRight className="w-4 h-4" />
@@ -403,7 +448,7 @@ export default function CalendarManagement() {
         <div className="grid grid-cols-7">
           {days.map((day, index) => {
             if (day === null) {
-              return <div key={`empty-${index}`} className="h-32 border-r border-b last:border-r-0"></div>
+              return <div key={`empty-${index}`} className="h-32 border-r border-b last:border-r-0 bg-gray-50"></div>
             }
 
             const dateStr = formatDateForCalendar(currentDate, day)
@@ -411,9 +456,9 @@ export default function CalendarManagement() {
             const isCurrentDay = isToday(dateStr)
 
             return (
-              <div 
-                key={day} 
-                className={`h-32 border-r border-b last:border-r-0 p-1 cursor-pointer hover:bg-gray-50 ${
+              <div
+                key={day}
+                className={`h-32 border-r border-b last:border-r-0 p-1 cursor-pointer hover:bg-gray-50 transition-colors ${
                   isCurrentDay ? 'bg-blue-50' : ''
                 }`}
                 onClick={() => {
@@ -423,34 +468,30 @@ export default function CalendarManagement() {
                 }}
               >
                 <div className={`text-sm font-medium mb-1 ${
-                  isCurrentDay ? 'text-blue-600' : 'text-gray-900'
+                  isCurrentDay ? 'text-blue-600 font-bold' : 'text-gray-900'
                 }`}>
                   {day}
                 </div>
-                
+
                 {/* Events for this day */}
                 <div className="space-y-1">
-                  {dayEvents.slice(0, 3).map(event => {
-                    const eventType = EVENT_TYPES.find(t => t.value === event.event_type)
-                    return (
-                      <div
-                        key={event.id}
-                        className={`text-xs p-1 rounded text-white truncate cursor-pointer ${
-                          eventType?.color || 'bg-gray-500'
-                        }`}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          openEditDialog(event)
-                        }}
-                        title={`${event.title}${event.start_time ? ` at ${formatTime(event.start_time)}` : ''}`}
-                      >
-                        {event.title}
-                        {!event.is_published && ' (Draft)'}
-                      </div>
-                    )
-                  })}
+                  {dayEvents.slice(0, 3).map(event => (
+                    <div
+                      key={event.id}
+                      className="text-xs p-1 rounded text-white truncate cursor-pointer hover:opacity-80 transition-opacity"
+                      style={{ backgroundColor: event.color }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openEditDialog(event)
+                      }}
+                      title={`${event.title}${event.start_time ? ` at ${formatTime(event.start_time)}` : ''}`}
+                    >
+                      {event.title}
+                      {!event.is_published && ' 🔒'}
+                    </div>
+                  ))}
                   {dayEvents.length > 3 && (
-                    <div className="text-xs text-gray-500 font-medium">
+                    <div className="text-xs text-gray-500 font-medium pl-1">
                       +{dayEvents.length - 3} more
                     </div>
                   )}
@@ -465,95 +506,112 @@ export default function CalendarManagement() {
 
   const EventsList = () => (
     <div className="grid grid-cols-1 gap-4">
-      {events.map((event) => (
-        <Card key={event.id} className="hover:shadow-md transition-shadow">
-          <CardHeader>
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                {getEventTypeBadge(event.event_type)}
-                <Badge variant={event.is_published ? 'default' : 'secondary'}>
-                  {event.is_published ? 'Published' : 'Draft'}
-                </Badge>
-                {event.is_recurring && (
-                  <Badge variant="outline">
-                    <Repeat className="w-3 h-3 mr-1" />
-                    Recurring
-                  </Badge>
-                )}
-              </div>
-              <div className="text-sm text-gray-500">
-                {formatDate(event.event_date)}
-              </div>
-            </div>
-            <CardTitle className="text-lg">{event.title}</CardTitle>
-            <p className="text-xs text-gray-500">Created by {event.created_by_name}</p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {event.description && (
-              <p className="text-gray-700 line-clamp-2">{event.description}</p>
-            )}
-            
-            <div className="flex items-center gap-4 text-sm text-gray-600">
-              {(event.start_time || event.end_time) && (
-                <div className="flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
-                  {event.start_time && formatTime(event.start_time)}
-                  {event.start_time && event.end_time && ' - '}
-                  {event.end_time && formatTime(event.end_time)}
-                </div>
-              )}
-              {event.location && (
-                <div className="flex items-center gap-1">
-                  <MapPin className="w-4 h-4" />
-                  {event.location}
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openEditDialog(event)}
-                className="flex-1"
-              >
-                <Edit className="w-4 h-4 mr-1" />
-                Edit
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => toggleEventStatus(event)}
-                className="flex-1"
-              >
-                {event.is_published ? (
-                  <>
-                    <EyeOff className="w-4 h-4 mr-1" />
-                    Unpublish
-                  </>
-                ) : (
-                  <>
-                    <Eye className="w-4 h-4 mr-1" />
-                    Publish
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => deleteEvent(event.id)}
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </div>
+      {events.length === 0 ? (
+        <Card className="text-center py-12">
+          <CardContent>
+            <Calendar className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No events yet</h3>
+            <p className="text-gray-600 mb-4">Create your first event to get started with the academic calendar.</p>
+            <Button onClick={() => setShowCreateEvent(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create First Event
+            </Button>
           </CardContent>
         </Card>
-      ))}
+      ) : (
+        events.map((event) => (
+          <Card key={event.id} className="hover:shadow-md transition-shadow">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  {getEventTypeBadge(event.event_type)}
+                  <Badge variant={event.is_published ? 'default' : 'secondary'}>
+                    {event.is_published ? 'Published' : 'Draft'}
+                  </Badge>
+                  {event.is_recurring && (
+                    <Badge variant="outline">
+                      <Repeat className="w-3 h-3 mr-1" />
+                      Recurring
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-sm text-gray-500">
+                  {formatDate(event.event_date)}
+                </div>
+              </div>
+              <CardTitle className="text-lg">{event.title}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {event.description && (
+                <p className="text-gray-700 line-clamp-2">{event.description}</p>
+              )}
+
+              <div className="flex items-center gap-4 text-sm text-gray-600">
+                {(event.start_time || event.end_time) && (
+                  <div className="flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    {event.start_time && formatTime(event.start_time)}
+                    {event.start_time && event.end_time && ' - '}
+                    {event.end_time && formatTime(event.end_time)}
+                  </div>
+                )}
+                {event.location && (
+                  <div className="flex items-center gap-1">
+                    <MapPin className="w-4 h-4" />
+                    {event.location}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openEditDialog(event)}
+                  className="flex-1"
+                >
+                  <Edit className="w-4 h-4 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => toggleEventStatus(event)}
+                  className="flex-1"
+                >
+                  {event.is_published ? (
+                    <>
+                      <EyeOff className="w-4 h-4 mr-1" />
+                      Unpublish
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="w-4 h-4 mr-1" />
+                      Publish
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => deleteEvent(event.id)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))
+      )}
     </div>
   )
 
   if (authLoading || (!user && !authLoading)) {
-    return <div className="p-6">Loading...</div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
   }
 
   if (!user?.school_id) {
@@ -570,7 +628,11 @@ export default function CalendarManagement() {
   }
 
   if (loading) {
-    return <div className="p-6">Loading calendar events...</div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
   }
 
   return (
@@ -580,7 +642,7 @@ export default function CalendarManagement() {
           <h1 className="text-2xl font-bold">Academic Calendar</h1>
           <p className="text-gray-600">Manage school events and academic calendar</p>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <div className="flex items-center border rounded-lg p-1">
             <Button
@@ -600,15 +662,20 @@ export default function CalendarManagement() {
               List
             </Button>
           </div>
-          
-          <Dialog open={showCreateEvent} onOpenChange={setShowCreateEvent}>
+
+          <Dialog open={showCreateEvent} onOpenChange={(open) => {
+            setShowCreateEvent(open)
+            if (!open) {
+              resetForm()
+            }
+          }}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="w-4 h-4 mr-2" />
                 Create Event
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   {editingEvent ? 'Edit Event' : 'Create New Event'}
@@ -634,7 +701,13 @@ export default function CalendarManagement() {
                       <SelectContent>
                         {EVENT_TYPES.map(type => (
                           <SelectItem key={type.value} value={type.value}>
-                            {type.label}
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: type.color }}
+                              />
+                              {type.label}
+                            </div>
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -700,13 +773,13 @@ export default function CalendarManagement() {
                       checked={newEvent.is_recurring}
                       onCheckedChange={(checked) => setNewEvent({...newEvent, is_recurring: checked})}
                     />
-                    <Label htmlFor="recurring">Recurring Event</Label>
+                    <Label htmlFor="recurring" className="cursor-pointer">Recurring Event</Label>
                   </div>
 
                   {newEvent.is_recurring && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6 border-l-2 border-gray-200">
                       <div>
-                        <Label htmlFor="recurrence_pattern">Recurrence Pattern</Label>
+                        <Label htmlFor="recurrence_pattern">Recurrence Pattern *</Label>
                         <Select value={newEvent.recurrence_pattern} onValueChange={(value) => setNewEvent({...newEvent, recurrence_pattern: value})}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select pattern" />
@@ -721,42 +794,54 @@ export default function CalendarManagement() {
                         </Select>
                       </div>
                       <div>
-                        <Label htmlFor="recurrence_end_date">Recurrence End Date</Label>
+                        <Label htmlFor="recurrence_end_date">Recurrence End Date *</Label>
                         <Input
                           id="recurrence_end_date"
                           type="date"
                           value={newEvent.recurrence_end_date}
                           onChange={(e) => setNewEvent({...newEvent, recurrence_end_date: e.target.value})}
+                          min={newEvent.event_date}
                         />
                       </div>
                     </div>
                   )}
                 </div>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
                   <Switch
                     id="published"
                     checked={newEvent.is_published}
                     onCheckedChange={(checked) => setNewEvent({...newEvent, is_published: checked})}
                   />
-                  <Label htmlFor="published">Publish immediately</Label>
+                  <Label htmlFor="published" className="cursor-pointer">
+                    <div className="font-medium">Publish immediately</div>
+                    <div className="text-xs text-gray-600">Make this event visible to parents and teachers</div>
+                  </Label>
                 </div>
 
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={editingEvent ? updateEvent : createEvent} 
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    onClick={editingEvent ? updateEvent : createEvent}
                     className="flex-1"
+                    disabled={submitting}
                   >
-                    {editingEvent ? 'Update Event' : 'Create Event'}
+                    {submitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        {editingEvent ? 'Updating...' : 'Creating...'}
+                      </>
+                    ) : (
+                      <>{editingEvent ? 'Update Event' : 'Create Event'}</>
+                    )}
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={() => {
                       setShowCreateEvent(false)
-                      setEditingEvent(null)
                       resetForm()
                     }}
                     className="flex-1"
+                    disabled={submitting}
                   >
                     Cancel
                   </Button>
@@ -770,7 +855,7 @@ export default function CalendarManagement() {
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          Events must be published to be visible to parents and students in their portals.
+          Events must be published to be visible to parents and teachers in their portals.
         </AlertDescription>
       </Alert>
 
@@ -786,7 +871,7 @@ export default function CalendarManagement() {
           <CardContent>
             <div className="space-y-2">
               {getUpcomingEvents().slice(0, 5).map(event => (
-                <div key={event.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                <div key={event.id} className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100 transition-colors">
                   <div className="flex items-center gap-2">
                     {getEventTypeBadge(event.event_type)}
                     <span className="font-medium">{event.title}</span>
@@ -803,27 +888,11 @@ export default function CalendarManagement() {
       )}
 
       {/* Calendar or List View */}
-      {loading ? (
-        <div className="text-center py-8">Loading events...</div>
-      ) : viewMode === 'calendar' ? (
+      {viewMode === 'calendar' ? (
         <CalendarGrid />
       ) : (
         <EventsList />
       )}
-
-      {events.length === 0 && !loading && (
-        <Card className="text-center py-12">
-          <CardContent>
-            <Calendar className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No events yet</h3>
-            <p className="text-gray-600 mb-4">Create your first event to get started with the academic calendar.</p>
-            <Button onClick={() => setShowCreateEvent(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Create First Event
-            </Button>
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
-} 
+}

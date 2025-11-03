@@ -30,10 +30,31 @@ export async function POST(request: NextRequest) {
     // Validate input
     const validatedData = paymentSchema.parse(body);
 
-    // Get the fee demand
+    // Get the fee demand with student and school details for receipt
     const { data: demand, error: demandError } = await supabase
       .from('student_fee_demands')
-      .select('*')
+      .select(`
+        *,
+        students!inner (
+          full_name,
+          admission_no,
+          grade,
+          section,
+          student_parents (
+            users (
+              first_name,
+              last_name,
+              phone,
+              email
+            )
+          )
+        ),
+        fee_structures (
+          fee_categories (
+            name
+          )
+        )
+      `)
       .eq('id', validatedData.fee_demand_id)
       .eq('school_id', schoolId)
       .eq('student_id', validatedData.student_id)
@@ -45,6 +66,13 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    // Get school details for receipt
+    const { data: school } = await supabase
+      .from('schools')
+      .select('name, address, phone_number, email_address, logo_url')
+      .eq('id', schoolId)
+      .single();
 
     // Check if payment amount exceeds balance
     if (validatedData.amount > demand.balance_amount) {
@@ -81,29 +109,61 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create payment transaction record (optional - for audit trail)
-    const { error: transactionError } = await supabase
-      .from('fee_payment_transactions')
+    // Generate receipt number
+    const receiptNumber = `REC-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+
+    // Get parent details
+    const parent = demand.students?.student_parents?.[0]?.users;
+    const parentName = parent ? `${parent.first_name} ${parent.last_name}` : '';
+    const parentPhone = parent?.phone || '';
+    const parentEmail = parent?.email || '';
+
+    // Get fee category name
+    const feeCategoryName = demand.fee_structures?.fee_categories?.name || 'Fee';
+
+    // Create receipt record
+    const { data: receipt, error: receiptError } = await supabase
+      .from('fee_receipts')
       .insert({
         school_id: schoolId,
         student_id: validatedData.student_id,
-        fee_demand_id: validatedData.fee_demand_id,
-        amount: validatedData.amount,
+        receipt_no: receiptNumber,
+        receipt_date: new Date().toISOString(),
+        student_name: demand.students?.full_name || 'Unknown',
+        student_admission_no: demand.students?.admission_no || '',
+        student_grade: demand.students?.grade || '',
+        student_section: demand.students?.section || '',
+        parent_name: parentName,
+        parent_phone: parentPhone,
+        parent_email: parentEmail,
         payment_method: validatedData.payment_method,
         payment_date: validatedData.payment_date,
-        reference_number: validatedData.reference_number,
-        notes: validatedData.notes,
-        status: 'completed'
-      });
+        reference_number: validatedData.reference_number || '',
+        notes: validatedData.notes || '',
+        receipt_items: [{
+          description: feeCategoryName,
+          amount: validatedData.amount
+        }],
+        total_amount: validatedData.amount,
+        school_name: school?.name || '',
+        school_address: school?.address || '',
+        school_phone: school?.phone_number || '',
+        school_email: school?.email_address || '',
+        school_logo_url: school?.logo_url || ''
+      })
+      .select()
+      .single();
 
-    // Don't fail if transaction table doesn't exist - it's optional
-    if (transactionError) {
-      console.warn('Could not create transaction record:', transactionError);
+    if (receiptError) {
+      console.error('Error creating receipt:', receiptError);
+      // Don't fail the payment if receipt creation fails
     }
 
     return NextResponse.json({
       success: true,
       data: updatedDemand,
+      receipt: receipt,
+      receipt_number: receiptNumber,
       message: 'Payment applied successfully'
     });
 

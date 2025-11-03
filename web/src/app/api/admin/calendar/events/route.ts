@@ -1,6 +1,63 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// Helper function to create notifications when event is published using existing notification system
+async function createEventNotifications(
+  supabase: any,
+  event: any,
+  school_id: string
+) {
+  try {
+    const eventDate = new Date(event.event_date).toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+
+    const eventTime = event.start_time
+      ? ` at ${new Date(`1970-01-01T${event.start_time}`).toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        })}`
+      : '';
+
+    const notificationTitle = `📅 New Event: ${event.title}`;
+    const notificationMessage = `${event.title} is scheduled for ${eventDate}${eventTime}.${event.location ? ` Location: ${event.location}` : ''}`;
+
+    // Use the existing bulk notification system with push notification support
+    // This automatically creates in-app notifications AND queues push notifications
+    const { data, error } = await supabase.rpc('create_bulk_notifications_with_push', {
+      p_school_id: school_id,
+      p_title: notificationTitle,
+      p_message: notificationMessage,
+      p_type: 'event',
+      p_target_audience: 'all', // Send to both parents and teachers
+      p_related_id: event.id,
+      p_push_data: {
+        type: 'calendar_event',
+        event_id: event.id,
+        event_type: event.event_type,
+        event_date: event.event_date,
+        screen: 'Calendar'
+      }
+    });
+
+    if (error) {
+      console.error('Error creating event notifications:', error);
+      return;
+    }
+
+    const result = data ? (data as any[])[0] : null;
+    if (result) {
+      console.log(`✅ Event notification sent: ${result.notifications_created} in-app, ${result.push_notifications_queued} push notifications queued for "${event.title}"`);
+    }
+  } catch (error) {
+    console.error('Error in createEventNotifications:', error);
+  }
+}
+
 // Environment check
 if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error('Missing Supabase environment variables');
@@ -245,10 +302,15 @@ export async function POST(request: NextRequest) {
     // Transform the response
     const transformedEvent = {
       ...event,
-      created_by_name: event.created_by_user ? 
-        `${event.created_by_user.first_name} ${event.created_by_user.last_name}` : 
+      created_by_name: event.created_by_user ?
+        `${event.created_by_user.first_name} ${event.created_by_user.last_name}` :
         'Unknown'
     };
+
+    // If event is published immediately, create notifications
+    if (is_published) {
+      await createEventNotifications(supabaseAdmin, event, school_id);
+    }
 
     return NextResponse.json({
       success: true,
@@ -382,6 +444,14 @@ export async function PUT(request: NextRequest) {
       updateData.location = location?.trim() || null;
     }
 
+    // Get the current event state before update to check if it's being published
+    const { data: oldEvent } = await supabaseAdmin
+      .from('academic_calendar_events')
+      .select('is_published')
+      .eq('id', id)
+      .eq('school_id', school_id)
+      .single();
+
     // Update the event
     const { data: event, error } = await supabaseAdmin
       .from('academic_calendar_events')
@@ -412,10 +482,15 @@ export async function PUT(request: NextRequest) {
     // Transform the response
     const transformedEvent = {
       ...event,
-      created_by_name: event.created_by_user ? 
-        `${event.created_by_user.first_name} ${event.created_by_user.last_name}` : 
+      created_by_name: event.created_by_user ?
+        `${event.created_by_user.first_name} ${event.created_by_user.last_name}` :
         'Unknown'
     };
+
+    // If event was just published (changed from false to true), create notifications
+    if (oldEvent && !oldEvent.is_published && event.is_published) {
+      await createEventNotifications(supabaseAdmin, event, school_id);
+    }
 
     return NextResponse.json({
       success: true,

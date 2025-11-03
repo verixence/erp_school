@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
         students (
           id,
           full_name,
-          admission_number,
+          admission_no,
           grade,
           section
         ),
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
       id: fee.id,
       student_id: fee.student_id,
       student_name: fee.students?.full_name || 'Unknown',
-      admission_number: fee.students?.admission_number || 'N/A',
+      admission_number: fee.students?.admission_no || 'N/A',
       grade: fee.students?.grade || 'N/A',
       section: fee.students?.section || 'N/A',
       fee_type: fee.fee_structures?.fee_categories?.name || 'Unknown',

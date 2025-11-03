@@ -52,6 +52,18 @@ interface ReportCard {
     rank?: number;
     attendance_percentage: number;
   };
+  // State Board specific fields
+  isStateBoard?: boolean;
+  stateBoardData?: {
+    report_type: string;
+    assessment_number: number;
+    total_marks: number;
+    obtained_marks: number;
+    percentage: number;
+    overall_grade?: string;
+    overall_remark?: string;
+    subject_marks: any[];
+  };
 }
 
 interface Child {
@@ -108,13 +120,14 @@ export const ParentReportsScreen: React.FC = () => {
     }
   }, [children, selectedChild]);
 
-  // Fetch report cards for selected child
+  // Fetch both report cards and State Board reports for selected child
   const { data: reportCards = [], isLoading: reportsLoading, refetch: refetchReports } = useQuery({
     queryKey: ['student-reports', selectedChild],
     queryFn: async (): Promise<ReportCard[]> => {
       if (!selectedChild) return [];
 
-      const { data, error} = await supabase
+      // Fetch CBSE report cards
+      const { data: cbseData, error: cbseError } = await supabase
         .from('report_cards')
         .select(`
           id,
@@ -137,9 +150,34 @@ export const ParentReportsScreen: React.FC = () => {
         .eq('student_id', selectedChild)
         .order('generated_at', { ascending: false });
 
-      if (error) throw error;
+      if (cbseError) console.error('CBSE reports error:', cbseError);
 
-      return (data || []).map((report: any) => ({
+      // Fetch State Board reports
+      const { data: stateBoardData, error: stateBoardError } = await supabase
+        .from('state_board_reports')
+        .select(`
+          id,
+          report_type,
+          assessment_number,
+          academic_year,
+          generated_at,
+          status,
+          is_published,
+          total_marks,
+          obtained_marks,
+          percentage,
+          overall_grade,
+          overall_remark,
+          subject_marks
+        `)
+        .eq('student_id', selectedChild)
+        .eq('is_published', true)
+        .order('generated_at', { ascending: false });
+
+      if (stateBoardError) console.error('State Board reports error:', stateBoardError);
+
+      // Combine both report types
+      const cbseReports = (cbseData || []).map((report: any) => ({
         id: report.id,
         title: report.title,
         type: report.type,
@@ -151,6 +189,33 @@ export const ParentReportsScreen: React.FC = () => {
         student: report.student,
         summary: report.report_summary?.[0]
       }));
+
+      const stateBoardReports = (stateBoardData || []).map((report: any) => ({
+        id: report.id,
+        title: `${report.report_type}-${report.assessment_number} Progress Report`,
+        type: 'progress',
+        academic_year: report.academic_year,
+        term: undefined,
+        generated_at: report.generated_at,
+        status: report.is_published ? 'published' : 'draft',
+        file_url: undefined, // State Board reports are generated on-the-fly
+        student: { full_name: '', grade: 0, section: '', admission_no: '' },
+        summary: {
+          total_subjects: report.subject_marks?.length || 0,
+          average_marks: report.percentage || 0,
+          grade: report.overall_grade || '',
+          rank: undefined,
+          attendance_percentage: 0
+        },
+        // Add State Board specific data
+        isStateBoard: true,
+        stateBoardData: report
+      }));
+
+      // Merge and sort by date
+      return [...cbseReports, ...stateBoardReports].sort((a, b) =>
+        new Date(b.generated_at).getTime() - new Date(a.generated_at).getTime()
+      );
     },
     enabled: !!selectedChild,
   });
@@ -233,6 +298,16 @@ export const ParentReportsScreen: React.FC = () => {
   };
 
   const handleViewReport = async (report: ReportCard) => {
+    // For State Board reports, show message that they need to view from web portal
+    if (report.isStateBoard) {
+      Alert.alert(
+        'View Report',
+        'State Board reports can be viewed from the web portal. Please login to the parent portal on your computer to view and download this report.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     if (!report.file_url) {
       Alert.alert('Error', 'Report is not yet available for viewing');
       return;
@@ -328,7 +403,15 @@ export const ParentReportsScreen: React.FC = () => {
             </View>
 
             <View style={styles.actionButtons}>
-              {report.file_url && report.status !== 'draft' ? (
+              {report.isStateBoard ? (
+                <TouchableOpacity
+                  onPress={() => handleViewReport(report)}
+                  style={[styles.actionButton, { backgroundColor: '#3b82f6' }]}
+                >
+                  <Eye size={14} color="white" />
+                  <Text style={styles.actionButtonText}>View on Web</Text>
+                </TouchableOpacity>
+              ) : report.file_url && report.status !== 'draft' ? (
                 <>
                   <TouchableOpacity
                     onPress={() => handleViewReport(report)}

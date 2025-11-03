@@ -96,9 +96,11 @@ export function generateStateBoardReportHTML(data: StateBoardReportData): string
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Progress Report - ${data.student.full_name}</title>
       <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Nunito+Sans:wght@400;600;700&display=swap');
+
         @page {
           size: A4;
-          margin: 15mm;
+          margin: 8mm;
         }
 
         * {
@@ -108,284 +110,317 @@ export function generateStateBoardReportHTML(data: StateBoardReportData): string
         }
 
         body {
-          font-family: 'Times New Roman', serif;
-          font-size: 12px;
-          line-height: 1.4;
-          color: #000;
+          font-family: 'Nunito Sans', 'Segoe UI', 'Arial', sans-serif;
+          font-size: 10px;
+          line-height: 1.5;
+          color: #2c3e50;
           background: white;
+          font-weight: 400;
         }
 
         .report-container {
           max-width: 210mm;
           margin: 0 auto;
           background: white;
-          padding: 10mm;
+          padding: 3mm 6mm;
+          border: 1px solid #e0e0e0;
         }
 
         /* Header Section */
         .header {
           text-align: center;
-          border: 2px solid #000;
-          padding: 15px;
-          margin-bottom: 20px;
-          background: #f8f9fa;
+          border: 1px solid #e0e0e0;
+          padding: 8px;
+          margin-bottom: 8px;
+          background: #F3F6FA;
+          border-bottom: 2px solid #004AAD;
         }
 
         .header h1 {
-          font-size: 18px;
-          font-weight: bold;
-          color: #2c3e50;
-          margin-bottom: 5px;
+          font-family: 'Poppins', sans-serif;
+          font-size: 16px;
+          font-weight: 600;
+          color: #004AAD;
+          margin-bottom: 3px;
           text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
 
         .header h2 {
-          font-size: 16px;
-          color: #34495e;
-          margin-bottom: 10px;
+          font-size: 11px;
+          color: #555;
+          margin-bottom: 3px;
+          font-weight: 400;
         }
 
         .school-details {
-          font-size: 11px;
-          color: #555;
-          margin-bottom: 10px;
+          font-size: 9px;
+          color: #666;
+          margin-bottom: 6px;
+          line-height: 1.4;
         }
 
         .report-title {
-          font-size: 14px;
-          font-weight: bold;
-          color: #e74c3c;
+          font-family: 'Poppins', sans-serif;
+          font-size: 12px;
+          font-weight: 600;
+          color: #004AAD;
           text-transform: uppercase;
-          letter-spacing: 1px;
+          letter-spacing: 0.8px;
+          border-top: 1px solid #e0e0e0;
+          border-bottom: 1px solid #e0e0e0;
+          padding: 4px 0;
+          margin-top: 4px;
+          background: white;
         }
 
         /* Student Info Section */
         .student-info {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 20px;
-          margin-bottom: 20px;
-          padding: 15px;
-          border: 1px solid #ddd;
-          background: #fafafa;
+          gap: 8px;
+          margin-bottom: 8px;
+          padding: 6px 10px;
+          border: 1px solid #e0e0e0;
+          background: #fafbfc;
+          font-size: 9px;
         }
 
         .info-group {
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 3px;
         }
 
         .info-item {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 6px;
+          padding: 2px 0;
         }
 
         .info-label {
-          font-weight: bold;
-          min-width: 120px;
+          font-weight: 600;
+          min-width: 105px;
           color: #2c3e50;
         }
 
         .info-value {
           color: #34495e;
-          border-bottom: 1px dotted #999;
+          border-bottom: 1px dotted #cbd5e0;
           flex: 1;
           padding-bottom: 2px;
         }
 
         /* Marks Table */
         .marks-section {
-          margin-bottom: 25px;
+          margin-bottom: 6px;
         }
 
         .section-title {
-          font-size: 14px;
-          font-weight: bold;
-          color: #2c3e50;
-          margin-bottom: 10px;
-          padding: 8px 12px;
-          background: #ecf0f1;
-          border-left: 4px solid #3498db;
+          font-family: 'Poppins', sans-serif;
+          font-size: 10px;
+          font-weight: 600;
+          color: #004AAD;
+          margin-bottom: 5px;
+          margin-top: 8px;
+          padding: 4px 0;
+          border-bottom: 1px solid #e0e0e0;
         }
 
         .marks-table {
           width: 100%;
           border-collapse: collapse;
-          border: 2px solid #2c3e50;
-          font-size: 11px;
+          border: 1px solid #e0e0e0;
+          font-size: 9px;
+          border-radius: 4px;
+          overflow: hidden;
         }
 
         .marks-table th {
-          background: #34495e;
+          background: #004AAD;
           color: white;
-          padding: 10px 8px;
+          padding: 5px 4px;
           text-align: center;
-          font-weight: bold;
-          border: 1px solid #2c3e50;
+          font-weight: 600;
+          border: 1px solid #e0e0e0;
+          font-family: 'Poppins', sans-serif;
+          font-size: 9px;
         }
 
         .marks-table td {
-          padding: 8px;
-          border: 1px solid #ddd;
+          padding: 4px 5px;
+          border: 1px solid #e0e0e0;
           text-align: center;
+        }
+
+        .marks-table tbody tr:nth-child(even) {
+          background: #F3F6FA;
         }
 
         .subject-name {
           text-align: left !important;
           font-weight: 500;
-          padding-left: 12px;
+          padding-left: 10px;
+          color: #2c3e50;
         }
 
         .marks-cell {
-          font-weight: bold;
+          font-weight: 600;
           color: #2c3e50;
         }
 
         .grade-badge {
           display: inline-block;
-          padding: 4px 8px;
-          border-radius: 4px;
-          font-weight: bold;
+          padding: 4px 10px;
+          border-radius: 3px;
+          font-weight: 600;
           text-align: center;
-          min-width: 30px;
+          min-width: 32px;
           color: white;
+          font-size: 9px;
         }
 
-        .grade-o { background: #27ae60; }
-        .grade-a { background: #2980b9; }
-        .grade-b { background: #f39c12; }
-        .grade-c { background: #e67e22; }
-        .grade-d { background: #e74c3c; }
+        .grade-o { background: #00A884; }
+        .grade-a { background: #004AAD; }
+        .grade-b { background: #7B68EE; }
+        .grade-c { background: #FFA500; }
+        .grade-d { background: #DC3545; }
 
         /* Total Section */
         .total-section {
-          background: #ecf0f1;
-          padding: 15px;
-          border: 2px solid #34495e;
-          margin-bottom: 20px;
+          background: white;
+          padding: 6px;
+          border: 1px solid #e0e0e0;
+          margin-bottom: 6px;
+          margin-top: 4px;
         }
 
         .total-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 15px;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 6px;
           text-align: center;
         }
 
         .total-item {
           background: white;
-          padding: 12px;
-          border-radius: 6px;
-          border: 1px solid #bdc3c7;
+          padding: 4px;
         }
 
         .total-label {
-          font-size: 11px;
-          color: #7f8c8d;
+          font-family: 'Nunito Sans', sans-serif;
+          font-size: 7px;
+          color: #666;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
-          margin-bottom: 5px;
+          letter-spacing: 0.3px;
+          margin-bottom: 2px;
+          font-weight: 400;
         }
 
         .total-value {
-          font-size: 18px;
-          font-weight: bold;
-          color: #2c3e50;
+          font-family: 'Poppins', sans-serif;
+          font-size: 14px;
+          font-weight: 600;
+          color: #004AAD;
         }
 
         .overall-grade {
-          font-size: 24px !important;
-          color: #27ae60;
+          font-size: 18px !important;
+          color: #00A884;
+          font-weight: 700;
         }
 
         /* Grading Legend */
         .legend-section {
-          margin-bottom: 20px;
+          margin-bottom: 5px;
         }
 
         .legend-table {
-          width: 60%;
+          width: 70%;
           border-collapse: collapse;
-          font-size: 10px;
+          font-size: 7px;
           margin: 0 auto;
         }
 
         .legend-table th {
-          background: #95a5a6;
+          background: #004AAD;
           color: white;
-          padding: 6px;
-          border: 1px solid #7f8c8d;
+          padding: 3px;
+          border: 1px solid #e0e0e0;
           text-align: center;
+          font-weight: 600;
+          font-size: 7px;
         }
 
         .legend-table td {
-          padding: 6px;
-          border: 1px solid #bdc3c7;
+          padding: 3px;
+          border: 1px solid #e0e0e0;
           text-align: center;
         }
 
         /* Attendance Section */
         .attendance-section {
-          margin-bottom: 25px;
+          margin-bottom: 5px;
         }
 
         .attendance-table {
           width: 100%;
           border-collapse: collapse;
-          font-size: 11px;
+          font-size: 7px;
         }
 
         .attendance-table th {
-          background: #8e44ad;
+          background: #004AAD;
           color: white;
-          padding: 8px;
-          border: 1px solid #7d3c98;
+          padding: 4px;
+          border: 1px solid #e0e0e0;
           text-align: center;
+          font-weight: 600;
+          font-size: 8px;
         }
 
         .attendance-table td {
-          padding: 6px;
-          border: 1px solid #ddd;
+          padding: 3px;
+          border: 1px solid #e0e0e0;
           text-align: center;
         }
 
         .month-name {
           text-align: left !important;
           font-weight: 500;
-          padding-left: 12px;
+          padding-left: 6px;
         }
 
         .attendance-total {
-          background: #f8f9fa;
-          font-weight: bold;
-          color: #2c3e50;
+          background: #F3F6FA;
+          font-weight: 600;
+          color: #004AAD;
         }
 
         /* Signatures Section */
         .signatures {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          gap: 40px;
-          margin-top: 40px;
+          gap: 15px;
+          margin-top: 8px;
           text-align: center;
         }
 
         .signature {
-          padding: 20px 0;
+          padding: 6px 0;
         }
 
         .signature-line {
-          width: 80%;
+          width: 70%;
           height: 1px;
-          background: #000;
-          margin: 40px auto 10px;
+          background: #666;
+          margin: 12px auto 4px;
         }
 
         .signature-title {
-          font-weight: bold;
-          font-size: 11px;
+          font-weight: 600;
+          font-size: 8px;
           color: #2c3e50;
         }
 
@@ -446,18 +481,23 @@ export function generateStateBoardReportHTML(data: StateBoardReportData): string
 
         <!-- Header -->
         <div class="header">
+          ${data.school.logo_url ? `
+            <div style="text-align: center; margin-bottom: 5px;">
+              <img src="${data.school.logo_url}" alt="School Logo" style="height: 40px; width: auto;">
+            </div>
+          ` : ''}
           <h1>${data.school.name}</h1>
           <div class="school-details">
-            ${data.school.address}<br>
-            ${data.school.district ? `District: ${data.school.district}` : ''} 
+            ${typeof data.school.address === 'string' ? data.school.address : ((data.school.address as any)?.street || '') + ((data.school.address as any)?.city ? ', ' + (data.school.address as any).city : '') + ((data.school.address as any)?.state ? ', ' + (data.school.address as any).state : '')}<br>
+            ${data.school.district ? `District: ${data.school.district}` : ''}
             ${data.school.mandal ? `| Mandal: ${data.school.mandal}` : ''}
             ${data.school.school_code ? `| School Code: ${data.school.school_code}` : ''}
           </div>
           <h2 class="report-title">
-            ${data.exam.type} - ${data.exam.assessment_number} Progress Report
+            ${data.exam.type} - ${data.exam.assessment_number} PROGRESS REPORT
           </h2>
-          <div style="font-size: 12px; margin-top: 8px; color: #555;">
-            Academic Year: ${data.exam.academic_year} | ${data.exam.date_range}
+          <div style="font-size: 9px; margin-top: 3px; color: #333;">
+            Academic Year: ${data.exam.academic_year}${data.exam.date_range ? ` | ${data.exam.date_range}` : ''}
           </div>
         </div>
 
@@ -470,21 +510,17 @@ export function generateStateBoardReportHTML(data: StateBoardReportData): string
             </div>
             <div class="info-item">
               <span class="info-label">Admission No:</span>
-              <span class="info-value">${data.student.admission_no || 'N/A'}</span>
+              <span class="info-value">${data.student.admission_no || ''}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Class & Section:</span>
-              <span class="info-value">${data.student.grade || 'N/A'} - ${data.student.section || 'N/A'}</span>
+              <span class="info-value">${data.student.grade || ''} - ${data.student.section || ''}</span>
             </div>
           </div>
           <div class="info-group">
             <div class="info-item">
-              <span class="info-label">Father's Name:</span>
-              <span class="info-value">${data.student.father_name || 'N/A'}</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">Mother's Name:</span>
-              <span class="info-value">${data.student.mother_name || 'N/A'}</span>
+              <span class="info-label">Parent/Guardian Name:</span>
+              <span class="info-value">${data.student.father_name || data.student.mother_name || ''}</span>
             </div>
             <div class="info-item">
               <span class="info-label">Assessment:</span>
@@ -495,7 +531,7 @@ export function generateStateBoardReportHTML(data: StateBoardReportData): string
 
         <!-- Subject-wise Performance -->
         <div class="marks-section">
-          <h3 class="section-title">📚 Subject-wise Performance</h3>
+          <h3 class="section-title">Subject-wise Performance</h3>
           <table class="marks-table">
             <thead>
               <tr>
@@ -534,15 +570,16 @@ export function generateStateBoardReportHTML(data: StateBoardReportData): string
             ` : ''}
           </div>
           ${data.overall_remark ? `
-          <div style="text-align: center; margin-top: 15px; padding: 10px; background: white; border-radius: 5px;">
-            <strong>Overall Remark:</strong> <em>${data.overall_remark}</em>
+          <div style="text-align: left; margin-top: 8px; padding: 6px 10px; background: #F3F6FA; font-size: 9px; border-left: 2px solid #004AAD;">
+            <span style="font-weight: 600; color: #004AAD;">Remark:</span>
+            <span style="color: #2c3e50; margin-left: 5px;">${data.overall_remark}</span>
           </div>
           ` : ''}
         </div>
 
         <!-- Grading Legend -->
         <div class="legend-section">
-          <h3 class="section-title">📊 Grading Scale</h3>
+          <h3 class="section-title">Grading Scale</h3>
           <table class="legend-table">
             <thead>
               <tr>
@@ -560,7 +597,7 @@ export function generateStateBoardReportHTML(data: StateBoardReportData): string
         <!-- Monthly Attendance -->
         ${Object.keys(data.attendance).length > 0 ? `
         <div class="attendance-section">
-          <h3 class="section-title">📅 Monthly Attendance</h3>
+          <h3 class="section-title">Monthly Attendance</h3>
           <table class="attendance-table">
             <thead>
               <tr>
@@ -600,15 +637,16 @@ export function generateStateBoardReportHTML(data: StateBoardReportData): string
         </div>
 
         <!-- Footer Note -->
-        <div style="text-align: center; margin-top: 30px; font-size: 10px; color: #7f8c8d; border-top: 1px solid #ddd; padding-top: 15px;">
-          <p><strong>Note:</strong> This is a computer-generated report. For any discrepancies, please contact the school office.</p>
-          <p>Generated on: ${new Date().toLocaleDateString('en-IN', { 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric',
+        <div style="text-align: center; margin-top: 6px; font-size: 7px; color: #7f8c8d; border-top: 1px solid #e0e0e0; padding-top: 5px; font-family: 'Nunito Sans', sans-serif;">
+          <p style="margin-bottom: 2px;">This report is auto-generated by the School ERP on ${new Date().toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+          })} at ${new Date().toLocaleTimeString('en-IN', {
             hour: '2-digit',
             minute: '2-digit'
-          })}</p>
+          })}.</p>
+          <p>For any corrections, please contact the school office.</p>
         </div>
       </div>
     </body>

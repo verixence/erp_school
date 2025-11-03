@@ -40,6 +40,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase-client';
 
 import Link from 'next/link';
+import { UpcomingEventsWidget } from '@/components/UpcomingEventsWidget';
 
 export default function TeacherDashboard() {
   const { user } = useAuth();
@@ -548,6 +549,17 @@ export default function TeacherDashboard() {
               </div>
             </CardContent>
           </Card>
+        </motion.div>
+      )}
+
+      {/* Upcoming Events Widget */}
+      {user?.school_id && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7 }}
+        >
+          <UpcomingEventsWidget schoolId={user.school_id} userRole="teacher" limit={5} />
         </motion.div>
       )}
     </div>

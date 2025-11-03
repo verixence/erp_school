@@ -11,6 +11,7 @@ import { Users, BookOpen, Calendar, TrendingUp, Clock, Video, ExternalLink } fro
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { UpcomingEventsWidget } from '@/components/UpcomingEventsWidget';
 
 export default function ParentDashboard() {
   const { user } = useAuth();
@@ -231,49 +232,59 @@ export default function ParentDashboard() {
         </Card>
       )}
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-blue-600" />
-              View Attendance
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-600">
-              Check daily attendance records and patterns for your children.
-            </p>
-          </CardContent>
-        </Card>
+      {/* Upcoming Events Widget and Quick Actions */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Upcoming Events Widget */}
+        {user?.school_id && (
+          <div className="lg:col-span-1">
+            <UpcomingEventsWidget schoolId={user.school_id} userRole="parent" limit={5} />
+          </div>
+        )}
 
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-green-600" />
-              Review Homework
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-600">
-              View assigned homework and submission status.
-            </p>
-          </CardContent>
-        </Card>
+        {/* Quick Actions */}
+        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-blue-600" />
+                View Attendance
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600">
+                Check daily attendance records and patterns for your children.
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-purple-600" />
-              Academic Progress
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-600">
-              Track academic performance and progress reports.
-            </p>
-          </CardContent>
-        </Card>
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-green-600" />
+                Review Homework
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600">
+                View assigned homework and submission status.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-purple-600" />
+                Academic Progress
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600">
+                Track academic performance and progress reports.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* No Children State */}
