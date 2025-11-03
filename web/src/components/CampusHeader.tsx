@@ -44,6 +44,15 @@ export function CampusHeader({ brand, onMenuToggle }: CampusHeaderProps) {
   const { query } = useKBar();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
+  // Determine settings URL based on user role
+  const getSettingsUrl = () => {
+    if (user?.role === 'teacher') return '/teacher/settings';
+    if (user?.role === 'parent') return '/parent/settings';
+    return '/school-admin/settings';
+  };
+
+  const settingsUrl = getSettingsUrl();
+
   const quickCreateActions = [
     { name: 'Add Student', href: '/school-admin/students?action=create', icon: GraduationCap },
     { name: 'Add Teacher', href: '/school-admin/teachers?action=create', icon: UserCheck },
@@ -187,13 +196,13 @@ export function CampusHeader({ brand, onMenuToggle }: CampusHeaderProps) {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/school-admin/settings" className="flex items-center focus-primary">
+                  <Link href={settingsUrl} className="flex items-center focus-primary">
                     <User className="h-4 w-4 mr-2" />
                     Profile
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/school-admin/settings" className="flex items-center focus-primary">
+                  <Link href={settingsUrl} className="flex items-center focus-primary">
                     <Settings className="h-4 w-4 mr-2" />
                     Settings
                   </Link>
