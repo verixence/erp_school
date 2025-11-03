@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase-client';
+import { generatePayslipPDF } from '@/lib/generate-payslip-pdf';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -139,16 +140,56 @@ export default function TeacherPayslipsPage() {
                       )}
                     </div>
 
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button
-                          size="sm"
-                          onClick={() => handleViewPayslip(payslip)}
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          View Details
-                        </Button>
-                      </DialogTrigger>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          // Fetch school name
+                          const { data: schoolData } = await supabase
+                            .from('schools')
+                            .select('name')
+                            .eq('id', user?.school_id)
+                            .single();
+
+                          generatePayslipPDF({
+                            teacher_name: `${user?.first_name} ${user?.last_name}`,
+                            employee_id: user?.employee_id || 'N/A',
+                            month: payslip.month,
+                            year: payslip.year,
+                            basic_salary: parseFloat(payslip.basic_salary),
+                            allowances: {
+                              hra: parseFloat(payslip.allowances?.hra || 0),
+                              da: parseFloat(payslip.allowances?.da || 0),
+                              ta: parseFloat(payslip.allowances?.ta || 0),
+                              other: parseFloat(payslip.allowances?.other || 0),
+                            },
+                            deductions: {
+                              pf: parseFloat(payslip.deductions?.pf || 0),
+                              tax: parseFloat(payslip.deductions?.tax || 0),
+                              other: parseFloat(payslip.deductions?.other || 0),
+                            },
+                            gross_salary: parseFloat(payslip.gross_salary),
+                            net_salary: parseFloat(payslip.net_salary),
+                            school_name: schoolData?.name,
+                            sent_at: payslip.sent_at,
+                          });
+                        }}
+                      >
+                        <Download className="h-4 w-4 mr-1" />
+                        Download PDF
+                      </Button>
+
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            onClick={() => handleViewPayslip(payslip)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View Details
+                          </Button>
+                        </DialogTrigger>
                       <DialogContent className="max-w-2xl">
                         <DialogHeader>
                           <DialogTitle>
@@ -253,6 +294,7 @@ export default function TeacherPayslipsPage() {
                         )}
                       </DialogContent>
                     </Dialog>
+                    </div>
                   </div>
                 </div>
               ))}
