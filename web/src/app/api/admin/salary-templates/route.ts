@@ -7,8 +7,10 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
 
     // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    console.log('Salary templates GET - Auth user:', user?.id, 'Error:', authError);
     if (!user) {
+      console.log('No user found in salary templates GET');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

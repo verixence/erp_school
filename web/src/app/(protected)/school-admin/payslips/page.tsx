@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +19,9 @@ import {
   Loader2,
   Edit,
   Save,
-  Sparkles
+  Sparkles,
+  Download,
+  Upload
 } from 'lucide-react';
 import {
   Dialog,
@@ -49,14 +51,131 @@ export default function PayslipsPage() {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
   const [viewingPayslip, setViewingPayslip] = useState<any>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  console.log('PayslipsPage - User:', user?.id, 'School:', user?.school_id, 'Role:', user?.role);
+
+  // Download CSV template
+  const downloadTemplate = async () => {
+    const { data: teachers, error } = await supabase
+      .from('users')
+      .select('id, first_name, last_name, employee_id')
+      .eq('school_id', user?.school_id)
+      .eq('role', 'teacher')
+      .eq('status', 'active')
+      .order('first_name');
+
+    if (error || !teachers || teachers.length === 0) {
+      toast.error('No teachers found');
+      return;
+    }
+
+    // Create CSV content
+    const headers = 'employee_id,teacher_name,basic_salary,hra,da,ta,other_allowances,pf,tax,other_deductions\n';
+    const rows = teachers.map(t =>
+      `${t.employee_id || ''},${t.first_name} ${t.last_name},0,0,0,0,0,0,0,0`
+    ).join('\n');
+
+    const csv = headers + rows;
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'salary_templates.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast.success('Template downloaded');
+  };
+
+  // Handle CSV upload
+  const handleCSVUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').filter(line => line.trim());
+      const headers = lines[0].split(',');
+
+      // Parse CSV rows
+      const templates = [];
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',');
+        const employeeId = values[0]?.trim();
+
+        if (!employeeId) continue;
+
+        // Find teacher by employee_id
+        const { data: teacher } = await supabase
+          .from('users')
+          .select('id')
+          .eq('school_id', user?.school_id)
+          .eq('employee_id', employeeId)
+          .eq('role', 'teacher')
+          .single();
+
+        if (!teacher) {
+          console.warn(`Teacher not found: ${employeeId}`);
+          continue;
+        }
+
+        templates.push({
+          school_id: user?.school_id,
+          teacher_id: teacher.id,
+          basic_salary: parseFloat(values[2] || '0'),
+          hra: parseFloat(values[3] || '0'),
+          da: parseFloat(values[4] || '0'),
+          ta: parseFloat(values[5] || '0'),
+          other_allowances: parseFloat(values[6] || '0'),
+          pf: parseFloat(values[7] || '0'),
+          tax: parseFloat(values[8] || '0'),
+          other_deductions: parseFloat(values[9] || '0'),
+          is_active: true
+        });
+      }
+
+      if (templates.length === 0) {
+        toast.error('No valid templates found in CSV');
+        return;
+      }
+
+      // Insert templates
+      const { error } = await supabase
+        .from('teacher_salary_templates')
+        .upsert(templates, {
+          onConflict: 'school_id,teacher_id'
+        });
+
+      if (error) throw error;
+
+      toast.success(`Uploaded ${templates.length} salary templates`);
+      queryClient.invalidateQueries({ queryKey: ['salary-templates'] });
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to upload CSV');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   // Fetch salary templates
   const { data: templates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ['salary-templates', user?.school_id],
     queryFn: async () => {
-      const response = await fetch('/api/admin/salary-templates');
-      if (!response.ok) throw new Error('Failed to fetch templates');
-      return response.json();
+      const { data, error } = await supabase
+        .from('teacher_salary_template_summary')
+        .select('*')
+        .eq('school_id', user?.school_id)
+        .order('teacher_name');
+
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!user?.school_id
   });
@@ -65,9 +184,16 @@ export default function PayslipsPage() {
   const { data: payslips = [], isLoading: payslipsLoading } = useQuery({
     queryKey: ['payslips', user?.school_id, selectedMonth, selectedYear],
     queryFn: async () => {
-      const response = await fetch(`/api/admin/payslips?month=${selectedMonth}&year=${selectedYear}`);
-      if (!response.ok) throw new Error('Failed to fetch payslips');
-      return response.json();
+      const { data, error} = await supabase
+        .from('teacher_payslip_summary')
+        .select('*')
+        .eq('school_id', user?.school_id)
+        .eq('month', selectedMonth)
+        .eq('year', selectedYear)
+        .order('teacher_name');
+
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!user?.school_id && !!selectedMonth && !!selectedYear
   });
@@ -75,20 +201,68 @@ export default function PayslipsPage() {
   // Bulk generate mutation
   const generateMutation = useMutation({
     mutationFn: async ({ send }: { send: boolean }) => {
-      const response = await fetch('/api/admin/payslips/bulk-upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // Get active salary templates
+      const { data: templatesData, error: templatesError } = await supabase
+        .from('teacher_salary_templates')
+        .select('*')
+        .eq('school_id', user?.school_id)
+        .eq('is_active', true);
+
+      if (templatesError) throw templatesError;
+      if (!templatesData || templatesData.length === 0) {
+        throw new Error('No active salary templates found');
+      }
+
+      // Generate payslips from templates
+      const payslips = templatesData.map(template => {
+        const gross = template.basic_salary +
+          (template.hra || 0) +
+          (template.da || 0) +
+          (template.ta || 0) +
+          (template.other_allowances || 0);
+
+        const totalDeductions =
+          (template.pf || 0) +
+          (template.tax || 0) +
+          (template.other_deductions || 0);
+
+        const net = gross - totalDeductions;
+
+        return {
+          school_id: user?.school_id,
+          teacher_id: template.teacher_id,
           month: selectedMonth,
           year: selectedYear,
-          send_now: send
-        })
+          basic_salary: template.basic_salary,
+          allowances: {
+            hra: template.hra || 0,
+            da: template.da || 0,
+            ta: template.ta || 0,
+            other: template.other_allowances || 0
+          },
+          deductions: {
+            pf: template.pf || 0,
+            tax: template.tax || 0,
+            other: template.other_deductions || 0
+          },
+          gross_salary: gross,
+          net_salary: net,
+          status: send ? 'sent' : 'draft',
+          sent_at: send ? new Date().toISOString() : null,
+          created_by: user?.id
+        };
       });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to generate payslips');
-      }
-      return response.json();
+
+      // Insert payslips
+      const { data, error } = await supabase
+        .from('teacher_payslips')
+        .upsert(payslips, {
+          onConflict: 'school_id,teacher_id,month,year'
+        })
+        .select();
+
+      if (error) throw error;
+      return { count: data.length };
     },
     onSuccess: (data) => {
       toast.success(`Generated ${data.count} payslips successfully`);
@@ -102,13 +276,29 @@ export default function PayslipsPage() {
   // Save template mutation
   const saveTemplateMutation = useMutation({
     mutationFn: async (template: any) => {
-      const response = await fetch('/api/admin/salary-templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(template)
-      });
-      if (!response.ok) throw new Error('Failed to save template');
-      return response.json();
+      const { data, error } = await supabase
+        .from('teacher_salary_templates')
+        .upsert({
+          school_id: user?.school_id,
+          teacher_id: template.teacher_id,
+          basic_salary: template.basic_salary || 0,
+          hra: template.hra || 0,
+          da: template.da || 0,
+          ta: template.ta || 0,
+          other_allowances: template.other_allowances || 0,
+          pf: template.pf || 0,
+          tax: template.tax || 0,
+          other_deductions: template.other_deductions || 0,
+          is_active: template.is_active !== undefined ? template.is_active : true,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'school_id,teacher_id'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       toast.success('Salary template saved');
@@ -123,10 +313,12 @@ export default function PayslipsPage() {
   // Delete payslip mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/admin/payslips/${id}`, {
-        method: 'DELETE'
-      });
-      if (!response.ok) throw new Error('Failed to delete payslip');
+      const { error } = await supabase
+        .from('teacher_payslips')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
     },
     onSuccess: () => {
       toast.success('Payslip deleted');
@@ -140,12 +332,15 @@ export default function PayslipsPage() {
   // Send payslip mutation
   const sendMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/admin/payslips/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'sent', sent_at: new Date().toISOString() })
-      });
-      if (!response.ok) throw new Error('Failed to send payslip');
+      const { error } = await supabase
+        .from('teacher_payslips')
+        .update({
+          status: 'sent',
+          sent_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (error) throw error;
     },
     onSuccess: () => {
       toast.success('Payslip sent to teacher');
@@ -197,8 +392,95 @@ export default function PayslipsPage() {
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
               ) : templates.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No salary templates yet. Create templates for teachers to enable bulk payslip generation.
+                <div className="text-center py-12">
+                  <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Salary Templates Yet</h3>
+                  <p className="text-muted-foreground mb-6">
+                    Create salary templates for your teachers to enable bulk payslip generation.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <Button
+                      onClick={async () => {
+                        // Fetch all active teachers
+                        const { data: teachers, error } = await supabase
+                          .from('users')
+                          .select('id, first_name, last_name, employee_id')
+                          .eq('school_id', user?.school_id)
+                          .eq('role', 'teacher')
+                          .eq('status', 'active');
+
+                        if (error) {
+                          toast.error('Failed to fetch teachers');
+                          return;
+                        }
+
+                        if (!teachers || teachers.length === 0) {
+                          toast.error('No active teachers found. Please add teachers first.');
+                          return;
+                        }
+
+                        // Create blank templates for all teachers
+                        const blankTemplates = teachers.map(t => ({
+                          school_id: user?.school_id,
+                          teacher_id: t.id,
+                          basic_salary: 0,
+                          hra: 0,
+                          da: 0,
+                          ta: 0,
+                          other_allowances: 0,
+                          pf: 0,
+                          tax: 0,
+                          other_deductions: 0,
+                          is_active: true
+                        }));
+
+                        const { error: insertError } = await supabase
+                          .from('teacher_salary_templates')
+                          .insert(blankTemplates);
+
+                        if (insertError) {
+                          toast.error('Failed to create templates');
+                          return;
+                        }
+
+                        toast.success(`Created templates for ${teachers.length} teachers`);
+                        queryClient.invalidateQueries({ queryKey: ['salary-templates'] });
+                      }}
+                    >
+                      <Users className="h-4 w-4 mr-2" />
+                      Create Blank Templates
+                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={downloadTemplate}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download CSV Template
+                      </Button>
+                      <div className="relative">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".csv"
+                          onChange={handleCSVUpload}
+                          className="hidden"
+                        />
+                        <Button
+                          variant="outline"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isUploading}
+                        >
+                          {isUploading ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Upload className="h-4 w-4 mr-2" />
+                          )}
+                          Upload CSV
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-3">

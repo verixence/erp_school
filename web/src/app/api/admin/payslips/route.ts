@@ -8,8 +8,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
 
     // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    console.log('Payslips GET - Auth user:', user?.id, 'Error:', authError);
     if (!user) {
+      console.log('No user found in payslips GET');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

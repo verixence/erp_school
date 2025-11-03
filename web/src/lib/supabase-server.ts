@@ -36,15 +36,17 @@ export async function createClient() {
     {
       cookies: {
         getAll() {
-          return cookieStore.getAll();
+          const allCookies = cookieStore.getAll();
+          return allCookies;
         },
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
             );
-          } catch {
-            // Ignore if called from Server Component
+          } catch (error) {
+            // The `setAll` method was called from a Server Component or API Route
+            // This can be ignored if you have middleware refreshing user sessions
           }
         },
       },

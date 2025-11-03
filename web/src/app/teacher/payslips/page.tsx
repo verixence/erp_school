@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/hooks/use-auth';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useState } from 'react';
+import { supabase } from '@/lib/supabase-client';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -29,26 +30,38 @@ const MONTHS = [
 
 export default function TeacherPayslipsPage() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [selectedPayslip, setSelectedPayslip] = useState<any>(null);
 
-  // Fetch payslips
+  // Fetch payslips using direct Supabase
   const { data: payslips = [], isLoading } = useQuery({
     queryKey: ['teacher-payslips', user?.id],
     queryFn: async () => {
-      const response = await fetch('/api/teacher/payslips');
-      if (!response.ok) throw new Error('Failed to fetch payslips');
-      return response.json();
+      const { data, error } = await supabase
+        .from('teacher_payslips')
+        .select('*')
+        .eq('teacher_id', user?.id)
+        .in('status', ['sent', 'viewed'])
+        .order('year', { ascending: false })
+        .order('month', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!user?.id
   });
 
   const markAsViewed = async (payslipId: string) => {
     try {
-      await fetch(`/api/admin/payslips/${payslipId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'viewed', viewed_at: new Date().toISOString() })
-      });
+      await supabase
+        .from('teacher_payslips')
+        .update({
+          status: 'viewed',
+          viewed_at: new Date().toISOString()
+        })
+        .eq('id', payslipId);
+
+      queryClient.invalidateQueries({ queryKey: ['teacher-payslips'] });
     } catch (error) {
       console.error('Error marking payslip as viewed:', error);
     }
