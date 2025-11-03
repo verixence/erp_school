@@ -14,7 +14,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { TrendingUp, AlertCircle, Users, Search, Loader2, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/use-auth';
-import { createClient } from '@/lib/supabase-client';
+import { supabase } from '@/lib/supabase-client';
 
 interface Student {
   id: string;
@@ -28,7 +28,6 @@ interface Student {
 export default function StudentPromotionsPage() {
   const { user } = useAuth();
   const schoolId = user?.school_id;
-  const supabase = createClient();
 
   const [fromYear, setFromYear] = useState('2024-2025');
   const [toYear, setToYear] = useState('2025-2026');
