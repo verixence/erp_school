@@ -39,7 +39,8 @@ import {
   UserX,
   DollarSign,
   TrendingUp,
-  Package
+  Package,
+  Wallet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -224,6 +225,14 @@ export function AdminSidebar({ brand, isOpen, onClose }: AdminSidebarProps) {
           isActive={pathname.startsWith("/school-admin/inventory")}
         >
           Inventory
+        </SidebarLink>
+
+        <SidebarLink
+          href="/school-admin/payslips"
+          icon={Wallet}
+          isActive={pathname.startsWith("/school-admin/payslips")}
+        >
+          Payslips
         </SidebarLink>
 
         <SidebarLink
