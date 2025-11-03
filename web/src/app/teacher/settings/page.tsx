@@ -3,27 +3,24 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { useChildren } from '@/hooks/use-parent';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Separator } from '@/components/ui/separator';
 import {
   User,
-  Users,
   Lock,
   Save,
   Loader2,
   Eye,
-  EyeOff
+  EyeOff,
+  GraduationCap
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase-client';
 import { useQueryClient } from '@tanstack/react-query';
 
-export default function ParentSettings() {
+export default function TeacherSettings() {
   const { user } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -34,7 +31,9 @@ export default function ParentSettings() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
-  const [relationship, setRelationship] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
+  const [subject, setSubject] = useState('');
+  const [department, setDepartment] = useState('');
 
   // Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -45,16 +44,14 @@ export default function ParentSettings() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  // Get children data
-  const { data: children = [] } = useChildren(user?.id);
-
   // Load user data
   useEffect(() => {
     if (user) {
       setFirstName(user.first_name || '');
       setLastName(user.last_name || '');
       setPhone(user.phone || '');
-      setRelationship(user.relation || '');
+      setEmployeeId(user.employee_id || '');
+      // Subject and department can be added to user table later
     }
   }, [user]);
 
@@ -69,7 +66,7 @@ export default function ParentSettings() {
           first_name: firstName,
           last_name: lastName,
           phone,
-          relation: relationship,
+          employee_id: employeeId,
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
@@ -130,7 +127,7 @@ export default function ParentSettings() {
   return (
     <div className="container mx-auto py-8 px-4 max-w-4xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Parent Settings</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Teacher Settings</h1>
         <p className="text-muted-foreground mt-2">
           Manage your profile and account settings
         </p>
@@ -145,7 +142,7 @@ export default function ParentSettings() {
               Profile Information
             </CardTitle>
             <CardDescription>
-              Update your personal details
+              Update your personal and professional details
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -181,19 +178,41 @@ export default function ParentSettings() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="relationship">Relationship to Student</Label>
-                <select
-                  id="relationship"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={relationship}
-                  onChange={(e) => setRelationship(e.target.value)}
-                >
-                  <option value="">Select Relationship</option>
-                  <option value="Father">Father</option>
-                  <option value="Mother">Mother</option>
-                  <option value="Guardian">Guardian</option>
-                  <option value="Other">Other</option>
-                </select>
+                <Label htmlFor="employeeId">Employee ID</Label>
+                <Input
+                  id="employeeId"
+                  value={employeeId}
+                  onChange={(e) => setEmployeeId(e.target.value)}
+                  placeholder="Enter employee ID"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="subject">Subject/Specialization</Label>
+                <Input
+                  id="subject"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="e.g., Mathematics, English"
+                  disabled
+                />
+                <p className="text-xs text-muted-foreground">
+                  Contact administration to update
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="department">Department</Label>
+                <Input
+                  id="department"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  placeholder="e.g., Science, Arts"
+                  disabled
+                />
+                <p className="text-xs text-muted-foreground">
+                  Contact administration to update
+                </p>
               </div>
             </div>
 
@@ -227,40 +246,22 @@ export default function ParentSettings() {
           </CardContent>
         </Card>
 
-        {/* My Children */}
+        {/* Teaching Information */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              My Children
+              <GraduationCap className="h-5 w-5" />
+              Teaching Information
             </CardTitle>
             <CardDescription>
-              Students linked to your account
+              Your current teaching assignments
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {children.map((child: any) => (
-                <div key={child.id} className="border rounded-lg p-4 bg-muted/50">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium text-lg">{child.full_name}</h3>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                        <span>Grade {child.sections?.grade} - Section {child.sections?.section}</span>
-                        <span>Admission No: {child.admission_no || 'N/A'}</span>
-                      </div>
-                    </div>
-                    <Badge variant="default" className="bg-green-100 text-green-800">
-                      Active
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-              {children.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  No children found. Please contact school administration.
-                </div>
-              )}
+            <div className="text-center py-8 text-muted-foreground">
+              <GraduationCap className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p>Your teaching assignments and class information</p>
+              <p className="text-sm mt-2">will be displayed here</p>
             </div>
           </CardContent>
         </Card>
