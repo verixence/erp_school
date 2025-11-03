@@ -145,12 +145,28 @@ export default function TeacherPayslipsPage() {
                         size="sm"
                         variant="outline"
                         onClick={async () => {
-                          // Fetch school name
+                          // Fetch school name and logo
                           const { data: schoolData } = await supabase
                             .from('schools')
-                            .select('name')
+                            .select('name, logo')
                             .eq('id', user?.school_id)
                             .single();
+
+                          // Convert logo URL to base64 if exists
+                          let logoBase64 = undefined;
+                          if (schoolData?.logo) {
+                            try {
+                              const response = await fetch(schoolData.logo);
+                              const blob = await response.blob();
+                              logoBase64 = await new Promise<string>((resolve) => {
+                                const reader = new FileReader();
+                                reader.onloadend = () => resolve(reader.result as string);
+                                reader.readAsDataURL(blob);
+                              });
+                            } catch (e) {
+                              console.warn('Failed to load logo:', e);
+                            }
+                          }
 
                           generatePayslipPDF({
                             teacher_name: `${user?.first_name} ${user?.last_name}`,
@@ -172,6 +188,7 @@ export default function TeacherPayslipsPage() {
                             gross_salary: parseFloat(payslip.gross_salary),
                             net_salary: parseFloat(payslip.net_salary),
                             school_name: schoolData?.name,
+                            school_logo: logoBase64,
                             sent_at: payslip.sent_at,
                           });
                         }}
