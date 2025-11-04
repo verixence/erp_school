@@ -145,18 +145,18 @@ export default function TeacherPayslipsPage() {
                         size="sm"
                         variant="outline"
                         onClick={async () => {
-                          // Fetch school name and logo
+                          // Fetch school name, logo and address
                           const { data: schoolData } = await supabase
                             .from('schools')
-                            .select('name, logo')
+                            .select('name, logo_url, address')
                             .eq('id', user?.school_id)
                             .single();
 
                           // Convert logo URL to base64 if exists
                           let logoBase64 = undefined;
-                          if (schoolData?.logo) {
+                          if (schoolData?.logo_url) {
                             try {
-                              const response = await fetch(schoolData.logo);
+                              const response = await fetch(schoolData.logo_url);
                               const blob = await response.blob();
                               logoBase64 = await new Promise<string>((resolve) => {
                                 const reader = new FileReader();
@@ -166,6 +166,14 @@ export default function TeacherPayslipsPage() {
                             } catch (e) {
                               console.warn('Failed to load logo:', e);
                             }
+                          }
+
+                          // Format address from JSONB
+                          let addressText = '';
+                          if (schoolData?.address) {
+                            const addr = schoolData.address as any;
+                            const parts = [addr.street, addr.city, addr.state, addr.postal_code].filter(Boolean);
+                            addressText = parts.join(', ');
                           }
 
                           generatePayslipPDF({
@@ -189,6 +197,7 @@ export default function TeacherPayslipsPage() {
                             net_salary: parseFloat(payslip.net_salary),
                             school_name: schoolData?.name,
                             school_logo: logoBase64,
+                            school_address: addressText,
                             sent_at: payslip.sent_at,
                           });
                         }}

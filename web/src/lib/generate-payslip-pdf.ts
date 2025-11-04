@@ -21,6 +21,7 @@ interface PayslipData {
   net_salary: number;
   school_name?: string;
   school_logo?: string;
+  school_address?: string;
   sent_at?: string;
 }
 
@@ -45,95 +46,131 @@ export function generatePayslipPDF(payslip: PayslipData) {
   const contentWidth = pageWidth - (margin * 2);
   let y = margin;
 
+  // Helper to format currency without special characters issues
+  const formatCurrency = (amount: number): string => {
+    return `Rs ${amount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  };
+
   // Helper function to draw a card/section
   const drawCard = (startY: number, height: number, bgColor?: number[]) => {
     if (bgColor) {
-      doc.setFillColor(...bgColor);
+      doc.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
       doc.roundedRect(margin, startY, contentWidth, height, 2, 2, 'F');
     }
-    doc.setDrawColor(...borderGray);
+    doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2]);
     doc.setLineWidth(0.3);
     doc.roundedRect(margin, startY, contentWidth, height, 2, 2, 'S');
   };
 
   // === HEADER SECTION ===
+  const headerHeight = 32;
+
   // Logo (if provided)
   if (payslip.school_logo) {
     try {
-      doc.addImage(payslip.school_logo, 'PNG', margin, y, 20, 20);
+      doc.addImage(payslip.school_logo, 'PNG', margin, y, 22, 22);
     } catch (e) {
       console.warn('Failed to add logo:', e);
     }
   }
 
-  // School name and title
-  doc.setTextColor(...darkText);
-  doc.setFontSize(22);
-  doc.setFont('helvetica', 'bold');
-  doc.text(payslip.school_name || 'School Name', payslip.school_logo ? margin + 25 : margin, y + 8);
+  const textStartX = payslip.school_logo ? margin + 27 : margin;
 
-  doc.setFontSize(10);
+  // School name
+  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text(payslip.school_name || 'School Name', textStartX, y + 7);
+
+  // School address
+  if (payslip.school_address) {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(lightText[0], lightText[1], lightText[2]);
+    doc.text(payslip.school_address, textStartX, y + 13);
+  }
+
+  // Payslip subtitle
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...lightText);
-  doc.text('Payslip', payslip.school_logo ? margin + 25 : margin, y + 15);
+  doc.setTextColor(lightText[0], lightText[1], lightText[2]);
+  doc.text('Salary Payslip', textStartX, y + (payslip.school_address ? 19 : 14));
 
   // Period badge on the right
   const periodText = `${MONTHS[payslip.month - 1]} ${payslip.year}`;
-  const periodWidth = doc.getTextWidth(periodText) + 10;
-  doc.setFillColor(...veryLightGray);
-  doc.roundedRect(pageWidth - margin - periodWidth, y + 2, periodWidth, 8, 2, 2, 'F');
-  doc.setTextColor(...darkText);
   doc.setFontSize(9);
+  const periodWidth = doc.getTextWidth(periodText) + 12;
+  doc.setFillColor(veryLightGray[0], veryLightGray[1], veryLightGray[2]);
+  doc.roundedRect(pageWidth - margin - periodWidth, y + 3, periodWidth, 9, 2, 2, 'F');
+  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
   doc.setFont('helvetica', 'bold');
-  doc.text(periodText, pageWidth - margin - periodWidth / 2, y + 7, { align: 'center' });
+  doc.text(periodText, pageWidth - margin - periodWidth / 2, y + 8.5, { align: 'center' });
 
-  y += 30;
+  y += headerHeight;
 
   // === EMPLOYEE INFO CARD ===
-  const cardHeight = 28;
+  const cardHeight = 35;
   drawCard(y, cardHeight, veryLightGray);
 
-  doc.setFontSize(9);
-  doc.setTextColor(...lightText);
+  const leftColX = margin + 5;
+  const rightColX = margin + contentWidth / 2 + 5;
+
+  // Left column - Employee Name
+  doc.setFontSize(8);
+  doc.setTextColor(lightText[0], lightText[1], lightText[2]);
   doc.setFont('helvetica', 'normal');
+  doc.text('EMPLOYEE NAME', leftColX, y + 8);
 
-  // Left side
-  doc.text('EMPLOYEE NAME', margin + 5, y + 8);
-  doc.setTextColor(...darkText);
+  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text(payslip.teacher_name, margin + 5, y + 14);
+  doc.setFontSize(10);
+  doc.text(payslip.teacher_name, leftColX, y + 14);
 
-  // Right side
-  doc.setFontSize(9);
-  doc.setTextColor(...lightText);
+  // Left column - Employee ID
+  doc.setFontSize(8);
+  doc.setTextColor(lightText[0], lightText[1], lightText[2]);
   doc.setFont('helvetica', 'normal');
-  doc.text('EMPLOYEE ID', margin + 5, y + 20);
-  doc.setTextColor(...darkText);
-  doc.setFont('helvetica', 'bold');
-  doc.text(payslip.employee_id || 'N/A', margin + 5, y + 25);
+  doc.text('EMPLOYEE ID', leftColX, y + 22);
 
-  // Issue date (far right)
+  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text(payslip.employee_id || 'N/A', leftColX, y + 28);
+
+  // Right column - Pay Period
+  doc.setFontSize(8);
+  doc.setTextColor(lightText[0], lightText[1], lightText[2]);
+  doc.setFont('helvetica', 'normal');
+  doc.text('PAY PERIOD', rightColX, y + 8);
+
+  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text(`${MONTHS[payslip.month - 1]} ${payslip.year}`, rightColX, y + 14);
+
+  // Right column - Issue Date
   const payDate = payslip.sent_at
-    ? new Date(payslip.sent_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-    : new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    ? new Date(payslip.sent_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
-  doc.setFontSize(9);
-  doc.setTextColor(...lightText);
+  doc.setFontSize(8);
+  doc.setTextColor(lightText[0], lightText[1], lightText[2]);
   doc.setFont('helvetica', 'normal');
-  doc.text('ISSUED ON', pageWidth - margin - 35, y + 8);
-  doc.setTextColor(...darkText);
-  doc.setFont('helvetica', 'bold');
-  doc.text(payDate, pageWidth - margin - 35, y + 14);
+  doc.text('ISSUED ON', rightColX, y + 22);
 
-  y += cardHeight + 12;
+  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text(payDate, rightColX, y + 28);
+
+  y += cardHeight + 15;
 
   // === EARNINGS & DEDUCTIONS GRID ===
   const colWidth = (contentWidth - 6) / 2;
 
   // EARNINGS COLUMN
   doc.setFontSize(10);
-  doc.setTextColor(...darkText);
+  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
   doc.setFont('helvetica', 'bold');
   doc.text('Earnings', margin, y);
 
@@ -143,11 +180,13 @@ export function generatePayslipPDF(payslip: PayslipData) {
   const drawLineItem = (label: string, amount: number, xPos: number, yPos: number, isSubtotal = false) => {
     doc.setFontSize(isSubtotal ? 10 : 9);
     doc.setFont('helvetica', isSubtotal ? 'bold' : 'normal');
-    doc.setTextColor(isSubtotal ? ...darkText : ...lightText);
-    doc.text(label, xPos + 5, yPos);
-    doc.setTextColor(...darkText);
-    doc.text(`₹${amount.toLocaleString('en-IN')}`, xPos + colWidth - 5, yPos, { align: 'right' });
-    return yPos + (isSubtotal ? 8 : 6);
+    const textColor = isSubtotal ? darkText : lightText;
+    doc.setTextColor(textColor[0], textColor[1], textColor[2]);
+    doc.text(label, xPos + 3, yPos);
+    doc.setTextColor(darkText[0], darkText[1], darkText[2]);
+    doc.setFont('helvetica', isSubtotal ? 'bold' : 'normal');
+    doc.text(formatCurrency(amount), xPos + colWidth - 3, yPos, { align: 'right' });
+    return yPos + (isSubtotal ? 7 : 5.5);
   };
 
   // Draw earnings
@@ -162,16 +201,16 @@ export function generatePayslipPDF(payslip: PayslipData) {
   }
 
   // Divider line
-  doc.setDrawColor(...borderGray);
+  doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2]);
   doc.setLineWidth(0.5);
-  doc.line(margin + 5, yEarn + 1, margin + colWidth - 5, yEarn + 1);
-  yEarn += 5;
+  doc.line(margin + 3, yEarn + 2, margin + colWidth - 3, yEarn + 2);
+  yEarn += 6;
 
   yEarn = drawLineItem('Gross Salary', payslip.gross_salary, margin, yEarn, true);
 
   // DEDUCTIONS COLUMN (parallel)
   doc.setFontSize(10);
-  doc.setTextColor(...darkText);
+  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
   doc.setFont('helvetica', 'bold');
   doc.text('Deductions', margin + colWidth + 6, earningsStartY - 7);
 
@@ -184,9 +223,9 @@ export function generatePayslipPDF(payslip: PayslipData) {
   }
 
   // Divider
-  doc.setDrawColor(...borderGray);
-  doc.line(margin + colWidth + 6 + 5, yDed + 1, pageWidth - margin - 5, yDed + 1);
-  yDed += 5;
+  doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2]);
+  doc.line(margin + colWidth + 6 + 3, yDed + 2, pageWidth - margin - 3, yDed + 2);
+  yDed += 6;
 
   const totalDeductions = payslip.deductions.pf + payslip.deductions.tax + payslip.deductions.other;
   yDed = drawLineItem('Total Deductions', totalDeductions, margin + colWidth + 6, yDed, true);
@@ -194,27 +233,27 @@ export function generatePayslipPDF(payslip: PayslipData) {
   y = Math.max(yEarn, yDed) + 10;
 
   // === NET SALARY HIGHLIGHT ===
-  const netBoxHeight = 24;
-  doc.setFillColor(...successGreen);
+  const netBoxHeight = 26;
+  doc.setFillColor(successGreen[0], successGreen[1], successGreen[2]);
   doc.roundedRect(margin, y, contentWidth, netBoxHeight, 3, 3, 'F');
 
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text('NET SALARY', margin + 8, y + 10);
+  doc.setFontSize(10);
+  doc.text('NET SALARY', margin + 10, y + 11);
 
-  doc.setFontSize(18);
+  doc.setFontSize(16);
   doc.text(
-    `₹${payslip.net_salary.toLocaleString('en-IN')}`,
-    pageWidth - margin - 8,
-    y + 15,
+    formatCurrency(payslip.net_salary),
+    pageWidth - margin - 10,
+    y + 16,
     { align: 'right' }
   );
 
   y += netBoxHeight + 20;
 
   // === FOOTER ===
-  doc.setTextColor(...lightText);
+  doc.setTextColor(lightText[0], lightText[1], lightText[2]);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.text(
