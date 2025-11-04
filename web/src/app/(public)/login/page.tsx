@@ -11,8 +11,12 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [loginMode, setLoginMode] = useState<'username' | 'email'>('username'); // Default to username
   const router = useRouter();
+
+  // Helper function to detect if input is email or username
+  const isEmail = (input: string): boolean => {
+    return input.includes('@');
+  };
 
   // Helper function to sign in with username
   const signInWithUsername = async (username: string, password: string) => {
@@ -24,7 +28,7 @@ export default function LoginPage() {
       .single();
 
     if (userError || !userData) {
-      throw new Error('Invalid username or password');
+      throw new Error('Invalid credentials');
     }
 
     // Check if user account is inactive
@@ -39,7 +43,7 @@ export default function LoginPage() {
     });
 
     if (error) {
-      throw new Error('Invalid username or password');
+      throw new Error('Invalid credentials');
     }
 
     return { data, userData };
@@ -53,11 +57,8 @@ export default function LoginPage() {
     try {
       let data, userData;
 
-      if (loginMode === 'username') {
-        const result = await signInWithUsername(loginId, password);
-        data = result.data;
-        userData = result.userData;
-      } else {
+      // Auto-detect if input is email or username
+      if (isEmail(loginId)) {
         // Email login
         const authResult = await supabase.auth.signInWithPassword({
           email: loginId,
@@ -65,7 +66,7 @@ export default function LoginPage() {
         });
 
         if (authResult.error) {
-          setMessage(authResult.error.message);
+          setMessage('Invalid credentials');
           return;
         }
 
@@ -91,6 +92,11 @@ export default function LoginPage() {
         }
 
         userData = dbUserData;
+      } else {
+        // Username login
+        const result = await signInWithUsername(loginId, password);
+        data = result.data;
+        userData = result.userData;
       }
 
       if (data.user && userData) {
@@ -140,58 +146,18 @@ export default function LoginPage() {
 
           {/* Form */}
           <form onSubmit={handleLogin} className="space-y-6">
-            {/* Login Mode Toggle */}
-            <div className="flex bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-1 border border-blue-200">
-              <button
-                type="button"
-                onClick={() => {
-                  setLoginMode('username');
-                  setLoginId('');
-                  setMessage('');
-                }}
-                className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
-                  loginMode === 'username'
-                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg transform scale-105'
-                    : 'text-gray-600 hover:text-gray-800 hover:bg-white/50'
-                }`}
-              >
-                <User className="w-4 h-4" />
-                Username
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setLoginMode('email');
-                  setLoginId('');
-                  setMessage('');
-                }}
-                className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
-                  loginMode === 'email'
-                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg transform scale-105'
-                    : 'text-gray-600 hover:text-gray-800 hover:bg-white/50'
-                }`}
-              >
-                <Mail className="w-4 h-4" />
-                Email
-              </button>
-            </div>
-
             <div className="space-y-2">
               <label htmlFor="loginId" className="block text-sm font-semibold text-gray-700">
-                {loginMode === 'email' ? 'Email Address' : 'Username'}
+                Username or Email
               </label>
               <div className="relative group">
-                {loginMode === 'email' ? (
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                ) : (
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                )}
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                 <input
                   id="loginId"
-                  type={loginMode === 'email' ? 'email' : 'text'}
+                  type="text"
                   value={loginId}
                   onChange={(e) => setLoginId(e.target.value)}
-                  placeholder={loginMode === 'email' ? 'Enter your email address' : 'Enter your username'}
+                  placeholder="Enter your username or email"
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-gray-50 focus:bg-white text-gray-900 placeholder-gray-500"
                   required
                 />
