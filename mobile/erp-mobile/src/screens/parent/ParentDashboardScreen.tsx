@@ -39,7 +39,8 @@ import {
   UserX,
   Camera,
   DollarSign,
-  HelpCircle
+  HelpCircle,
+  Wallet
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { schoolTheme } from '../../theme/schoolTheme';
@@ -360,6 +361,14 @@ export const ParentDashboardScreen: React.FC = () => {
       color: schoolTheme.quickActions.reports.color,
       lightBg: schoolTheme.quickActions.reports.lightBg,
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Reports' })
+    },
+    {
+      title: "Receipts",
+      icon: Wallet,
+      emoji: "💳",
+      color: schoolTheme.colors.success.main,
+      lightBg: schoolTheme.colors.success.bg,
+      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Receipts' })
     },
     {
       title: "Online Classes",

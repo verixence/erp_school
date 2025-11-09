@@ -273,6 +273,13 @@ export const TeacherDashboardScreen: React.FC = () => {
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Exams' })
     },
     {
+      title: "Analytics",
+      icon: Sparkles,
+      color: schoolTheme.colors.info.main,
+      lightBg: schoolTheme.colors.info.bg,
+      onPress: () => (navigation as any).navigate('DashboardTab', { screen: 'Analytics' })
+    },
+    {
       title: "Online Classes",
       icon: Video,
       color: schoolTheme.quickActions.onlineClasses.color,
@@ -299,6 +306,13 @@ export const TeacherDashboardScreen: React.FC = () => {
       color: schoolTheme.quickActions.calendar?.color || schoolTheme.colors.primary.main,
       lightBg: schoolTheme.quickActions.calendar?.lightBg || schoolTheme.colors.primary.bg,
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Calendar' })
+    },
+    {
+      title: "Gallery",
+      icon: ImageIcon,
+      color: schoolTheme.colors.parent.main,
+      lightBg: schoolTheme.colors.parent.lightBg,
+      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Gallery' })
     }
   ];
 
