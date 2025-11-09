@@ -33,6 +33,8 @@ import { TeacherCoScholasticScreen } from '../screens/teacher/TeacherCoScholasti
 import { TeacherLeaveRequestsScreen } from '../screens/teacher/TeacherLeaveRequestsScreen';
 import { TeacherOnlineClassesScreen } from '../screens/teacher/TeacherOnlineClassesScreen';
 import { TeacherMarksEntryScreen } from '../screens/teacher/TeacherMarksEntryScreen';
+import { TeacherMarksScreen } from '../screens/teacher/TeacherMarksScreen';
+import { TeacherAnalyticsScreen } from '../screens/teacher/TeacherAnalyticsScreen';
 import { SettingsScreen } from '../screens/shared/SettingsScreen';
 import { ThemeSettingsScreen } from '../screens/settings/ThemeSettingsScreen';
 import { schoolTheme } from '../theme/schoolTheme';
@@ -46,6 +48,11 @@ const DashboardStack = () => (
       name="Dashboard"
       component={TeacherDashboardScreen}
       options={{ headerShown: false }}
+    />
+    <Stack.Screen
+      name="Analytics"
+      component={TeacherAnalyticsScreen}
+      options={{ title: 'Performance Analytics' }}
     />
     {/* Communication screens accessible from Dashboard quick actions */}
     <Stack.Screen
@@ -78,45 +85,55 @@ const AttendanceStack = () => (
 
 const AcademicsStack = () => (
   <Stack.Navigator>
-    <Stack.Screen 
-      name="Timetable" 
+    <Stack.Screen
+      name="Timetable"
       component={TeacherTimetableScreen}
       options={{ title: 'My Timetable' }}
     />
-    <Stack.Screen 
-      name="Homework" 
+    <Stack.Screen
+      name="Homework"
       component={TeacherHomeworkScreen}
       options={{ title: 'Homework Management' }}
     />
-    <Stack.Screen 
-      name="Marks" 
+    <Stack.Screen
+      name="Marks"
       component={TeacherMarksEntryScreen}
       options={{ headerShown: false }}
     />
-    <Stack.Screen 
-      name="Exams" 
+    <Stack.Screen
+      name="MarksOverview"
+      component={TeacherMarksScreen}
+      options={{ title: 'Marks Overview' }}
+    />
+    <Stack.Screen
+      name="Exams"
       component={TeacherExamsScreen}
       options={{ title: 'Exam Management' }}
     />
-    <Stack.Screen 
-      name="Calendar" 
+    <Stack.Screen
+      name="Calendar"
       component={TeacherCalendarScreen}
       options={{ title: 'Academic Calendar' }}
     />
-    <Stack.Screen 
-      name="CoScholastic" 
+    <Stack.Screen
+      name="CoScholastic"
       component={TeacherCoScholasticScreen}
       options={{ title: 'Co-Scholastic Assessments' }}
     />
-    <Stack.Screen 
-      name="OnlineClasses" 
+    <Stack.Screen
+      name="OnlineClasses"
       component={TeacherOnlineClassesScreen}
       options={{ title: 'Online Classes' }}
     />
-    <Stack.Screen 
-      name="LeaveRequests" 
+    <Stack.Screen
+      name="LeaveRequests"
       component={TeacherLeaveRequestsScreen}
       options={{ title: 'Leave Requests' }}
+    />
+    <Stack.Screen
+      name="Gallery"
+      component={TeacherGalleryScreen}
+      options={{ title: 'School Gallery' }}
     />
   </Stack.Navigator>
 );
