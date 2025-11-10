@@ -62,23 +62,23 @@ const DashboardStack = () => (
     <Stack.Screen
       name="Analytics"
       component={ParentAnalyticsScreen}
-      options={{ title: 'Performance Analytics' }}
+      options={{ headerShown: false }}
     />
     {/* Communication screens accessible from Dashboard quick actions */}
     <Stack.Screen
       name="Community"
       component={ParentCommunityScreen}
-      options={{ title: 'Community' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="Announcements"
       component={ParentAnnouncementsScreen}
-      options={{ title: 'Announcements' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="Feedback"
       component={ParentFeedbackScreen}
-      options={{ title: 'Feedback' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="ThemeSettings"
@@ -103,47 +103,47 @@ const AcademicsStack = () => (
     <Stack.Screen
       name="Attendance"
       component={ParentAttendanceScreen}
-      options={{ title: 'Child Attendance' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="Timetable"
       component={ParentTimetableScreen}
-      options={{ title: 'Class Timetable' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="Homework"
       component={ParentHomeworkScreen}
-      options={{ title: 'Homework' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="Exams"
       component={ParentExamsScreen}
-      options={{ title: 'Exams & Results' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="Reports"
       component={ParentReportsScreen}
-      options={{ title: 'Report Cards' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="Receipts"
       component={ParentReceiptsScreen}
-      options={{ title: 'Fee Receipts' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="OnlineClasses"
       component={ParentOnlineClassesScreen}
-      options={{ title: 'Online Classes' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="Gallery"
       component={ParentGalleryScreen}
-      options={{ title: 'School Gallery' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="Calendar"
       component={ParentCalendarScreen}
-      options={{ title: 'Academic Calendar' }}
+      options={{ headerShown: false }}
     />
   </Stack.Navigator>
 );
@@ -166,12 +166,12 @@ const CalendarStack = () => (
     <Stack.Screen
       name="Calendar"
       component={ParentCalendarScreen}
-      options={{ title: 'Academic Calendar' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="Gallery"
       component={ParentGalleryScreen}
-      options={{ title: 'School Gallery' }}
+      options={{ headerShown: false }}
     />
   </Stack.Navigator>
 );
