@@ -545,10 +545,10 @@ export const ParentOnlineClassesScreen: React.FC = () => {
 
   if (childrenLoading || classesLoading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50">
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
         <StatusBar style="dark" />
-        <View className="flex-1 justify-center items-center">
-          <Text className="text-gray-500">Loading online classes...</Text>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: '#6b7280' }}>Loading online classes...</Text>
         </View>
       </SafeAreaView>
     );

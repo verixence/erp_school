@@ -617,7 +617,7 @@ export const ParentHomeworkScreen: React.FC = () => {
                       {/* Attachment */}
                       {hw.file_url && (
                         <TouchableOpacity
-                          onPress={() => Linking.openURL(hw.file_url)}
+                          onPress={() => hw.file_url && Linking.openURL(hw.file_url)}
                           style={{
                             flexDirection: 'row',
                             alignItems: 'center',
@@ -643,11 +643,11 @@ export const ParentHomeworkScreen: React.FC = () => {
                             Submitted
                           </Text>
                           <Text style={{ fontSize: 12, color: '#166534' }}>
-                            Submitted on: {new Date(hw.homework_submissions[0].submitted_at).toLocaleDateString()}
+                            Submitted on: {new Date(hw.homework_submissions?.[0]?.submitted_at || new Date()).toLocaleDateString()}
                           </Text>
-                          {hw.homework_submissions[0].file_url && (
+                          {hw.homework_submissions?.[0]?.file_url && (
                             <TouchableOpacity
-                              onPress={() => Linking.openURL(hw.homework_submissions[0].file_url!)}
+                              onPress={() => hw.homework_submissions?.[0]?.file_url && Linking.openURL(hw.homework_submissions[0].file_url)}
                               style={{
                                 flexDirection: 'row',
                                 alignItems: 'center',

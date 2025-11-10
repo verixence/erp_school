@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.campushoster.mobile'
+    namespace 'com.campushoster.mobile.dev'
     defaultConfig {
-        applicationId 'com.campushoster.mobile'
+        applicationId 'com.campushoster.mobile.dev'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 2
@@ -106,9 +106,9 @@ android {
         }
         release {
             storeFile file('keystore/release.keystore')
-            storePassword System.getenv("RELEASE_KEYSTORE_PASSWORD") ?: (project.hasProperty("RELEASE_KEYSTORE_PASSWORD") ? project.property("RELEASE_KEYSTORE_PASSWORD") : "")
+            storePassword 'campushoster2025'
             keyAlias 'campushoster-release'
-            keyPassword System.getenv("RELEASE_KEY_PASSWORD") ?: (project.hasProperty("RELEASE_KEY_PASSWORD") ? project.property("RELEASE_KEY_PASSWORD") : "")
+            keyPassword 'campushoster2025'
         }
     }
     buildTypes {

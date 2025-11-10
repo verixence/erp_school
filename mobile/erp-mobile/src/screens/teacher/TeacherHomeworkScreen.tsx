@@ -500,7 +500,7 @@ export const TeacherHomeworkScreen: React.FC = () => {
           {/* Attachment */}
           {homework.file_url && (
             <TouchableOpacity
-              onPress={() => Linking.openURL(homework.file_url)}
+              onPress={() => homework.file_url && Linking.openURL(homework.file_url)}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',

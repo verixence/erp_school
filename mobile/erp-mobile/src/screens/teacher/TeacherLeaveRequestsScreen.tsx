@@ -344,7 +344,9 @@ export const TeacherLeaveRequestsScreen: React.FC = () => {
   const rejectedCount = leaveRequests.filter(req => req.status === 'rejected').length;
   const totalDaysThisYear = leaveRequests
     .filter(req => {
-      const requestYear = new Date(req.created_at || req.applied_date).getFullYear();
+      const dateStr = req.created_at || req.applied_date;
+      if (!dateStr) return false;
+      const requestYear = new Date(dateStr).getFullYear();
       const currentYear = new Date().getFullYear();
       return req.status === 'approved' && requestYear === currentYear;
     })
@@ -497,7 +499,7 @@ export const TeacherLeaveRequestsScreen: React.FC = () => {
           <View style={styles.dateInfo}>
             <Calendar size={14} color="#6b7280" />
             <Text style={styles.appliedDate}>
-              Applied: {formatDate(request.created_at || request.applied_date)}
+              Applied: {formatDate(request.created_at || request.applied_date || new Date().toISOString())}
             </Text>
           </View>
           

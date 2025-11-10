@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, Text, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
+import { TouchableOpacity, Text, ActivityIndicator, ViewStyle, TextStyle, StyleSheet } from 'react-native';
 
 interface ButtonProps {
   title: string;
@@ -22,89 +22,103 @@ export const Button: React.FC<ButtonProps> = ({
   style,
   textStyle,
 }) => {
-  const getVariantStyles = () => {
+  const getVariantStyles = (): ViewStyle => {
     switch (variant) {
       case 'primary':
-        return 'bg-primary-600 border-primary-600';
+        return { backgroundColor: '#2563eb', borderColor: '#2563eb' };
       case 'secondary':
-        return 'bg-secondary-600 border-secondary-600';
+        return { backgroundColor: '#7c3aed', borderColor: '#7c3aed' };
       case 'outline':
-        return 'bg-transparent border-primary-600';
+        return { backgroundColor: 'transparent', borderColor: '#2563eb' };
       case 'ghost':
-        return 'bg-transparent border-transparent';
+        return { backgroundColor: 'transparent', borderColor: 'transparent' };
       default:
-        return 'bg-primary-600 border-primary-600';
+        return { backgroundColor: '#2563eb', borderColor: '#2563eb' };
     }
   };
 
-  const getSizeStyles = () => {
+  const getSizeStyles = (): ViewStyle => {
     switch (size) {
       case 'sm':
-        return 'px-3 py-2';
+        return { paddingHorizontal: 12, paddingVertical: 8 };
       case 'md':
-        return 'px-4 py-3';
+        return { paddingHorizontal: 16, paddingVertical: 12 };
       case 'lg':
-        return 'px-6 py-4';
+        return { paddingHorizontal: 24, paddingVertical: 16 };
       default:
-        return 'px-4 py-3';
+        return { paddingHorizontal: 16, paddingVertical: 12 };
     }
   };
 
-  const getTextVariantStyles = () => {
+  const getTextVariantStyles = (): TextStyle => {
     switch (variant) {
       case 'outline':
-        return 'text-primary-600';
       case 'ghost':
-        return 'text-primary-600';
+        return { color: '#2563eb' };
       default:
-        return 'text-white';
+        return { color: 'white' };
     }
   };
 
-  const getTextSizeStyles = () => {
+  const getTextSizeStyles = (): TextStyle => {
     switch (size) {
       case 'sm':
-        return 'text-sm';
+        return { fontSize: 14 };
       case 'md':
-        return 'text-base';
+        return { fontSize: 16 };
       case 'lg':
-        return 'text-lg';
+        return { fontSize: 18 };
       default:
-        return 'text-base';
+        return { fontSize: 16 };
     }
   };
 
-  const baseStyle = `
-    rounded-lg border-2 flex-row items-center justify-center
-    ${getVariantStyles()}
-    ${getSizeStyles()}
-    ${disabled || loading ? 'opacity-50' : ''}
-  `;
+  const buttonStyle: ViewStyle = {
+    ...styles.base,
+    ...getVariantStyles(),
+    ...getSizeStyles(),
+    opacity: (disabled || loading) ? 0.5 : 1,
+    ...style,
+  };
 
-  const textBaseStyle = `
-    font-semibold text-center
-    ${getTextVariantStyles()}
-    ${getTextSizeStyles()}
-  `;
+  const textStyle_: TextStyle = {
+    ...styles.text,
+    ...getTextVariantStyles(),
+    ...getTextSizeStyles(),
+    ...textStyle,
+  };
 
   return (
     <TouchableOpacity
-      className={baseStyle}
-      style={style}
+      style={buttonStyle}
       onPress={onPress}
       disabled={disabled || loading}
       activeOpacity={0.8}
     >
       {loading && (
-        <ActivityIndicator 
-          size="small" 
-          color={variant === 'outline' || variant === 'ghost' ? '#2563eb' : 'white'} 
+        <ActivityIndicator
+          size="small"
+          color={variant === 'outline' || variant === 'ghost' ? '#2563eb' : 'white'}
           style={{ marginRight: 8 }}
         />
       )}
-      <Text className={textBaseStyle} style={textStyle}>
+      <Text style={textStyle_}>
         {title}
       </Text>
     </TouchableOpacity>
   );
-}; 
+};
+
+const styles = StyleSheet.create({
+  base: {
+    borderRadius: 8,
+    borderWidth: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  text: {
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+}); 

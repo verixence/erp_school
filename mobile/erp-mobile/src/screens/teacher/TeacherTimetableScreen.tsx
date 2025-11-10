@@ -533,11 +533,11 @@ const TeacherTimetableScreen: React.FC = () => {
                             Period {item.period_no}
                           </Chip>
                           {isCurrent && (
-                            <Badge style={{ backgroundColor: subjectColor, marginTop: 8 }}>
+                            <View style={{ backgroundColor: subjectColor, marginTop: 8, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, alignSelf: 'flex-start' }}>
                               <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>
                                 CURRENT
                               </Text>
-                            </Badge>
+                            </View>
                           )}
                         </View>
                       </View>

@@ -35,8 +35,11 @@ import { TeacherOnlineClassesScreen } from '../screens/teacher/TeacherOnlineClas
 import { TeacherMarksEntryScreen } from '../screens/teacher/TeacherMarksEntryScreen';
 import { TeacherMarksScreen } from '../screens/teacher/TeacherMarksScreen';
 import { TeacherAnalyticsScreen } from '../screens/teacher/TeacherAnalyticsScreen';
+import { TeacherExpenseClaimsScreen } from '../screens/teacher/TeacherExpenseClaimsScreen';
+import { TeacherPayslipsScreen } from '../screens/teacher/TeacherPayslipsScreen';
 import { SettingsScreen } from '../screens/shared/SettingsScreen';
 import { ThemeSettingsScreen } from '../screens/settings/ThemeSettingsScreen';
+import { NotificationSettingsScreen } from '../screens/settings/NotificationSettingsScreen';
 import { schoolTheme } from '../theme/schoolTheme';
 
 const Tab = createBottomTabNavigator();
@@ -135,6 +138,16 @@ const AcademicsStack = () => (
       component={TeacherGalleryScreen}
       options={{ title: 'School Gallery' }}
     />
+    <Stack.Screen
+      name="ExpenseClaims"
+      component={TeacherExpenseClaimsScreen}
+      options={{ title: 'Expense Claims' }}
+    />
+    <Stack.Screen
+      name="Payslips"
+      component={TeacherPayslipsScreen}
+      options={{ title: 'My Payslips' }}
+    />
   </Stack.Navigator>
 );
 
@@ -142,10 +155,20 @@ const AcademicsStack = () => (
 
 const SettingsStack = () => (
   <Stack.Navigator>
-    <Stack.Screen 
-      name="Settings" 
+    <Stack.Screen
+      name="Settings"
       component={SettingsScreen}
       options={{ title: 'Settings' }}
+    />
+    <Stack.Screen
+      name="NotificationSettings"
+      component={NotificationSettingsScreen}
+      options={{ title: 'Notification Preferences' }}
+    />
+    <Stack.Screen
+      name="ThemeSettings"
+      component={ThemeSettingsScreen}
+      options={{ title: 'Theme Settings' }}
     />
   </Stack.Navigator>
 );
@@ -154,7 +177,7 @@ export const TeacherNavigator: React.FC = () => {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
+        tabBarIcon: ({ color, size }) => {
           let IconComponent;
 
           switch (route.name) {

@@ -1,17 +1,14 @@
 import React from 'react';
-import { View, ViewStyle } from 'react-native';
+import { View, ViewStyle, StyleSheet } from 'react-native';
 
 interface CardProps {
   children: React.ReactNode;
   style?: ViewStyle;
-  className?: string;
 }
 
-export const Card: React.FC<CardProps> = ({ children, style, className = '' }) => {
-  const baseStyle = `bg-white rounded-xl shadow-sm border border-gray-200 ${className}`;
-  
+export const Card: React.FC<CardProps> = ({ children, style }) => {
   return (
-    <View className={baseStyle} style={style}>
+    <View style={[styles.card, style]}>
       {children}
     </View>
   );
@@ -20,14 +17,11 @@ export const Card: React.FC<CardProps> = ({ children, style, className = '' }) =
 interface CardHeaderProps {
   children: React.ReactNode;
   style?: ViewStyle;
-  className?: string;
 }
 
-export const CardHeader: React.FC<CardHeaderProps> = ({ children, style, className = '' }) => {
-  const baseStyle = `p-4 pb-2 ${className}`;
-  
+export const CardHeader: React.FC<CardHeaderProps> = ({ children, style }) => {
   return (
-    <View className={baseStyle} style={style}>
+    <View style={[styles.header, style]}>
       {children}
     </View>
   );
@@ -36,14 +30,11 @@ export const CardHeader: React.FC<CardHeaderProps> = ({ children, style, classNa
 interface CardContentProps {
   children: React.ReactNode;
   style?: ViewStyle;
-  className?: string;
 }
 
-export const CardContent: React.FC<CardContentProps> = ({ children, style, className = '' }) => {
-  const baseStyle = `p-4 pt-0 ${className}`;
-  
+export const CardContent: React.FC<CardContentProps> = ({ children, style }) => {
   return (
-    <View className={baseStyle} style={style}>
+    <View style={[styles.content, style]}>
       {children}
     </View>
   );
@@ -52,15 +43,38 @@ export const CardContent: React.FC<CardContentProps> = ({ children, style, class
 interface CardFooterProps {
   children: React.ReactNode;
   style?: ViewStyle;
-  className?: string;
 }
 
-export const CardFooter: React.FC<CardFooterProps> = ({ children, style, className = '' }) => {
-  const baseStyle = `p-4 pt-0 ${className}`;
-  
+export const CardFooter: React.FC<CardFooterProps> = ({ children, style }) => {
   return (
-    <View className={baseStyle} style={style}>
+    <View style={[styles.footer, style]}>
       {children}
     </View>
   );
-}; 
+};
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  header: {
+    padding: 16,
+    paddingBottom: 8,
+  },
+  content: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  footer: {
+    padding: 16,
+    paddingTop: 0,
+  },
+}); 

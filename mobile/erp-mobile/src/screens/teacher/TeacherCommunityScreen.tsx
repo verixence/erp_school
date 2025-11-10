@@ -138,7 +138,7 @@ const TeacherCommunityScreen = () => {
         console.error('Error fetching posts:', error);
         throw error;
       }
-      return data || [];
+      return (data || []) as unknown as Post[];
     },
     enabled: !!user?.school_id,
     staleTime: 1000 * 60 * 2, // Consider data fresh for 2 minutes

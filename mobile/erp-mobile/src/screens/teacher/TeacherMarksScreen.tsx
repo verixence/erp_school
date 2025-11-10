@@ -414,7 +414,7 @@ export const TeacherMarksScreen: React.FC = () => {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Set',
-          onPress: (marks) => {
+          onPress: (marks?: string) => {
             if (!marks || isNaN(parseFloat(marks))) {
               Alert.alert('Error', 'Please enter valid marks');
               return;

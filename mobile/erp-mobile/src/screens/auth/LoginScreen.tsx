@@ -21,11 +21,10 @@ import { useAuth } from '../../contexts/AuthContext';
 const { width, height } = Dimensions.get('window');
 
 export const LoginScreen: React.FC = () => {
-  const [loginId, setLoginId] = useState(''); // Can be email or username
+  const [loginId, setLoginId] = useState(''); // Auto-detects email or username
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [loginMode, setLoginMode] = useState<'username' | 'email'>('username'); // Default to username
   const [errors, setErrors] = useState<{ loginId?: string; password?: string }>({});
 
   const { signIn, signInWithUsername } = useAuth();
@@ -35,21 +34,19 @@ export const LoginScreen: React.FC = () => {
     return emailRegex.test(email);
   };
 
-  const validateUsername = (username: string): boolean => {
-    // Username should be alphanumeric, 3-20 characters
-    const usernameRegex = /^[a-zA-Z0-9]{3,20}$/;
-    return usernameRegex.test(username);
+  // Auto-detect if input is email or username
+  const isEmail = (input: string): boolean => {
+    // Check if it contains @ AND looks like a valid email structure
+    return input.includes('@') && input.includes('.');
   };
 
   const validateForm = (): boolean => {
     const newErrors: { loginId?: string; password?: string } = {};
 
     if (!loginId.trim()) {
-      newErrors.loginId = loginMode === 'email' ? 'Email is required' : 'Username is required';
-    } else if (loginMode === 'email' && !validateEmail(loginId)) {
+      newErrors.loginId = 'Email or username is required';
+    } else if (isEmail(loginId) && !validateEmail(loginId)) {
       newErrors.loginId = 'Please enter a valid email address';
-    } else if (loginMode === 'username' && !validateUsername(loginId)) {
-      newErrors.loginId = 'Username should be 3-20 alphanumeric characters';
     }
 
     if (!password) {
@@ -68,26 +65,34 @@ export const LoginScreen: React.FC = () => {
     setLoading(true);
     try {
       let result;
-      if (loginMode === 'email') {
+      // Auto-detect and use appropriate login method
+      if (isEmail(loginId)) {
+        console.log('Attempting email login with:', loginId);
         result = await signIn(loginId, password);
       } else {
+        console.log('Attempting username login with:', loginId);
         result = await signInWithUsername(loginId, password);
       }
-      
+
+      console.log('Login result:', result);
+
       if (result.error) {
-        Alert.alert('Login Failed', result.error.message || 'Invalid credentials');
+        console.error('Login error:', result.error);
+        // Show more detailed error message
+        const errorMessage = result.error?.message || 'Invalid username or password. Please try again.';
+        Alert.alert('Login Failed', errorMessage);
+      } else {
+        console.log('Login successful');
       }
     } catch (error) {
-      Alert.alert('Login Failed', 'An unexpected error occurred');
+      console.error('Unexpected login error:', error);
+      Alert.alert('Login Failed', 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const isFormValid = loginId.trim() && password && 
-    ((loginMode === 'email' && validateEmail(loginId)) || 
-     (loginMode === 'username' && validateUsername(loginId))) && 
-    password.length >= 6;
+  const isFormValid = loginId.trim() && password && password.length >= 6;
 
   return (
     <PaperProvider>
@@ -187,7 +192,7 @@ export const LoginScreen: React.FC = () => {
                   paddingVertical: 32,
                   paddingHorizontal: 24,
                 }}>
-                  <View style={{ marginBottom: 32 }}>
+                  <View style={{ marginBottom: 24 }}>
                     <Text style={{
                       fontSize: 24,
                       fontWeight: 'bold',
@@ -202,70 +207,15 @@ export const LoginScreen: React.FC = () => {
                       color: '#718096',
                       textAlign: 'center',
                     }}>
-                      Sign in to access your account
+                      Sign in with email or username
                     </Text>
-                    
-                    {/* Login Mode Toggle */}
-                    <View style={{ 
-                      flexDirection: 'row', 
-                      justifyContent: 'center', 
-                      marginTop: 16,
-                      backgroundColor: '#F7FAFC',
-                      borderRadius: 8,
-                      padding: 4
-                    }}>
-                      <TouchableOpacity
-                        onPress={() => {
-                          setLoginMode('username');
-                          setLoginId('');
-                          setErrors({});
-                        }}
-                        style={{
-                          flex: 1,
-                          paddingVertical: 8,
-                          paddingHorizontal: 16,
-                          borderRadius: 6,
-                          backgroundColor: loginMode === 'username' ? '#6B46C1' : 'transparent',
-                        }}
-                      >
-                        <Text style={{
-                          textAlign: 'center',
-                          color: loginMode === 'username' ? 'white' : '#6B46C1',
-                          fontWeight: '600',
-                        }}>
-                          Username
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => {
-                          setLoginMode('email');
-                          setLoginId('');
-                          setErrors({});
-                        }}
-                        style={{
-                          flex: 1,
-                          paddingVertical: 8,
-                          paddingHorizontal: 16,
-                          borderRadius: 6,
-                          backgroundColor: loginMode === 'email' ? '#6B46C1' : 'transparent',
-                        }}
-                      >
-                        <Text style={{
-                          textAlign: 'center',
-                          color: loginMode === 'email' ? 'white' : '#6B46C1',
-                          fontWeight: '600',
-                        }}>
-                          Email
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
                   </View>
 
-                  {/* Login ID Input */}
+                  {/* Login ID Input - Auto-detects email or username */}
                   <View style={{ marginBottom: 20 }}>
                     <TextInput
-                      label={loginMode === 'email' ? 'Email' : 'Username'}
-                      placeholder={loginMode === 'email' ? 'Enter your email' : 'Enter your username'}
+                      label="Email or Username"
+                      placeholder="Enter your email or username"
                       value={loginId}
                       onChangeText={(text) => {
                         setLoginId(text);
@@ -273,24 +223,28 @@ export const LoginScreen: React.FC = () => {
                           setErrors(prev => ({ ...prev, loginId: undefined }));
                         }
                       }}
-                      keyboardType={loginMode === 'email' ? 'email-address' : 'default'}
+                      keyboardType="email-address"
                       autoCapitalize="none"
                       autoCorrect={false}
-                      autoComplete={loginMode === 'email' ? 'email' : 'username'}
-                      left={<TextInput.Icon icon={loginMode === 'email' ? 'email' : 'account'} />}
+                      autoComplete="email"
+                      left={<TextInput.Icon icon={isEmail(loginId) ? 'email' : 'account'} color="#6366F1" />}
                       mode="outlined"
                       error={!!errors.loginId}
+                      textColor="#1F2937"
+                      placeholderTextColor="#9CA3AF"
                       style={{
                         backgroundColor: 'white',
                       }}
                       theme={{
                         colors: {
-                          primary: '#6B46C1',
+                          primary: '#6366F1',
                           outline: errors.loginId ? '#E53E3E' : '#E2E8F0',
+                          text: '#1F2937',
+                          placeholder: '#9CA3AF',
                         }
                       }}
-                      accessibilityLabel={`${loginMode === 'email' ? 'Email' : 'Username'} input field`}
-                      accessibilityHint={`Enter your ${loginMode === 'email' ? 'email address' : 'username'} to log in`}
+                      accessibilityLabel="Email or username input field"
+                      accessibilityHint="Enter your email address or username to log in"
                     />
                     {errors.loginId && (
                       <Text style={{
@@ -300,6 +254,18 @@ export const LoginScreen: React.FC = () => {
                         marginLeft: 12,
                       }}>
                         {errors.loginId}
+                      </Text>
+                    )}
+                    {/* Helper text showing auto-detection */}
+                    {loginId.trim() && !errors.loginId && (
+                      <Text style={{
+                        color: '#6366F1',
+                        fontSize: 11,
+                        marginTop: 4,
+                        marginLeft: 12,
+                        fontStyle: 'italic',
+                      }}>
+                        {isEmail(loginId) ? '✓ Using email login' : '✓ Using username login'}
                       </Text>
                     )}
                   </View>
@@ -318,22 +284,27 @@ export const LoginScreen: React.FC = () => {
                       }}
                       secureTextEntry={!showPassword}
                       autoComplete="password"
-                      left={<TextInput.Icon icon="lock" />}
+                      left={<TextInput.Icon icon="lock" color="#6366F1" />}
                       right={
                         <TextInput.Icon
                           icon={showPassword ? "eye-off" : "eye"}
                           onPress={() => setShowPassword(!showPassword)}
+                          color="#6366F1"
                         />
                       }
                       mode="outlined"
                       error={!!errors.password}
+                      textColor="#1F2937"
+                      placeholderTextColor="#9CA3AF"
                       style={{
                         backgroundColor: 'white',
                       }}
                       theme={{
                         colors: {
-                          primary: '#6B46C1',
+                          primary: '#6366F1',
                           outline: errors.password ? '#E53E3E' : '#E2E8F0',
+                          text: '#1F2937',
+                          placeholder: '#9CA3AF',
                         }
                       }}
                       accessibilityLabel="Password input field"
@@ -360,7 +331,7 @@ export const LoginScreen: React.FC = () => {
                     style={{
                       borderRadius: 16,
                       paddingVertical: 6,
-                      backgroundColor: isFormValid ? '#6B46C1' : '#CBD5E0',
+                      backgroundColor: isFormValid ? '#6366F1' : '#CBD5E0',
                     }}
                     labelStyle={{
                       fontSize: 16,
@@ -420,7 +391,7 @@ export const LoginScreen: React.FC = () => {
                 >
                   <Text style={{
                     fontSize: 14,
-                    color: '#6B46C1',
+                    color: '#6366F1',
                     textAlign: 'center',
                     textDecorationLine: 'underline',
                   }}>

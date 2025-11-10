@@ -210,8 +210,8 @@ export const NotificationSettingsScreen: React.FC<{ navigation: any }> = ({ navi
     // Save to database
     if (user?.id) {
       const prefsToUpdate = { ...updatedPreferences };
-      delete prefsToUpdate.emergencies; // Don't update emergencies
-      updateNotificationPreferences(user.id, prefsToUpdate).catch(error => {
+      const { emergencies, ...prefsWithoutEmergencies } = prefsToUpdate; // Don't update emergencies
+      updateNotificationPreferences(user.id, prefsWithoutEmergencies).catch(error => {
         console.error('Error updating all preferences:', error);
         Alert.alert('Error', 'Failed to update notification preferences');
         loadPreferences(); // Reload on error

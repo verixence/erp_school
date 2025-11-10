@@ -30,9 +30,9 @@ export const QuickActionsGrid: React.FC<QuickActionsGridProps> = ({
 
   const handleActionPress = (action: QuickAction) => {
     if (action.params) {
-      navigation.navigate(action.route as never, action.params as never);
+      (navigation as any).navigate(action.route, action.params);
     } else {
-      navigation.navigate(action.route as never);
+      (navigation as any).navigate(action.route);
     }
   };
 

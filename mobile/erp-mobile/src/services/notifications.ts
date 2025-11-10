@@ -11,6 +11,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: false,  // Don't show in-app alerts (only push notifications)
     shouldPlaySound: false,  // Don't play sound when app is open
     shouldSetBadge: true,    // Update badge count
+    shouldShowBanner: false, // Don't show banner when app is open
+    shouldShowList: true,    // Show in notification list
   }),
 });
 

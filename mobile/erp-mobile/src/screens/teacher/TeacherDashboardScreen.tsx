@@ -38,7 +38,9 @@ import {
   FileEdit,
   ClipboardCheck,
   Megaphone,
-  ImageIcon
+  ImageIcon,
+  Receipt,
+  Wallet
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { schoolTheme } from '../../theme/schoolTheme';
@@ -83,6 +85,7 @@ export const TeacherDashboardScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [showStatHelp, setShowStatHelp] = useState<string | null>(null);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const [showAllTools, setShowAllTools] = useState(false);
 
   // Fetch teacher's assigned sections
   const { data: teacherSections = [], isLoading: sectionsLoading, refetch: refetchSections } = useQuery({
@@ -220,22 +223,22 @@ export const TeacherDashboardScreen: React.FC = () => {
     action();
   };
 
-  // Quick Actions
+  // Quick Actions - Modern vibrant colors
   const primaryActions = [
     {
       title: "Take Attendance",
       subtitle: "Mark who's here today",
       icon: CheckCircle,
-      color: schoolTheme.quickActions.attendance.color,
-      lightBg: schoolTheme.quickActions.attendance.lightBg,
+      color: '#10B981', // Emerald green
+      lightBg: '#D1FAE5',
       onPress: () => (navigation as any).navigate('AttendanceTab', { screen: 'Attendance' })
     },
     {
       title: "Enter Marks",
       subtitle: "Update test scores",
       icon: FileEdit,
-      color: schoolTheme.quickActions.marks.color,
-      lightBg: schoolTheme.quickActions.marks.lightBg,
+      color: '#F59E0B', // Amber
+      lightBg: '#FEF3C7',
       badge: pendingMarksPapers.length > 0 ? pendingMarksPapers.length : null,
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Marks' })
     },
@@ -243,78 +246,111 @@ export const TeacherDashboardScreen: React.FC = () => {
       title: "My Timetable",
       subtitle: "Today's schedule",
       icon: Calendar,
-      color: schoolTheme.quickActions.timetable.color,
-      lightBg: schoolTheme.quickActions.timetable.lightBg,
+      color: '#3B82F6', // Blue
+      lightBg: '#DBEAFE',
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Timetable' })
     },
     {
       title: "Community",
       subtitle: "Connect with others",
       icon: MessageSquare,
-      color: schoolTheme.quickActions.community.color,
-      lightBg: schoolTheme.quickActions.community.lightBg,
+      color: '#8B5CF6', // Purple
+      lightBg: '#EDE9FE',
       onPress: () => (navigation as any).navigate('DashboardTab', { screen: 'Community' })
     }
   ];
 
-  const secondaryActions = [
-    {
-      title: "Homework",
-      icon: BookOpen,
-      color: schoolTheme.quickActions.homework.color,
-      lightBg: schoolTheme.quickActions.homework.lightBg,
-      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Homework' })
+  // Organized by categories for better UX
+  const categorizedTools = {
+    academic: {
+      title: "📚 Academic",
+      color: '#4F46E5',
+      items: [
+        {
+          title: "Homework",
+          icon: BookOpen,
+          color: schoolTheme.quickActions.homework.color,
+          lightBg: schoolTheme.quickActions.homework.lightBg,
+          onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Homework' })
+        },
+        {
+          title: "Exams",
+          icon: Award,
+          color: schoolTheme.quickActions.exams.color,
+          lightBg: schoolTheme.quickActions.exams.lightBg,
+          onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Exams' })
+        },
+        {
+          title: "Analytics",
+          icon: Sparkles,
+          color: schoolTheme.colors.info.main,
+          lightBg: schoolTheme.colors.info.bg,
+          onPress: () => (navigation as any).navigate('DashboardTab', { screen: 'Analytics' })
+        },
+        {
+          title: "Online Classes",
+          icon: Video,
+          color: schoolTheme.quickActions.onlineClasses.color,
+          lightBg: schoolTheme.quickActions.onlineClasses.lightBg,
+          onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'OnlineClasses' })
+        },
+      ]
     },
-    {
-      title: "Exams",
-      icon: Award,
-      color: schoolTheme.quickActions.exams.color,
-      lightBg: schoolTheme.quickActions.exams.lightBg,
-      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Exams' })
+    administrative: {
+      title: "💼 Administrative",
+      color: '#7C3AED',
+      items: [
+        {
+          title: "Leave Requests",
+          icon: ClipboardCheck,
+          color: schoolTheme.colors.warning.main,
+          lightBg: schoolTheme.colors.warning.bg,
+          onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'LeaveRequests' })
+        },
+        {
+          title: "Expense Claims",
+          icon: Receipt,
+          color: '#10b981',
+          lightBg: '#d1fae5',
+          onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'ExpenseClaims' })
+        },
+        {
+          title: "Payslips",
+          icon: Wallet,
+          color: '#8b5cf6',
+          lightBg: '#ede9fe',
+          onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Payslips' })
+        },
+      ]
     },
-    {
-      title: "Analytics",
-      icon: Sparkles,
-      color: schoolTheme.colors.info.main,
-      lightBg: schoolTheme.colors.info.bg,
-      onPress: () => (navigation as any).navigate('DashboardTab', { screen: 'Analytics' })
-    },
-    {
-      title: "Online Classes",
-      icon: Video,
-      color: schoolTheme.quickActions.onlineClasses.color,
-      lightBg: schoolTheme.quickActions.onlineClasses.lightBg,
-      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'OnlineClasses' })
-    },
-    {
-      title: "Leave Requests",
-      icon: ClipboardCheck,
-      color: schoolTheme.colors.warning.main,
-      lightBg: schoolTheme.colors.warning.bg,
-      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'LeaveRequests' })
-    },
-    {
-      title: "Announcements",
-      icon: Megaphone,
-      color: schoolTheme.quickActions.announcements.color,
-      lightBg: schoolTheme.quickActions.announcements.lightBg,
-      onPress: () => (navigation as any).navigate('DashboardTab', { screen: 'Announcements' })
-    },
-    {
-      title: "Calendar",
-      icon: Calendar,
-      color: schoolTheme.quickActions.calendar?.color || schoolTheme.colors.primary.main,
-      lightBg: schoolTheme.quickActions.calendar?.lightBg || schoolTheme.colors.primary.bg,
-      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Calendar' })
-    },
-    {
-      title: "Gallery",
-      icon: ImageIcon,
-      color: schoolTheme.colors.parent.main,
-      lightBg: schoolTheme.colors.parent.lightBg,
-      onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Gallery' })
+    communication: {
+      title: "💬 Communication",
+      color: '#14B8A6',
+      items: [
+        {
+          title: "Announcements",
+          icon: Megaphone,
+          color: schoolTheme.quickActions.announcements.color,
+          lightBg: schoolTheme.quickActions.announcements.lightBg,
+          onPress: () => (navigation as any).navigate('DashboardTab', { screen: 'Announcements' })
+        },
+        {
+          title: "Calendar",
+          icon: Calendar,
+          color: schoolTheme.quickActions.calendar?.color || schoolTheme.colors.primary.main,
+          lightBg: schoolTheme.quickActions.calendar?.lightBg || schoolTheme.colors.secondary.light,
+          onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Calendar' })
+        },
+        {
+          title: "Gallery",
+          icon: ImageIcon,
+          color: schoolTheme.colors.parent.main,
+          lightBg: schoolTheme.colors.parent.lightBg,
+          onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Gallery' })
+        },
+      ]
     }
-  ];
+  };
 
   // Recent Activities - teacher specific
   const recentActivities = [
@@ -342,12 +378,17 @@ export const TeacherDashboardScreen: React.FC = () => {
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <StatusBar style="light" />
-
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        showsVerticalScrollIndicator={false}
+      >
       {/* Colorful Header */}
       <LinearGradient
-        colors={schoolTheme.colors.teacher.gradient}
+        colors={['#6366F1', '#8B5CF6']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
@@ -442,13 +483,6 @@ export const TeacherDashboardScreen: React.FC = () => {
           Updated {stats.lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
         </Text>
       </LinearGradient>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-        showsVerticalScrollIndicator={false}
-      >
         {/* Important Alerts Section */}
         <ImportantAlerts
           alerts={[
@@ -524,34 +558,47 @@ export const TeacherDashboardScreen: React.FC = () => {
         {/* Recent Activity Section */}
         <RecentActivity activities={recentActivities} />
 
-        {/* More Tools - Reduced to 6 items with See All button */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>More Tools</Text>
-          <View style={styles.secondaryGrid}>
-            {secondaryActions.slice(0, 6).map((action, index) => {
-              const IconComponent = action.icon;
-              return (
-                <TouchableOpacity
-                  key={index}
-                  style={[styles.secondaryCard, { backgroundColor: action.lightBg }]}
-                  onPress={() => handleButtonPress(action.onPress)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.secondaryIconContainer, { backgroundColor: action.color + '20' }]}>
-                    <IconComponent size={20} color={action.color} />
-                  </View>
-                  <Text style={[styles.secondaryCardTitle, { color: action.color }]}>
-                    {action.title}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+        {/* Categorized Tools - Better Organization */}
+        {Object.entries(categorizedTools).map(([key, category]) => (
+          <View key={key} style={styles.categorySection}>
+            <View style={styles.categoryHeader}>
+              <Text style={styles.categoryTitle}>{category.title}</Text>
+              <View style={[styles.categoryBadge, { backgroundColor: category.color + '20' }]}>
+                <Text style={[styles.categoryBadgeText, { color: category.color }]}>
+                  {category.items.length}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.categoryGrid}>
+              {category.items.map((action, index) => {
+                const IconComponent = action.icon;
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.categoryCard}
+                    onPress={() => handleButtonPress(action.onPress)}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={[action.lightBg, 'white']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.categoryCardGradient}
+                    >
+                      <View style={[styles.categoryIconWrapper, { backgroundColor: action.color + '15' }]}>
+                        <IconComponent size={24} color={action.color} strokeWidth={2.5} />
+                      </View>
+                      <Text style={styles.categoryCardTitle}>{action.title}</Text>
+                      <View style={[styles.categoryCardArrow, { backgroundColor: action.color + '10' }]}>
+                        <ChevronRight size={14} color={action.color} />
+                      </View>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
-          <TouchableOpacity style={styles.seeAllButton} activeOpacity={0.7}>
-            <Text style={styles.seeAllText}>See All</Text>
-            <ChevronRight size={16} color={schoolTheme.colors.teacher.main} />
-          </TouchableOpacity>
-        </View>
+        ))}
 
         {/* Pending Tasks */}
         {examsLoading ? (
@@ -689,17 +736,23 @@ export const TeacherDashboardScreen: React.FC = () => {
           (navigation as any).navigate('SettingsTab', { screen: 'Settings' });
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: schoolTheme.colors.background.main,
+    backgroundColor: '#F8F9FA',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   header: {
-    paddingTop: 10,
+    paddingTop: 60,
     paddingBottom: 24,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 32,
@@ -811,12 +864,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 12,
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingTop: 20,
-  },
   section: {
     marginBottom: 28,
     paddingHorizontal: 20,
@@ -916,6 +963,69 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: schoolTheme.typography.fonts.bold,
     textAlign: 'center',
+  },
+  // Category Section Styles
+  categorySection: {
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  categoryTitle: {
+    fontSize: 20,
+    fontFamily: schoolTheme.typography.fonts.bold,
+    color: schoolTheme.colors.text.primary,
+  },
+  categoryBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  categoryBadgeText: {
+    fontSize: 14,
+    fontFamily: schoolTheme.typography.fonts.bold,
+  },
+  categoryGrid: {
+    gap: 12,
+  },
+  categoryCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    ...schoolTheme.shadows.md,
+    marginBottom: 8,
+  },
+  categoryCardGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 16,
+  },
+  categoryIconWrapper: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  categoryCardTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: schoolTheme.typography.fonts.bold,
+    color: schoolTheme.colors.text.primary,
+  },
+  categoryCardArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   seeAllButton: {
     flexDirection: 'row',

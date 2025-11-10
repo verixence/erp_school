@@ -1,0 +1,5 @@
+# Keystore passwords for release builds
+# DO NOT commit the actual gradle.properties file with real passwords!
+# Copy this file to gradle.properties and add your passwords
+RELEASE_KEYSTORE_PASSWORD=your_keystore_password_here
+RELEASE_KEY_PASSWORD=your_key_password_here

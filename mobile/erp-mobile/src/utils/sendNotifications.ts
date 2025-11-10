@@ -54,9 +54,9 @@ export async function sendPushNotification(
         .single();
 
       // Default to enabled if no preferences found, or if it's an emergency
-      const isEnabled = options.notificationType === 'emergencies' || 
-                       !preferences || 
-                       preferences[options.notificationType] !== false;
+      const isEnabled = options.notificationType === 'emergencies' ||
+                       !preferences ||
+                       (preferences && preferences[options.notificationType as keyof typeof preferences] !== false);
 
       if (isEnabled) {
         validTokens.push(tokenData.token);

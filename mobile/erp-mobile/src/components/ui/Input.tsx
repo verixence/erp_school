@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TextInput, View, Text, TouchableOpacity, TextInputProps } from 'react-native';
+import { TextInput, View, Text, TouchableOpacity, TextInputProps, StyleSheet, ViewStyle, TextStyle } from 'react-native';
 import { Eye, EyeOff } from 'lucide-react-native';
 
 interface InputProps extends TextInputProps {
@@ -7,7 +7,7 @@ interface InputProps extends TextInputProps {
   error?: string;
   required?: boolean;
   type?: 'text' | 'email' | 'password' | 'number';
-  containerClassName?: string;
+  containerStyle?: ViewStyle;
 }
 
 export const Input: React.FC<InputProps> = ({
@@ -15,7 +15,8 @@ export const Input: React.FC<InputProps> = ({
   error,
   required = false,
   type = 'text',
-  containerClassName = '',
+  containerStyle,
+  style,
   ...props
 }) => {
   const [showPassword, setShowPassword] = useState(false);
@@ -35,23 +36,26 @@ export const Input: React.FC<InputProps> = ({
     }
   };
 
-  const inputStyle = `
-    bg-white border-2 rounded-lg px-4 py-3 text-base text-gray-900
-    ${error ? 'border-red-500' : isFocused ? 'border-primary-500' : 'border-gray-300'}
-  `;
+  const inputStyle: TextStyle = {
+    ...styles.input,
+    borderColor: error ? '#ef4444' : isFocused ? '#3b82f6' : '#d1d5db',
+    ...(style as TextStyle),
+  };
 
   return (
-    <View className={`mb-4 ${containerClassName}`}>
+    <View style={[styles.container, containerStyle]}>
       {label && (
-        <Text className="text-sm font-medium text-gray-700 mb-2">
-          {label}
-          {required && <Text className="text-red-500"> *</Text>}
-        </Text>
+        <View style={styles.labelContainer}>
+          <Text style={styles.label}>
+            {label}
+            {required && <Text style={styles.required}> *</Text>}
+          </Text>
+        </View>
       )}
-      
-      <View className="relative">
+
+      <View style={styles.inputWrapper}>
         <TextInput
-          className={inputStyle}
+          style={inputStyle}
           secureTextEntry={secureTextEntry}
           keyboardType={getKeyboardType()}
           autoCapitalize={type === 'email' ? 'none' : 'sentences'}
@@ -61,10 +65,10 @@ export const Input: React.FC<InputProps> = ({
           placeholderTextColor="#9ca3af"
           {...props}
         />
-        
+
         {isPassword && (
           <TouchableOpacity
-            className="absolute right-3 top-3"
+            style={styles.eyeIcon}
             onPress={() => setShowPassword(!showPassword)}
           >
             {showPassword ? (
@@ -75,10 +79,49 @@ export const Input: React.FC<InputProps> = ({
           </TouchableOpacity>
         )}
       </View>
-      
+
       {error && (
-        <Text className="text-red-500 text-sm mt-1">{error}</Text>
+        <Text style={styles.error}>{error}</Text>
       )}
     </View>
   );
-}; 
+};
+
+const styles = StyleSheet.create({
+  container: {
+    marginBottom: 16,
+  },
+  labelContainer: {
+    marginBottom: 8,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  required: {
+    color: '#ef4444',
+  },
+  inputWrapper: {
+    position: 'relative',
+  },
+  input: {
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#111827',
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+  },
+  error: {
+    color: '#ef4444',
+    fontSize: 14,
+    marginTop: 4,
+  },
+}); 

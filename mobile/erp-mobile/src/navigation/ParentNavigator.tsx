@@ -15,7 +15,8 @@ import {
   Camera,
   Video,
   Mail,
-  CalendarDays
+  CalendarDays,
+  Receipt
 } from 'lucide-react-native';
 
 // Parent Screens
@@ -32,8 +33,10 @@ import { ParentCalendarScreen } from '../screens/parent/ParentCalendarScreen';
 import { ParentFeedbackScreen } from '../screens/parent/ParentFeedbackScreen';
 import { ParentOnlineClassesScreen } from '../screens/parent/ParentOnlineClassesScreen';
 import { ParentAnalyticsScreen } from '../screens/parent/ParentAnalyticsScreen';
+import { ParentReceiptsScreen } from '../screens/parent/ParentReceiptsScreen';
 import { SettingsScreen } from '../screens/shared/SettingsScreen';
 import { ThemeSettingsScreen } from '../screens/settings/ThemeSettingsScreen';
+import { NotificationSettingsScreen } from '../screens/settings/NotificationSettingsScreen';
 import { schoolTheme } from '../theme/schoolTheme';
 
 const Tab = createBottomTabNavigator();
@@ -77,35 +80,50 @@ const DashboardStack = () => (
 
 const AcademicsStack = () => (
   <Stack.Navigator>
-    <Stack.Screen 
-      name="Attendance" 
+    <Stack.Screen
+      name="Attendance"
       component={ParentAttendanceScreen}
       options={{ title: 'Child Attendance' }}
     />
-    <Stack.Screen 
-      name="Timetable" 
+    <Stack.Screen
+      name="Timetable"
       component={ParentTimetableScreen}
       options={{ title: 'Class Timetable' }}
     />
-    <Stack.Screen 
-      name="Homework" 
+    <Stack.Screen
+      name="Homework"
       component={ParentHomeworkScreen}
       options={{ title: 'Homework' }}
     />
-    <Stack.Screen 
-      name="Exams" 
+    <Stack.Screen
+      name="Exams"
       component={ParentExamsScreen}
       options={{ title: 'Exams & Results' }}
     />
-    <Stack.Screen 
-      name="Reports" 
+    <Stack.Screen
+      name="Reports"
       component={ParentReportsScreen}
       options={{ title: 'Report Cards' }}
     />
-    <Stack.Screen 
-      name="OnlineClasses" 
+    <Stack.Screen
+      name="Receipts"
+      component={ParentReceiptsScreen}
+      options={{ title: 'Fee Receipts' }}
+    />
+    <Stack.Screen
+      name="OnlineClasses"
       component={ParentOnlineClassesScreen}
       options={{ title: 'Online Classes' }}
+    />
+    <Stack.Screen
+      name="Gallery"
+      component={ParentGalleryScreen}
+      options={{ title: 'School Gallery' }}
+    />
+    <Stack.Screen
+      name="Calendar"
+      component={ParentCalendarScreen}
+      options={{ title: 'Academic Calendar' }}
     />
   </Stack.Navigator>
 );
@@ -113,32 +131,37 @@ const AcademicsStack = () => (
 // Communication screens accessible from Dashboard and push notifications
 // No need for separate tab - reduces clutter
 
-const MediaStack = () => (
+const CalendarStack = () => (
   <Stack.Navigator>
-    <Stack.Screen 
-      name="Gallery" 
+    <Stack.Screen
+      name="Calendar"
+      component={ParentCalendarScreen}
+      options={{ title: 'Academic Calendar' }}
+    />
+    <Stack.Screen
+      name="Gallery"
       component={ParentGalleryScreen}
       options={{ title: 'School Gallery' }}
     />
   </Stack.Navigator>
 );
 
-const CalendarStack = () => (
-  <Stack.Navigator>
-    <Stack.Screen 
-      name="Calendar" 
-      component={ParentCalendarScreen}
-      options={{ title: 'Academic Calendar' }}
-    />
-  </Stack.Navigator>
-);
-
 const SettingsStack = () => (
   <Stack.Navigator>
-    <Stack.Screen 
-      name="Settings" 
+    <Stack.Screen
+      name="Settings"
       component={SettingsScreen}
       options={{ title: 'Settings' }}
+    />
+    <Stack.Screen
+      name="NotificationSettings"
+      component={NotificationSettingsScreen}
+      options={{ title: 'Notification Preferences' }}
+    />
+    <Stack.Screen
+      name="ThemeSettings"
+      component={ThemeSettingsScreen}
+      options={{ title: 'Theme Settings' }}
     />
   </Stack.Navigator>
 );

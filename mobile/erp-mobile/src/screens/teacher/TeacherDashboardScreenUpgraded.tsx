@@ -213,7 +213,7 @@ export const TeacherDashboardScreenUpgraded: React.FC = () => {
       subtitle: "Mark student attendance",
       icon: Users,
       color: "#3b82f6",
-      gradient: ["#3b82f6", "#1d4ed8"],
+      gradient: ["#3b82f6", "#1d4ed8"] as const,
       onPress: () => (navigation as any).navigate('AttendanceTab', { screen: 'Attendance' })
     },
     {
@@ -221,7 +221,7 @@ export const TeacherDashboardScreenUpgraded: React.FC = () => {
       subtitle: "Update exam marks",
       icon: PenTool,
       color: "#10b981",
-      gradient: ["#10b981", "#059669"],
+      gradient: ["#10b981", "#059669"] as const,
       badge: pendingMarksPapers.length > 0 ? pendingMarksPapers.length : null,
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Marks' })
     },
@@ -230,7 +230,7 @@ export const TeacherDashboardScreenUpgraded: React.FC = () => {
       subtitle: "View class schedule",
       icon: Calendar,
       color: "#f59e0b",
-      gradient: ["#f59e0b", "#d97706"],
+      gradient: ["#f59e0b", "#d97706"] as const,
       onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Timetable' })
     },
     {
@@ -238,7 +238,7 @@ export const TeacherDashboardScreenUpgraded: React.FC = () => {
       subtitle: "Connect & share",
       icon: MessageSquare,
       color: "#8b5cf6",
-      gradient: ["#8b5cf6", "#7c3aed"],
+      gradient: ["#8b5cf6", "#7c3aed"] as const,
       onPress: () => (navigation as any).navigate('MessagesTab', { screen: 'Community' })
     }
   ];

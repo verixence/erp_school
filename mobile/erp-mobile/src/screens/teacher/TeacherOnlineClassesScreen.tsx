@@ -97,9 +97,10 @@ export const TeacherOnlineClassesScreen: React.FC = () => {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
   
   // Wheel picker states
-  // Removed complex wheel date picker - using simple approach now
+  const [showWheelDatePicker, setShowWheelDatePicker] = useState(false);
   const [showWheelStartTimePicker, setShowWheelStartTimePicker] = useState(false);
   const [showWheelEndTimePicker, setShowWheelEndTimePicker] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showTestModal, setShowTestModal] = useState(false);
   
   // Wheel picker temp values
