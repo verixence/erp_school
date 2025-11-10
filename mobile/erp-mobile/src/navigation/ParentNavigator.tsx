@@ -43,7 +43,17 @@ const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 const DashboardStack = () => (
-  <Stack.Navigator>
+  <Stack.Navigator
+    screenOptions={{
+      headerStyle: {
+        backgroundColor: 'white',
+      },
+      headerShadowVisible: false,
+      contentStyle: {
+        backgroundColor: '#f9fafb',
+      },
+    }}
+  >
     <Stack.Screen
       name="Dashboard"
       component={ParentDashboardScreen}
@@ -79,7 +89,17 @@ const DashboardStack = () => (
 );
 
 const AcademicsStack = () => (
-  <Stack.Navigator>
+  <Stack.Navigator
+    screenOptions={{
+      headerStyle: {
+        backgroundColor: 'white',
+      },
+      headerShadowVisible: false,
+      contentStyle: {
+        backgroundColor: '#f9fafb',
+      },
+    }}
+  >
     <Stack.Screen
       name="Attendance"
       component={ParentAttendanceScreen}
@@ -132,7 +152,17 @@ const AcademicsStack = () => (
 // No need for separate tab - reduces clutter
 
 const CalendarStack = () => (
-  <Stack.Navigator>
+  <Stack.Navigator
+    screenOptions={{
+      headerStyle: {
+        backgroundColor: 'white',
+      },
+      headerShadowVisible: false,
+      contentStyle: {
+        backgroundColor: '#f9fafb',
+      },
+    }}
+  >
     <Stack.Screen
       name="Calendar"
       component={ParentCalendarScreen}
@@ -147,7 +177,17 @@ const CalendarStack = () => (
 );
 
 const SettingsStack = () => (
-  <Stack.Navigator>
+  <Stack.Navigator
+    screenOptions={{
+      headerStyle: {
+        backgroundColor: 'white',
+      },
+      headerShadowVisible: false,
+      contentStyle: {
+        backgroundColor: '#f9fafb',
+      },
+    }}
+  >
     <Stack.Screen
       name="Settings"
       component={SettingsScreen}
