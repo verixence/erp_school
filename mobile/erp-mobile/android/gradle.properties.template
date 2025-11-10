@@ -1,8 +1,6 @@
 # Project-wide Gradle settings.
 
-# Keystore passwords for release builds
-# These should be set via environment variables in EAS builds
-# For local builds, add them here (not committed to git for security)
+# Keystore passwords for release builds (set via environment variables in EAS/CI)
 # RELEASE_KEYSTORE_PASSWORD=your_password_here
 # RELEASE_KEY_PASSWORD=your_password_here
 
