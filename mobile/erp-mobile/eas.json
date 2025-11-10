@@ -25,7 +25,8 @@
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease",
-        "withoutCredentials": true
+        "withoutCredentials": true,
+        "image": "latest"
       },
       "ios": {
         "simulator": true
