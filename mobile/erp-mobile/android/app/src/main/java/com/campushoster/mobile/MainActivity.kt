@@ -1,4 +1,4 @@
-package com.campushoster.mobile.dev
+package com.campushoster.mobile
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
@@ -10,7 +10,7 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnable
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 
 import expo.modules.ReactActivityDelegateWrapper
-import com.campushoster.mobile.dev.BuildConfig
+import com.campushoster.mobile.BuildConfig
 
 class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {

@@ -1,4 +1,4 @@
-package com.campushoster.mobile.dev
+package com.campushoster.mobile
 
 import android.app.Application
 import android.content.res.Configuration
@@ -15,7 +15,7 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
-import com.campushoster.mobile.dev.BuildConfig
+import com.campushoster.mobile.BuildConfig
 
 class MainApplication : Application(), ReactApplication {
 
