@@ -13,7 +13,7 @@ export default {
     splash: {
       image: './assets/splash.png',
       resizeMode: 'contain',
-      backgroundColor: '#8b5cf6'
+      backgroundColor: '#ffffff'
     },
     assetBundlePatterns: ['**/*'],
     ios: {
@@ -53,8 +53,8 @@ export default {
       ],
       softwareKeyboardLayoutMode: 'pan',
       statusBar: {
-        backgroundColor: '#8b5cf6',
-        barStyle: 'light-content',
+        backgroundColor: '#ffffff',
+        barStyle: 'dark-content',
         translucent: false
       }
     },

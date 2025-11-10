@@ -12,6 +12,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { QueryProvider } from './src/contexts/QueryProvider';
 import { AppNavigator } from './src/navigation/AppNavigator';
+import { AnimatedSplash } from './src/components/common/AnimatedSplash';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -57,7 +58,7 @@ export default function App() {
   }, [appIsReady]);
 
   if (!appIsReady) {
-    return null;
+    return <AnimatedSplash />;
   }
 
   return (
