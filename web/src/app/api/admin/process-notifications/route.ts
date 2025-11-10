@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendPushNotifications, type NotificationType } from '@/lib/push-notifications';
 
 // Environment check
 if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -47,28 +48,40 @@ export async function POST(request: NextRequest) {
 
     for (const notification of pendingNotifications) {
       try {
-        // Here you would integrate with your actual notification service
-        // For now, we'll just log the notification and mark it as sent
-        
-        console.log(`Sending ${notification.notification_type} notification to ${notification.recipient_email}:`);
-        console.log(`Subject: Online Class - ${notification.class_title}`);
-        console.log(`Message: ${notification.message}`);
-        
-        // In a real implementation, you would send the notification via:
-        // - Email service (SendGrid, AWS SES, etc.)
-        // - Push notifications (Firebase, etc.)
-        // - SMS service (Twilio, etc.)
-        // - In-app notifications
-        
-        // For demonstration, we'll simulate successful sending
-        processedIds.push(notification.id);
-        results.push({
-          id: notification.id,
-          recipient: notification.recipient_email,
-          type: notification.notification_type,
-          status: 'sent'
+        // Send push notification using the new service
+        const pushResult = await sendPushNotifications({
+          title: notification.title || `Online Class - ${notification.class_title}`,
+          body: notification.message,
+          schoolId: notification.school_id,
+          notificationType: notification.notification_type as NotificationType,
+          recipientIds: notification.recipient_id ? [notification.recipient_id] : undefined,
+          data: {
+            type: notification.notification_type,
+            id: notification.related_id,
+            classTitle: notification.class_title
+          }
         });
-        
+
+        if (pushResult.success) {
+          processedIds.push(notification.id);
+          results.push({
+            id: notification.id,
+            recipient: notification.recipient_email,
+            type: notification.notification_type,
+            status: 'sent',
+            pushSent: pushResult.sent,
+            pushFailed: pushResult.failed
+          });
+        } else {
+          results.push({
+            id: notification.id,
+            recipient: notification.recipient_email,
+            type: notification.notification_type,
+            status: 'failed',
+            error: pushResult.errors?.[0]?.message || 'Push notification failed'
+          });
+        }
+
       } catch (notificationError) {
         console.error(`Failed to send notification ${notification.id}:`, notificationError);
         results.push({
@@ -107,7 +120,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error processing notifications:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Internal server error',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
