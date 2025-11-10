@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  SafeAreaView, 
-  ScrollView, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
   RefreshControl,
   FlatList,
   Modal
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
@@ -255,12 +255,12 @@ export const ParentAnnouncementsScreen: React.FC = () => {
       <StatusBar style="dark" />
       
       {/* Header */}
-      <View style={{ 
-        backgroundColor: 'white', 
-        paddingHorizontal: 24, 
-        paddingTop: 16,
+      <View style={{
+        backgroundColor: 'white',
+        paddingHorizontal: 24,
+        paddingTop: 48,
         paddingBottom: 20,
-        borderBottomWidth: 1, 
+        borderBottomWidth: 1,
         borderBottomColor: '#e5e7eb',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },

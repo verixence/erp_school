@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  ScrollView, 
-  SafeAreaView, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
   RefreshControl,
   Dimensions,
   FlatList
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
@@ -307,23 +307,6 @@ export const ParentAttendanceScreen: React.FC = () => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <StatusBar style="dark" />
-      
-      {/* Header */}
-      <View style={{ 
-        backgroundColor: 'white', 
-        paddingHorizontal: 24, 
-        paddingTop: 16,
-        paddingBottom: 20,
-        borderBottomWidth: 1, 
-        borderBottomColor: '#e5e7eb'
-      }}>
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#111827', marginBottom: 8 }}>
-          Attendance Tracking
-        </Text>
-        <Text style={{ fontSize: 14, color: '#6b7280' }}>
-          Monitor your child's attendance and performance
-        </Text>
-      </View>
 
       <ScrollView
         style={{ flex: 1 }}

@@ -103,7 +103,7 @@ const AcademicsStack = () => (
     <Stack.Screen
       name="Attendance"
       component={ParentAttendanceScreen}
-      options={{ headerShown: false }}
+      options={{ title: 'Attendance Tracking' }}
     />
     <Stack.Screen
       name="Timetable"
