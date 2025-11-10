@@ -1,4 +1,4 @@
-package com.campushoster.mobile.dev
+package com.campushoster.mobile
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
