@@ -38,7 +38,16 @@ export default function App() {
     }
 
     prepare();
-  }, []);
+
+    // Fallback: Force splash screen to hide after 3 seconds
+    const timeout = setTimeout(() => {
+      if (!appIsReady) {
+        setAppIsReady(true);
+      }
+    }, 3000);
+
+    return () => clearTimeout(timeout);
+  }, [appIsReady]);
 
   const onLayoutRootView = useCallback(async () => {
     if (appIsReady) {
