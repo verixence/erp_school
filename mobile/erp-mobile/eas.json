@@ -45,7 +45,7 @@
       "android": {
         "buildType": "app-bundle",
         "gradleCommand": ":app:bundleRelease",
-        "prebuildCommand": ".eas/build/restore-keystore.sh"
+        "withoutCredentials": true
       },
       "ios": {
         "simulator": false
