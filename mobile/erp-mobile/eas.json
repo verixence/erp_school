@@ -44,7 +44,8 @@
       },
       "android": {
         "buildType": "app-bundle",
-        "gradleCommand": ":app:bundleRelease"
+        "gradleCommand": ":app:bundleRelease",
+        "prebuildCommand": ".eas/build/restore-keystore.sh"
       },
       "ios": {
         "simulator": false
