@@ -36,7 +36,7 @@ export default {
       package: IS_PRODUCTION
         ? 'com.campushoster.mobile'
         : 'com.campushoster.mobile.dev',
-      versionCode: 2,
+      versionCode: 3,
       permissions: [
         'android.permission.CAMERA',
         'android.permission.READ_EXTERNAL_STORAGE',
