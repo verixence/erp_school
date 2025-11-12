@@ -25,7 +25,6 @@
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease",
-        "withoutCredentials": true,
         "image": "latest"
       },
       "ios": {
@@ -42,12 +41,7 @@
       },
       "android": {
         "buildType": "app-bundle",
-        "gradleCommand": ":app:bundleRelease",
-        "withoutCredentials": true,
-        "env": {
-          "RELEASE_STORE_PASSWORD": "campushoster2025",
-          "RELEASE_KEY_PASSWORD": "campushoster2025"
-        }
+        "gradleCommand": ":app:bundleRelease"
       },
       "ios": {
         "simulator": false
