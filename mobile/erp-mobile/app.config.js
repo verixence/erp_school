@@ -3,7 +3,7 @@ const IS_PREVIEW = process.env.EAS_BUILD_PROFILE === 'preview';
 
 export default {
   expo: {
-    owner: 'verixence',
+    owner: 'campushoster',
     name: IS_PRODUCTION ? 'CampusHoster' : 'CampusHoster (Dev)',
     slug: 'campus-hoster',
     version: '1.0.1',
@@ -79,7 +79,7 @@ export default {
     ],
     extra: {
       eas: {
-        projectId: 'bbddf204-1181-42b5-9ab4-5f8d5b4c769d'
+        projectId: 'cd4178e9-7c6b-454a-adc6-b965118df79d'
       },
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
