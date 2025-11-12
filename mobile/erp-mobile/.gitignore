@@ -13,6 +13,8 @@ web-build/
 *.orig.*
 *.jks
 *.keystore
+# Exception: Include upload keystore for EAS builds
+!android/app/upload-keystore.keystore
 *.p8
 *.p12
 *.key
