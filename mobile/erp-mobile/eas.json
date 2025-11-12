@@ -38,14 +38,16 @@
         "EAS_BUILD_PROFILE": "production",
         "EXPO_PUBLIC_SUPABASE_URL": "https://pyzdfteicahfzyuoxgwg.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5emRmdGVpY2FoZnp5dW94Z3dnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3NjU1MTIsImV4cCI6MjA2NjM0MTUxMn0.LLy0stoEf3vuH33l-EMEa56Yow12bxlNzhXYejVpR4o",
-        "EXPO_PUBLIC_APP_ENV": "production",
-        "RELEASE_STORE_PASSWORD": "campushoster2025",
-        "RELEASE_KEY_PASSWORD": "campushoster2025"
+        "EXPO_PUBLIC_APP_ENV": "production"
       },
       "android": {
         "buildType": "app-bundle",
         "gradleCommand": ":app:bundleRelease",
-        "withoutCredentials": true
+        "withoutCredentials": true,
+        "env": {
+          "RELEASE_STORE_PASSWORD": "campushoster2025",
+          "RELEASE_KEY_PASSWORD": "campushoster2025"
+        }
       },
       "ios": {
         "simulator": false
