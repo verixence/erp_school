@@ -5,7 +5,7 @@ export default {
   expo: {
     owner: 'campushoster',
     name: IS_PRODUCTION ? 'CampusHoster' : 'CampusHoster (Dev)',
-    slug: 'campus-hoster',
+    slug: 'campushoster',
     version: '1.0.1',
     orientation: 'portrait',
     icon: './assets/icon.png',
