@@ -1,15 +1,5 @@
 {
   "installCommand": "cd .. && pnpm install",
   "buildCommand": "pnpm build",
-  "framework": "nextjs",
-  "crons": [
-    {
-      "path": "/api/admin/send-push-notifications",
-      "schedule": "*/2 * * * *"
-    },
-    {
-      "path": "/api/cron/process-fee-reminders",
-      "schedule": "0 9 * * *"
-    }
-  ]
+  "framework": "nextjs"
 } 
