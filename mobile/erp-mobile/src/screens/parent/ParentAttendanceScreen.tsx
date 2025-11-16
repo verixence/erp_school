@@ -139,10 +139,9 @@ export const ParentAttendanceScreen: React.FC = () => {
       const endDateStr = endDate.toISOString().slice(0, 10);
 
       const { data, error } = await supabase
-        .from('attendance')
+        .from('attendance_records')
         .select('*')
         .eq('student_id', selectedChild)
-        .eq('school_id', user?.school_id)
         .gte('date', startDate)
         .lte('date', endDateStr)
         .order('date', { ascending: false });
@@ -154,7 +153,7 @@ export const ParentAttendanceScreen: React.FC = () => {
 
       return data || [];
     },
-    enabled: !!selectedChild && !!selectedMonth && !!user?.school_id,
+    enabled: !!selectedChild && !!selectedMonth,
   });
 
   // Calculate attendance statistics
