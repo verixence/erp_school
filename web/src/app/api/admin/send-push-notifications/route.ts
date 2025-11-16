@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
 // Environment check
 if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error('Missing Supabase environment variables');
@@ -30,6 +37,11 @@ interface PushNotificationQueueItem {
   attempts: number;
 }
 
+// Handle OPTIONS request for CORS preflight
+export async function OPTIONS(request: NextRequest) {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Get pending push notifications from queue
@@ -45,7 +57,7 @@ export async function POST(request: NextRequest) {
       console.error('Error fetching pending push notifications:', fetchError);
       return NextResponse.json(
         { error: 'Failed to fetch pending push notifications' },
-        { status: 500 }
+        { status: 500, headers: corsHeaders }
       );
     }
 
@@ -54,7 +66,7 @@ export async function POST(request: NextRequest) {
         success: true,
         message: 'No pending push notifications',
         processed: 0
-      });
+      }, { headers: corsHeaders });
     }
 
     console.log(`Processing ${pendingPushes.length} push notifications...`);
@@ -179,7 +191,7 @@ export async function POST(request: NextRequest) {
       processed: pendingPushes.length,
       sent: totalSent,
       failed: totalFailed
-    });
+    }, { headers: corsHeaders });
 
   } catch (error) {
     console.error('Error processing push notification queue:', error);
@@ -188,7 +200,7 @@ export async function POST(request: NextRequest) {
         error: 'Internal server error',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
@@ -215,19 +227,19 @@ export async function GET(request: NextRequest) {
         success: true,
         pending: pendingCount || 0,
         failed: failedCount || 0
-      });
+      }, { headers: corsHeaders });
     }
 
     return NextResponse.json({
       success: true,
       ...stats
-    });
+    }, { headers: corsHeaders });
 
   } catch (error) {
     console.error('Error fetching queue status:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
