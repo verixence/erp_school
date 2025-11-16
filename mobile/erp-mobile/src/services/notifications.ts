@@ -124,27 +124,51 @@ export function addNotificationResponseReceivedListener(
 // Store the push token in the database (to be called after login)
 export async function storePushToken(userId: string, token: string, schoolId: string) {
   try {
-    const { data, error } = await supabase
+    // First, check if token exists
+    const { data: existing } = await supabase
       .from('push_tokens')
-      .upsert({
-        user_id: userId,
-        school_id: schoolId,
-        token,
-        platform: Platform.OS,
-        device_name: Device.deviceName || `${Platform.OS} Device`,
-        is_active: true,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'user_id,token'
-      });
+      .select('id')
+      .eq('user_id', userId)
+      .eq('token', token)
+      .single();
 
-    if (error) {
-      console.error('Error storing push token:', error);
-      throw error;
+    if (existing) {
+      // Update existing token to reactivate it
+      const { data, error } = await supabase
+        .from('push_tokens')
+        .update({
+          is_active: true,
+          device_name: Device.deviceName || `${Platform.OS} Device`,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existing.id);
+
+      if (error) {
+        console.error('Error updating push token:', error);
+        throw error;
+      }
+    } else {
+      // Insert new token
+      const { data, error } = await supabase
+        .from('push_tokens')
+        .insert({
+          user_id: userId,
+          school_id: schoolId,
+          token,
+          platform: Platform.OS,
+          device_name: Device.deviceName || `${Platform.OS} Device`,
+          is_active: true,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('Error inserting push token:', error);
+        throw error;
+      }
     }
 
-    console.log('Push token stored successfully for user:', userId);
-    return data;
+    console.log('Push token stored/reactivated successfully for user:', userId);
+    return true;
   } catch (error) {
     console.error('Failed to store push token:', error);
     throw error;
