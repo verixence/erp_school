@@ -1,5 +1,5 @@
 # Fee Reminder Cron Job Setup
-
+ 
 ## ✅ Automated Setup (pg_cron) - Already Done!
 
 Your fee reminders are now **100% automated** using Supabase's built-in `pg_cron` extension (completely free).
