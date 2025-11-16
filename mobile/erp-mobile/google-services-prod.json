@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "466915673468",
+    "project_id": "campushoster-f5e7f",
+    "storage_bucket": "campushoster-f5e7f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:466915673468:android:0389d47aa18a9e4f4910f9",
+        "android_client_info": {
+          "package_name": "com.campushoster.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDuoN_A83hmskxp93PxzuNGW8m9U1867tY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:466915673468:android:89c6d1d0cb27815e4910f9",
+        "android_client_info": {
+          "package_name": "com.campushoster.mobile.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDuoN_A83hmskxp93PxzuNGW8m9U1867tY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

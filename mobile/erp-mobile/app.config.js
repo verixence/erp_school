@@ -6,7 +6,7 @@ export default {
     owner: 'campushoster',
     name: IS_PRODUCTION ? 'CampusHoster' : 'CampusHoster (Dev)',
     slug: 'campushoster',
-    version: '1.0.1',
+    version: '1.0.6',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'automatic',
@@ -36,7 +36,10 @@ export default {
       package: IS_PRODUCTION
         ? 'com.campushoster.mobile'
         : 'com.campushoster.mobile.dev',
-      versionCode: 3,
+      googleServicesFile: IS_PRODUCTION
+        ? './google-services-prod.json'
+        : './google-services-dev.json',
+      versionCode: 6,
       permissions: [
         'android.permission.CAMERA',
         'android.permission.READ_EXTERNAL_STORAGE',

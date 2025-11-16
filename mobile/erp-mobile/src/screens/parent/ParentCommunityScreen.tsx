@@ -62,11 +62,10 @@ const ParentCommunityScreen = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedAudience, setSelectedAudience] = useState<'all' | 'teachers' | 'parents' | 'students'>('all');
 
   // Fetch posts
   const { data: posts = [], isLoading, refetch } = useQuery({
-    queryKey: ['community-posts', user?.school_id, selectedAudience],
+    queryKey: ['community-posts', user?.school_id],
     queryFn: async (): Promise<Post[]> => {
       if (!user?.school_id) return [];
 
@@ -95,14 +94,8 @@ const ParentCommunityScreen = () => {
           )
         `)
         .eq('school_id', user.school_id)
+        .or('audience.eq.parents,audience.eq.all')
         .order('created_at', { ascending: false });
-
-      // Filter posts visible to parents
-      if (selectedAudience === 'all') {
-        query = query.or('audience.eq.parents,audience.eq.all');
-      } else {
-        query = query.eq('audience', selectedAudience);
-      }
 
       const { data, error } = await query;
 
@@ -269,45 +262,6 @@ const ParentCommunityScreen = () => {
             </Text>
           </View>
         </View>
-      </View>
-
-      {/* Audience Filter */}
-      <View style={{ backgroundColor: 'white', paddingHorizontal: 24, paddingVertical: 16 }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            {[
-              { key: 'all', label: 'All Posts', icon: Globe },
-              { key: 'teachers', label: 'Teachers', icon: UserCheck },
-              { key: 'parents', label: 'Parents', icon: Users },
-              { key: 'students', label: 'Students', icon: GraduationCap }
-            ].map((filter) => (
-              <TouchableOpacity
-                key={filter.key}
-                style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderRadius: 20,
-                  backgroundColor: selectedAudience === filter.key ? '#8b5cf6' : '#f3f4f6',
-                  flexDirection: 'row',
-                  alignItems: 'center'
-                }}
-                onPress={() => setSelectedAudience(filter.key as any)}
-              >
-                <filter.icon 
-                  size={16} 
-                  color={selectedAudience === filter.key ? 'white' : '#6b7280'} 
-                />
-                <Text style={{
-                  marginLeft: 6,
-                  color: selectedAudience === filter.key ? 'white' : '#6b7280',
-                  fontWeight: selectedAudience === filter.key ? '600' : '400'
-                }}>
-                  {filter.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
       </View>
 
       {/* Posts List */}

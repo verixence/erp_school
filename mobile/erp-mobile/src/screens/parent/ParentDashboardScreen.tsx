@@ -24,7 +24,6 @@ import {
   Send,
   Megaphone,
   ImageIcon,
-  BarChart3,
   CalendarDays
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -120,6 +119,75 @@ export const ParentDashboardScreen: React.FC = () => {
     }
   }, [children.length, selectedChild]);
 
+  // Fetch recent activities
+  const { data: recentActivities = [] } = useQuery({
+    queryKey: ['parent-recent-activities', user?.id, selectedChild],
+    queryFn: async () => {
+      if (!user?.id || !selectedChild) return [];
+
+      const currentChild = children.find(c => c.id === selectedChild);
+      if (!currentChild) return [];
+
+      const activities: any[] = [];
+
+      // Get recent attendance
+      const { data: attendanceData } = await supabase
+        .from('attendance_records')
+        .select('date, status')
+        .eq('student_id', selectedChild)
+        .eq('school_id', user.school_id)
+        .order('date', { ascending: false })
+        .limit(3);
+
+      if (attendanceData) {
+        attendanceData.forEach((record: any) => {
+          const date = new Date(record.date);
+          const isToday = date.toDateString() === new Date().toDateString();
+          activities.push({
+            id: `attendance-${record.date}`,
+            type: 'attendance',
+            title: `Attendance - ${record.status === 'present' ? 'Present' : record.status === 'absent' ? 'Absent' : 'Late'}`,
+            description: `${currentChild.full_name} was marked ${record.status}`,
+            time: isToday ? 'Today' : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          });
+        });
+      }
+
+      // Get recent homework
+      if (currentChild.sections) {
+        const sectionFormat = `${currentChild.sections.grade} ${currentChild.sections.section}`;
+        const { data: homeworkData } = await supabase
+          .from('homeworks')
+          .select('id, title, subject, due_date, created_at')
+          .eq('section', sectionFormat)
+          .eq('school_id', user.school_id)
+          .order('created_at', { ascending: false })
+          .limit(2);
+
+        if (homeworkData) {
+          homeworkData.forEach((hw: any) => {
+            const createdDate = new Date(hw.created_at);
+            const now = new Date();
+            const diffHours = Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60));
+            const timeAgo = diffHours < 24 ? `${diffHours} hours ago` : createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+            activities.push({
+              id: `homework-${hw.id}`,
+              type: 'homework',
+              title: 'New Homework',
+              description: `${hw.subject}: ${hw.title}`,
+              time: timeAgo
+            });
+          });
+        }}
+
+      // Sort by most recent
+      return activities.slice(0, 5);
+    },
+    enabled: !!user?.id && !!selectedChild && children.length > 0,
+    staleTime: 1000 * 60 * 2,
+  });
+
   // Fetch parent dashboard stats
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['parent-stats', user?.id, selectedChild],
@@ -143,24 +211,44 @@ export const ParentDashboardScreen: React.FC = () => {
       let averageGrade = 'N/A';
 
       if (studentIds.length > 0) {
-        // Get upcoming homework count
+        // Get upcoming homework count - build section format like "2 A"
+        const sectionFormats = children
+          .filter(c => c.sections)
+          .map(c => `${c.sections!.grade} ${c.sections!.section}`);
+
         const { data: homeworkData } = await supabase
-          .from('homework')
+          .from('homeworks')
           .select('id')
-          .in('section_id', children.map(c => c.section_id))
+          .in('section', sectionFormats)
           .gte('due_date', new Date().toISOString().split('T')[0])
           .eq('school_id', user.school_id);
 
-        upcomingHomework = homeworkData?.length || 0;
+        if (homeworkData && homeworkData.length > 0) {
+          // Get homework submissions for the selected child
+          const { data: submissions } = await supabase
+            .from('homework_submissions')
+            .select('homework_id')
+            .in('student_id', studentIds);
+
+          const submittedHomeworkIds = new Set(submissions?.map(s => s.homework_id) || []);
+
+          // Count only homework that hasn't been submitted
+          upcomingHomework = homeworkData.filter(hw => !submittedHomeworkIds.has(hw.id)).length;
+        } else {
+          upcomingHomework = 0;
+        }
 
         // Calculate attendance percentage for current month
-        const currentMonth = new Date().toISOString().slice(0, 7);
+        const now = new Date();
+        const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const firstDayOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
         const { data: attendanceData } = await supabase
           .from('attendance_records')
           .select('status')
           .in('student_id', studentIds)
-          .gte('date', currentMonth + '-01')
-          .lt('date', currentMonth + '-32')
+          .gte('date', firstDayOfMonth.toISOString().split('T')[0])
+          .lt('date', firstDayOfNextMonth.toISOString().split('T')[0])
           .eq('school_id', user.school_id);
 
         if (attendanceData && attendanceData.length > 0) {
@@ -291,13 +379,6 @@ export const ParentDashboardScreen: React.FC = () => {
           onPress: () => (navigation as any).navigate('AcademicsTab', { screen: 'Reports' })
         },
         {
-          title: "Analytics",
-          icon: BarChart3,
-          color: schoolTheme.colors.info.main,
-          lightBg: schoolTheme.colors.info.bg,
-          onPress: () => (navigation as any).navigate('DashboardTab', { screen: 'Analytics' })
-        },
-        {
           title: "Online Classes",
           icon: Video,
           color: schoolTheme.quickActions.onlineClasses.color,
@@ -354,31 +435,6 @@ export const ParentDashboardScreen: React.FC = () => {
       ]
     }
   };
-
-  // Recent activities
-  const recentActivities = [
-    {
-      id: '1',
-      type: 'attendance' as const,
-      title: 'Attendance Marked',
-      description: currentChild ? `${currentChild.full_name} marked present today` : 'Child marked present today',
-      time: 'Today',
-    },
-    {
-      id: '2',
-      type: 'homework' as const,
-      title: 'New Homework',
-      description: 'Mathematics assignment posted for review',
-      time: '2 hours ago',
-    },
-    {
-      id: '3',
-      type: 'exam' as const,
-      title: 'Exam Results',
-      description: 'Science test results available',
-      time: 'Yesterday',
-    },
-  ];
 
   return (
     <View style={styles.container}>

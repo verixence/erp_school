@@ -9,7 +9,12 @@ import ErrorBoundary from '@/components/error-boundary';
 import GlobalErrorHandler from '@/components/global-error-handler';
 import ClientScriptLoader from '@/components/client-script-loader';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+  weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900']
+});
 
 export const metadata: Metadata = {
   title: 'Campus Hoster - School Management System',
