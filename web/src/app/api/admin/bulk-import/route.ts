@@ -265,6 +265,19 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
     sectionMap.set(key, sec.id);
   });
 
+  // Pre-fetch existing students by admission_no to reduce queries
+  const admissionNos = data.map(row => row.admission_no).filter(Boolean);
+  const { data: existingStudents } = await supabase
+    .from('students')
+    .select('id, admission_no')
+    .eq('school_id', school_id)
+    .in('admission_no', admissionNos);
+
+  const existingStudentMap = new Map();
+  existingStudents?.forEach(student => {
+    existingStudentMap.set(student.admission_no, student.id);
+  });
+
   for (const row of data) {
     try {
       // Normalize grade for lookup
@@ -293,6 +306,9 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
         gradeValue = row.grade.toString().toUpperCase();
       }
 
+      // Check if student already exists using pre-fetched map
+      const existingStudentId = existingStudentMap.get(row.admission_no);
+
       const studentData = {
         full_name: row.full_name,
         admission_no: row.admission_no,
@@ -306,14 +322,29 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
         school_id
       };
 
-      const { data: student, error } = await supabase
-        .from('students')
-        .upsert(studentData, {
-          onConflict: 'school_id,admission_no',
-          ignoreDuplicates: false
-        })
-        .select()
-        .single();
+      let student;
+      let error;
+
+      if (existingStudentId) {
+        // Update existing student
+        const result = await supabase
+          .from('students')
+          .update(studentData)
+          .eq('id', existingStudentId)
+          .select()
+          .single();
+        student = result.data;
+        error = result.error;
+      } else {
+        // Insert new student
+        const result = await supabase
+          .from('students')
+          .insert(studentData)
+          .select()
+          .single();
+        student = result.data;
+        error = result.error;
+      }
 
       if (error) {
         errors.push(`Student ${row.full_name}: ${error.message}`);
@@ -351,7 +382,7 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
               .eq('username', providedUsername)
               .eq('school_id', school_id)
               .eq('role', 'parent')
-              .single();
+              .maybeSingle();
             parent = data;
           }
 
@@ -363,7 +394,7 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
               .eq('email', email)
               .eq('school_id', school_id)
               .eq('role', 'parent')
-              .single();
+              .maybeSingle();
             parent = data;
           }
 
@@ -375,7 +406,7 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
               .eq('phone', phone)
               .eq('school_id', school_id)
               .eq('role', 'parent')
-              .single();
+              .maybeSingle();
             parent = data;
           }
 
@@ -418,62 +449,87 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
               });
 
               if (authError) {
-                errors.push(`Parent ${parentName} (${email}): Auth creation failed - ${authError.message}`);
-                continue;
+                // Check if it's a duplicate email error
+                if (authError.message?.includes('already been registered')) {
+                  // Try to find the existing auth user and link them
+                  const { data: existingUserData } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('email', finalEmail)
+                    .maybeSingle();
+
+                  if (existingUserData) {
+                    // Parent exists, just link them and continue to linking code
+                    parent = { id: existingUserData.id };
+                    // Don't continue here - let it proceed to link parent to student
+                  } else {
+                    errors.push(`Parent ${parentName || 'Unknown'} (${email || 'no email'}): Email ${finalEmail} already registered but not found in database. Please contact admin.`);
+                    continue;
+                  }
+                } else {
+                  errors.push(`Parent ${parentName || 'Unknown'} (${email || 'no email'}): Auth creation failed - ${authError.message}`);
+                  continue;
+                }
+              } else {
+                // Auth user created successfully, now create user record
+                const userData = {
+                  id: authUser.user.id,
+                  email: finalEmail,
+                  username,
+                  role: 'parent',
+                  school_id,
+                  first_name,
+                  last_name,
+                  phone: parentPhones[i] || null,
+                  relation: (parentRelations[i] || 'parent').toLowerCase()
+                };
+
+                const { error: userError } = await supabase
+                  .from('users')
+                  .insert(userData);
+
+                if (userError) {
+                  // Cleanup auth user if user record creation fails
+                  await supabase.auth.admin.deleteUser(authUser.user.id);
+                  errors.push(`Parent ${parentName || 'Unknown'} (${email || 'no email'}): Database user creation failed - ${userError.message}`);
+                  continue;
+                }
+
+                parent = { id: authUser.user.id };
+
+                // Note: We don't add parent to successful array to avoid inflating student count
+                // Parent credentials are tracked separately in the logs if needed
               }
 
-              // Create user record
-              const userData = {
-                id: authUser.user.id,
-                email: finalEmail,
-                username,
-                role: 'parent',
-                school_id,
-                first_name,
-                last_name,
-                phone: parentPhones[i] || null,
-                relation: (parentRelations[i] || 'parent').toLowerCase()
-              };
-
-              const { error: userError } = await supabase
-                .from('users')
-                .insert(userData);
-
-              if (userError) {
-                // Cleanup auth user if user record creation fails
-                await supabase.auth.admin.deleteUser(authUser.user.id);
-                errors.push(`Parent ${parentName} (${email}): Database user creation failed - ${userError.message}`);
-                continue;
-              }
-
-              parent = { id: authUser.user.id };
-              
-              // Log successful parent creation
-              successful.push({
-                type: 'parent',
-                email: finalEmail,
-                username,
-                name: parentName,
-                temp_password: tempPassword,
-                message: username 
-                  ? `Created parent account for ${parentName} with username: ${username} | Password: ${tempPassword}`
-                  : `Created parent account for ${parentName} with email: ${finalEmail} | Password: ${tempPassword}`
-              });
-              
             } catch (error: any) {
-              errors.push(`Parent creation for ${email}: ${error.message}`);
+              errors.push(`Parent creation for ${email || 'no email'}: ${error.message}`);
               continue;
             }
           }
 
-          // Link parent to student
+          // Link parent to student (use upsert to avoid duplicate links)
           if (parent) {
-            await supabase
+            const { error: linkError } = await supabase
               .from('student_parents')
-              .insert({
+              .upsert({
                 student_id: student.id,
                 parent_id: parent.id
+              }, {
+                onConflict: 'student_id,parent_id',
+                ignoreDuplicates: true
               });
+
+            if (linkError) {
+              // If upsert doesn't work (no constraint), try insert and ignore errors
+              await supabase
+                .from('student_parents')
+                .insert({
+                  student_id: student.id,
+                  parent_id: parent.id
+                })
+                .select()
+                .maybeSingle();
+            }
           }
         }
       }
