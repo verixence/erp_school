@@ -96,8 +96,8 @@ export async function POST(request: NextRequest) {
 
     // Process in batches for better performance
     const BATCH_SIZE = 50;
-    let allSuccessful = [];
-    let allErrors = [];
+    let allSuccessful: any[] = [];
+    let allErrors: string[] = [];
 
     switch (entity) {
       case 'sections':
