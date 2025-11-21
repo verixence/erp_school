@@ -94,18 +94,47 @@ export async function POST(request: NextRequest) {
     let results;
     const errors = [];
 
+    // Process in batches for better performance
+    const BATCH_SIZE = 50;
+    let allSuccessful = [];
+    let allErrors = [];
+
     switch (entity) {
       case 'sections':
         results = await bulkImportSections(data, school_id);
         break;
       case 'students':
-        results = await bulkImportStudents(data, school_id, useUsername);
+        // Process students in batches
+        for (let i = 0; i < data.length; i += BATCH_SIZE) {
+          const batch = data.slice(i, i + BATCH_SIZE);
+          console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(data.length / BATCH_SIZE)}`);
+          const batchResults = await bulkImportStudents(batch, school_id, useUsername);
+          allSuccessful = allSuccessful.concat(batchResults.successful);
+          allErrors = allErrors.concat(batchResults.errors);
+        }
+        results = { successful: allSuccessful, errors: allErrors };
         break;
       case 'teachers':
-        results = await bulkImportTeachers(data, school_id, useUsername);
+        // Process teachers in batches
+        for (let i = 0; i < data.length; i += BATCH_SIZE) {
+          const batch = data.slice(i, i + BATCH_SIZE);
+          console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(data.length / BATCH_SIZE)}`);
+          const batchResults = await bulkImportTeachers(batch, school_id, useUsername);
+          allSuccessful = allSuccessful.concat(batchResults.successful);
+          allErrors = allErrors.concat(batchResults.errors);
+        }
+        results = { successful: allSuccessful, errors: allErrors };
         break;
       case 'parents':
-        results = await bulkImportParents(data, school_id, useUsername);
+        // Process parents in batches
+        for (let i = 0; i < data.length; i += BATCH_SIZE) {
+          const batch = data.slice(i, i + BATCH_SIZE);
+          console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(data.length / BATCH_SIZE)}`);
+          const batchResults = await bulkImportParents(batch, school_id, useUsername);
+          allSuccessful = allSuccessful.concat(batchResults.successful);
+          allErrors = allErrors.concat(batchResults.errors);
+        }
+        results = { successful: allSuccessful, errors: allErrors };
         break;
       default:
         return NextResponse.json(
@@ -114,12 +143,20 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    console.log(`Bulk import completed:`, results);
+    console.log(`Bulk import completed:`, {
+      successful: results.successful.length,
+      errors: results.errors.length
+    });
 
     return NextResponse.json({
       success: true,
       imported: results.successful,
-      errors: results.errors
+      errors: results.errors,
+      summary: {
+        total: data.length,
+        successful: results.successful.length,
+        failed: results.errors.length
+      }
     });
 
   } catch (error: any) {
@@ -216,9 +253,20 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
   const successful = [];
   const errors = [];
 
+  // Pre-fetch all sections for this school to reduce queries
+  const { data: allSections } = await supabase
+    .from('sections')
+    .select('id, grade, grade_text, section')
+    .eq('school_id', school_id);
+
+  const sectionMap = new Map();
+  allSections?.forEach(sec => {
+    const key = `${sec.grade || sec.grade_text}-${sec.section}`.toLowerCase();
+    sectionMap.set(key, sec.id);
+  });
+
   for (const row of data) {
     try {
-      // Check if section exists
       // Normalize grade for lookup
       let lookupGrade = row.grade;
       if (row.grade && !isNaN(row.grade)) {
@@ -227,34 +275,11 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
         lookupGrade = row.grade.toString().toUpperCase();
       }
 
-      // Query sections table and handle both numeric and text grades
-      let section = null;
+      // Look up section from pre-fetched map
+      const sectionKey = `${lookupGrade}-${row.section.toString().toUpperCase()}`.toLowerCase();
+      const sectionId = sectionMap.get(sectionKey);
 
-      // First try matching with grade_text (for text grades like NURSERY, LKG, UKG)
-      const { data: textGradeSection } = await supabase
-        .from('sections')
-        .select('id')
-        .eq('grade_text', lookupGrade.toString().toLowerCase())
-        .eq('section', row.section.toString().toUpperCase())
-        .eq('school_id', school_id)
-        .maybeSingle();
-
-      section = textGradeSection;
-
-      // If not found and grade is numeric, try matching with integer grade column
-      if (!section && !isNaN(lookupGrade as any)) {
-        const { data: numericGradeSection } = await supabase
-          .from('sections')
-          .select('id')
-          .eq('grade', parseInt(lookupGrade as string))
-          .eq('section', row.section.toString().toUpperCase())
-          .eq('school_id', school_id)
-          .maybeSingle();
-
-        section = numericGradeSection;
-      }
-
-      if (!section) {
+      if (!sectionId) {
         errors.push(`Student ${row.full_name}: Section ${row.grade}-${row.section} does not exist. Please create the section first.`);
         continue;
       }
@@ -273,7 +298,7 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
         admission_no: row.admission_no,
         grade: gradeValue,
         section: row.section.toString().toUpperCase(),
-        section_id: section.id,
+        section_id: sectionId,
         date_of_birth: row.date_of_birth,
         gender: row.gender.toLowerCase(),
         student_email: row.student_email || null,
@@ -283,7 +308,10 @@ async function bulkImportStudents(data: any[], school_id: string, useUsername: b
 
       const { data: student, error } = await supabase
         .from('students')
-        .insert(studentData)
+        .upsert(studentData, {
+          onConflict: 'school_id,admission_no',
+          ignoreDuplicates: false
+        })
         .select()
         .single();
 
@@ -469,12 +497,75 @@ async function bulkImportTeachers(data: any[], school_id: string, useUsername: b
 
   for (const row of data) {
     try {
-      // Use provided password or generate a temporary one
+      // Check if teacher already exists by employee_id or email
+      let existingUser = null;
+
+      if (row.employee_id) {
+        const { data } = await supabase
+          .from('users')
+          .select('id, email, username')
+          .eq('employee_id', row.employee_id)
+          .eq('school_id', school_id)
+          .eq('role', 'teacher')
+          .maybeSingle();
+        existingUser = data;
+      }
+
+      if (!existingUser && row.email) {
+        const { data } = await supabase
+          .from('users')
+          .select('id, email, username')
+          .eq('email', row.email)
+          .eq('school_id', school_id)
+          .eq('role', 'teacher')
+          .maybeSingle();
+        existingUser = data;
+      }
+
+      if (existingUser) {
+        // Update existing teacher
+        const userData = {
+          first_name: row.first_name,
+          last_name: row.last_name,
+          phone: row.phone || null,
+          employee_id: row.employee_id || null,
+          subjects: row.subjects ? row.subjects.split(';').map((s: string) => s.trim()) : []
+        };
+
+        await supabase
+          .from('users')
+          .update(userData)
+          .eq('id', existingUser.id);
+
+        const teacherData = {
+          first_name: row.first_name,
+          last_name: row.last_name,
+          phone: row.phone || null,
+          department: row.department || null,
+          subjects: row.subjects ? row.subjects.split(';').map((s: string) => s.trim()) : [],
+          status: 'active'
+        };
+
+        await supabase
+          .from('teachers')
+          .update(teacherData)
+          .eq('user_id', existingUser.id);
+
+        successful.push({
+          ...teacherData,
+          employee_id: row.employee_id,
+          email: existingUser.email,
+          username: existingUser.username,
+          message: `Updated teacher ${row.first_name} ${row.last_name}`
+        });
+        continue;
+      }
+
+      // Create new teacher
       const tempPassword = row.password && row.password.trim()
         ? row.password.trim()
         : 'temp' + Math.random().toString(36).slice(-8) + '!';
 
-      // Generate username if useUsername is enabled
       let username = null;
       let finalEmail = row.email || null;
 
@@ -482,12 +573,10 @@ async function bulkImportTeachers(data: any[], school_id: string, useUsername: b
         username = await generateUsername('teacher', school_id, row.employee_id);
         finalEmail = `${username}@${school_id}.local`;
       } else if (!finalEmail) {
-        // If not using username and no email provided, generate dummy email
         username = await generateUsername('teacher', school_id, row.employee_id);
         finalEmail = `${username}@${school_id}.local`;
       }
 
-      // Create auth user first
       const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
         email: finalEmail,
         password: tempPassword,
@@ -506,7 +595,6 @@ async function bulkImportTeachers(data: any[], school_id: string, useUsername: b
         continue;
       }
 
-      // Create user record in database
       const userData = {
         id: authUser.user.id,
         email: finalEmail,
@@ -525,13 +613,11 @@ async function bulkImportTeachers(data: any[], school_id: string, useUsername: b
         .insert(userData);
 
       if (userError) {
-        // Cleanup auth user if user record creation fails
         await supabase.auth.admin.deleteUser(authUser.user.id);
         errors.push(`Teacher ${row.first_name} ${row.last_name} (${row.email}): Database user creation failed - ${userError.message}`);
         continue;
       }
 
-      // Create teacher record
       const teacherData = {
         user_id: authUser.user.id,
         school_id,
@@ -550,18 +636,17 @@ async function bulkImportTeachers(data: any[], school_id: string, useUsername: b
         .insert(teacherData);
 
       if (teacherError) {
-        // Cleanup both auth user and database user if teacher record creation fails
         await supabase.auth.admin.deleteUser(authUser.user.id);
         await supabase.from('users').delete().eq('id', authUser.user.id);
         errors.push(`Teacher ${row.first_name} ${row.last_name} (${row.email}): Teacher record creation failed - ${teacherError.message}`);
         continue;
       }
 
-      successful.push({ 
-        ...teacherData, 
+      successful.push({
+        ...teacherData,
         username,
         temp_password: tempPassword,
-        message: username 
+        message: username
           ? `Created teacher account for ${row.first_name} ${row.last_name} with username: ${username} | Password: ${tempPassword}`
           : `Created teacher account for ${row.first_name} ${row.last_name} with email: ${finalEmail} | Password: ${tempPassword}`
       });
@@ -580,19 +665,91 @@ async function bulkImportParents(data: any[], school_id: string, useUsername: bo
 
   for (const row of data) {
     try {
-      // Generate a temporary password
+      // Check if parent already exists by email or phone
+      let existingUser = null;
+
+      if (row.email) {
+        const { data } = await supabase
+          .from('users')
+          .select('id, email, username')
+          .eq('email', row.email)
+          .eq('school_id', school_id)
+          .eq('role', 'parent')
+          .maybeSingle();
+        existingUser = data;
+      }
+
+      if (!existingUser && row.phone) {
+        const { data } = await supabase
+          .from('users')
+          .select('id, email, username')
+          .eq('phone', row.phone)
+          .eq('school_id', school_id)
+          .eq('role', 'parent')
+          .maybeSingle();
+        existingUser = data;
+      }
+
+      if (existingUser) {
+        // Update existing parent
+        const userData = {
+          first_name: row.first_name,
+          last_name: row.last_name,
+          phone: row.phone || null,
+          relation: row.relation?.toLowerCase() || 'parent'
+        };
+
+        await supabase
+          .from('users')
+          .update(userData)
+          .eq('id', existingUser.id);
+
+        // Link children if provided
+        if (row.children_admission_nos) {
+          const admissionNos = row.children_admission_nos.split(';').map((no: string) => no.trim());
+
+          for (const admissionNo of admissionNos) {
+            const { data: student } = await supabase
+              .from('students')
+              .select('id')
+              .eq('admission_no', admissionNo)
+              .eq('school_id', school_id)
+              .maybeSingle();
+
+            if (student) {
+              // Use upsert to avoid duplicate parent-child links
+              await supabase
+                .from('student_parents')
+                .upsert({
+                  student_id: student.id,
+                  parent_id: existingUser.id
+                }, {
+                  onConflict: 'student_id,parent_id'
+                });
+            }
+          }
+        }
+
+        successful.push({
+          ...userData,
+          email: existingUser.email,
+          username: existingUser.username,
+          message: `Updated parent ${row.first_name} ${row.last_name}`
+        });
+        continue;
+      }
+
+      // Create new parent
       const tempPassword = 'temp' + Math.random().toString(36).slice(-8) + '!';
-      
-      // Generate username if useUsername is enabled
+
       let username = null;
       let finalEmail = row.email;
-      
+
       if (useUsername) {
         username = await generateUsername('parent', school_id);
         finalEmail = `${username}@${school_id}.local`;
       }
 
-      // Create auth user first
       const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
         email: finalEmail,
         password: tempPassword,
@@ -611,7 +768,6 @@ async function bulkImportParents(data: any[], school_id: string, useUsername: bo
         continue;
       }
 
-      // Create user record
       const userData = {
         id: authUser.user.id,
         email: finalEmail,
@@ -629,7 +785,6 @@ async function bulkImportParents(data: any[], school_id: string, useUsername: bo
         .insert(userData);
 
       if (userError) {
-        // Cleanup auth user if user record creation fails
         await supabase.auth.admin.deleteUser(authUser.user.id);
         errors.push(`Parent ${row.first_name} ${row.last_name} (${row.email}): Database user creation failed - ${userError.message}`);
         continue;
@@ -638,14 +793,14 @@ async function bulkImportParents(data: any[], school_id: string, useUsername: bo
       // Link children if provided
       if (row.children_admission_nos) {
         const admissionNos = row.children_admission_nos.split(';').map((no: string) => no.trim());
-        
+
         for (const admissionNo of admissionNos) {
           const { data: student } = await supabase
             .from('students')
             .select('id')
             .eq('admission_no', admissionNo)
             .eq('school_id', school_id)
-            .single();
+            .maybeSingle();
 
           if (student) {
             await supabase
@@ -658,10 +813,10 @@ async function bulkImportParents(data: any[], school_id: string, useUsername: bo
         }
       }
 
-      successful.push({ 
-        ...userData, 
+      successful.push({
+        ...userData,
         temp_password: tempPassword,
-        message: username 
+        message: username
           ? `Created parent account for ${row.first_name} ${row.last_name} with username: ${username} | Password: ${tempPassword}`
           : `Created parent account for ${row.first_name} ${row.last_name} with email: ${finalEmail} | Password: ${tempPassword}`
       });

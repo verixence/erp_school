@@ -1,0 +1,29 @@
+name: Process Push Notifications
+
+on:
+  schedule:
+    # Run every 15 minutes
+    - cron: '*/15 * * * *'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  process-notifications:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Process Push Notification Queue
+        run: |
+          echo "Processing push notifications..."
+          response=$(curl -s -w "\n%{http_code}" -X POST https://www.campushoster.com/api/admin/send-push-notifications)
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "Response Code: $http_code"
+          echo "Response Body: $body"
+
+          if [ "$http_code" != "200" ]; then
+            echo "::error::Failed to process push notifications (HTTP $http_code)"
+            exit 1
+          fi
+
+          echo "✅ Push notifications processed successfully"

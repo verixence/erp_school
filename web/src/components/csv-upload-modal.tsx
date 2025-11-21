@@ -69,6 +69,8 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
   const [errors, setErrors] = useState<string[]>([]);
   const [uploadResults, setUploadResults] = useState<any>(null);
   const [showResults, setShowResults] = useState(false);
+  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
+  const [importStats, setImportStats] = useState({ successful: 0, failed: 0 });
   const queryClient = useQueryClient();
 
   const template = CSV_TEMPLATES[entity];
@@ -217,10 +219,32 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
     if (!csvData.length || errors.length > 0) return;
 
     setIsProcessing(true);
+    setImportProgress({ current: 0, total: csvData.length });
+    setImportStats({ successful: 0, failed: 0 });
+
     try {
+      // Simulate progress updates (since we can't stream from API route easily)
+      const progressInterval = setInterval(() => {
+        setImportProgress(prev => {
+          if (prev.current < prev.total) {
+            return { ...prev, current: Math.min(prev.current + 1, prev.total) };
+          }
+          return prev;
+        });
+      }, 100); // Update every 100ms
+
       const results = await onUpload(csvData);
 
-      if (results && results.imported && results.imported.length > 0) {
+      clearInterval(progressInterval);
+
+      // Set final progress
+      setImportProgress({ current: csvData.length, total: csvData.length });
+      setImportStats({
+        successful: results?.summary?.successful || results?.imported?.length || 0,
+        failed: results?.summary?.failed || results?.errors?.length || 0
+      });
+
+      if (results && (results.imported || results.errors)) {
         // Show results with credentials if available
         setUploadResults(results);
         setShowResults(true);
@@ -234,8 +258,8 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
       setErrors([]);
     } catch (error: any) {
       toast.error(`Failed to import ${entity}: ${error.message}`);
-    } finally {
       setIsProcessing(false);
+      setImportProgress({ current: 0, total: 0 });
     }
   };
 
@@ -259,6 +283,29 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
     a.click();
     window.URL.revokeObjectURL(url);
     toast.success('Credentials downloaded successfully');
+  };
+
+  const downloadErrorLog = () => {
+    if (!uploadResults || !uploadResults.errors || uploadResults.errors.length === 0) return;
+
+    const errorLog = [
+      `${entity.toUpperCase()} Import Error Log`,
+      `Generated: ${new Date().toLocaleString()}`,
+      `Total Errors: ${uploadResults.errors.length}`,
+      '',
+      'Errors:',
+      '---',
+      ...uploadResults.errors.map((error: string, index: number) => `${index + 1}. ${error}`)
+    ].join('\n');
+
+    const blob = new Blob([errorLog], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${entity}_import_errors_${new Date().toISOString().split('T')[0]}.txt`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast.success('Error log downloaded');
   };
 
   const handleCloseResults = () => {
@@ -330,7 +377,7 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
                     <AlertCircle className="h-4 w-4 text-red-500" />
                     <span className="font-medium text-red-700">Validation Errors</span>
                   </div>
-                  <ul className="text-sm text-red-600 space-y-1">
+                  <ul className="text-sm text-red-600 space-y-1 max-h-40 overflow-y-auto">
                     {errors.slice(0, 10).map((error, index) => (
                       <li key={index}>• {error}</li>
                     ))}
@@ -340,6 +387,44 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
                   </ul>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Import Progress */}
+          {isProcessing && (
+            <div className="space-y-3 p-4 border rounded-lg bg-blue-50">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-blue-900">Importing {entity}...</span>
+                <span className="text-sm text-blue-700">
+                  {importProgress.current} / {importProgress.total}
+                </span>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="w-full bg-blue-200 rounded-full h-2.5">
+                <div
+                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                  style={{
+                    width: `${importProgress.total > 0 ? (importProgress.current / importProgress.total) * 100 : 0}%`
+                  }}
+                />
+              </div>
+
+              {/* Stats */}
+              <div className="flex items-center gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full" />
+                  <span className="text-green-700">Success: {importStats.successful}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full" />
+                  <span className="text-red-700">Failed: {importStats.failed}</span>
+                </div>
+              </div>
+
+              <p className="text-xs text-blue-600">
+                Please wait while we process your data. This may take a few moments for large files.
+              </p>
             </div>
           )}
         </div>
@@ -363,10 +448,21 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
       <Dialog open={showResults} onOpenChange={handleCloseResults}>
         <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle>Upload Complete - Credentials Generated</DialogTitle>
+            <DialogTitle>
+              {uploadResults?.summary?.failed === 0 ? '✅ Import Complete' : '⚠️ Import Complete with Errors'}
+            </DialogTitle>
             <DialogDescription>
-              {uploadResults?.imported?.length || 0} {entity} imported successfully.
-              Download the credentials file to share login information.
+              {uploadResults?.summary ? (
+                <>
+                  Processed {uploadResults.summary.total} records: {uploadResults.summary.successful} successful, {uploadResults.summary.failed} failed.
+                  {uploadResults.summary.successful > 0 && ' Download credentials to share login information.'}
+                </>
+              ) : (
+                <>
+                  {uploadResults?.imported?.length || 0} {entity} imported successfully.
+                  Download the credentials file to share login information.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -423,16 +519,27 @@ export default function CSVUploadModal({ isOpen, onClose, entity, onUpload }: CS
               {/* Errors */}
               {uploadResults?.errors && uploadResults.errors.length > 0 && (
                 <div className="p-3 border border-red-200 rounded-lg bg-red-50">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle className="h-4 w-4 text-red-500" />
-                    <span className="font-medium text-red-700">Import Errors</span>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-red-500" />
+                      <span className="font-medium text-red-700">Import Errors ({uploadResults.errors.length})</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={downloadErrorLog}
+                      className="text-xs"
+                    >
+                      <Download className="h-3 w-3 mr-1" />
+                      Download Log
+                    </Button>
                   </div>
                   <ul className="text-sm text-red-600 space-y-1 max-h-32 overflow-y-auto">
                     {uploadResults.errors.slice(0, 10).map((error: string, index: number) => (
-                      <li key={index}>• {error}</li>
+                      <li key={index} className="break-words">• {error}</li>
                     ))}
                     {uploadResults.errors.length > 10 && (
-                      <li>• ... and {uploadResults.errors.length - 10} more errors</li>
+                      <li>• ... and {uploadResults.errors.length - 10} more errors (download log to view all)</li>
                     )}
                   </ul>
                 </div>
