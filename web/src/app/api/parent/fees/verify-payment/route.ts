@@ -173,6 +173,11 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
+    // Extract profile data (Supabase might return it as array)
+    const profileData = parent?.profile && Array.isArray(parent.profile)
+      ? parent.profile[0]
+      : parent?.profile as any;
+
     // Generate receipt number
     const receiptNo = `RCP-${Date.now()}-${Math.random().toString(36).substring(7).toUpperCase()}`;
 
@@ -188,9 +193,9 @@ export async function POST(request: NextRequest) {
         student_admission_no: student?.admission_number || '',
         student_grade: student?.grade || '',
         student_section: student?.section || '',
-        parent_name: parent?.profile ? `${parent.profile.first_name} ${parent.profile.last_name}` : '',
+        parent_name: profileData ? `${profileData.first_name || ''} ${profileData.last_name || ''}`.trim() : '',
         parent_email: parent?.email || '',
-        parent_phone: parent?.profile?.phone || '',
+        parent_phone: profileData?.phone || '',
         payment_method: 'online',
         payment_date: new Date().toISOString().split('T')[0],
         reference_number: gateway_payment_id,

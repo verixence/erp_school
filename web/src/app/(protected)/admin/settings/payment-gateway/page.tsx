@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -83,19 +83,21 @@ export default function PaymentGatewaySettingsPage() {
       const data = await response.json();
       return data.settings;
     },
-    onSuccess: (data) => {
-      if (data) {
-        setFormData({
-          ...formData,
-          ...data,
-          // Don't show actual secrets, just placeholder if they exist
-          api_key: data.api_key ? '••••••••••••' : '',
-          api_secret: data.api_secret ? '••••••••••••' : '',
-          webhook_secret: data.webhook_secret ? '••••••••••••' : '',
-        });
-      }
-    },
   });
+
+  // Update form when settings are fetched
+  useEffect(() => {
+    if (settings) {
+      setFormData({
+        ...formData,
+        ...settings,
+        // Don't show actual secrets, just placeholder if they exist
+        api_key: settings.api_key ? '••••••••••••' : '',
+        api_secret: settings.api_secret ? '••••••••••••' : '',
+        webhook_secret: settings.webhook_secret ? '••••••••••••' : '',
+      });
+    }
+  }, [settings]);
 
   // Save settings mutation
   const saveMutation = useMutation({
