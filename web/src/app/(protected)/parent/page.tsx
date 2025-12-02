@@ -1,13 +1,13 @@
 'use client';
 
 import { useAuth } from '@/hooks/use-auth';
-import { useChildren, useParentDashboardStats } from '@/hooks/use-parent';
+import { useChildren, useParentDashboardStats, useAllChildrenFeeSummary } from '@/hooks/use-parent';
 import { useParentOnlineClasses } from '@erp/common';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Users, BookOpen, Calendar, TrendingUp, Clock, Video, ExternalLink } from 'lucide-react';
+import { Users, BookOpen, Calendar, TrendingUp, Clock, Video, ExternalLink, Wallet, AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
@@ -21,6 +21,20 @@ export default function ParentDashboard() {
   const { data: stats, isLoading: statsLoading } = useParentDashboardStats(user?.id);
   const { data: allOnlineClasses = [] } = useParentOnlineClasses(user?.id || '');
 
+  // Fetch aggregated fee summary for all children
+  const { data: feeSummaryData } = useAllChildrenFeeSummary();
+
+  // Extract aggregated fees and per-child summaries
+  const aggregatedFees = {
+    totalBalance: feeSummaryData?.summary?.total_balance || 0,
+    overdueCount: feeSummaryData?.summary?.overdue_count || 0,
+    overdueAmount: feeSummaryData?.summary?.overdue_amount || 0,
+    totalPaid: feeSummaryData?.summary?.total_paid || 0,
+    totalDemand: feeSummaryData?.summary?.total_demand || 0,
+  };
+
+  const childrenSummaries = feeSummaryData?.children_summaries || [];
+
   // Set default selected child when children load
   if (children && children.length > 0 && !selectedChild) {
     setSelectedChild(children[0].id);
@@ -30,9 +44,18 @@ export default function ParentDashboard() {
 
   // Filter today's online classes
   const today = new Date().toISOString().split('T')[0];
-  const todaysOnlineClasses = allOnlineClasses.filter(onlineClass => 
+  const todaysOnlineClasses = allOnlineClasses.filter(onlineClass =>
     onlineClass.scheduled_date === today && onlineClass.status !== 'cancelled'
   );
+
+  // Format currency helper
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
 
   if (childrenLoading || statsLoading) {
     return (
@@ -113,18 +136,45 @@ export default function ParentDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Last Activity</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">Today</div>
-            <p className="text-xs text-muted-foreground">
-              Last portal visit
-            </p>
-          </CardContent>
-        </Card>
+        <Link href="/parent/fees" className="block">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Fee Status</CardTitle>
+              <Wallet className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              {aggregatedFees.overdueCount > 0 ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <div className="text-2xl font-bold text-red-600">
+                      {formatCurrency(aggregatedFees.overdueAmount)}
+                    </div>
+                    <AlertTriangle className="h-5 w-5 text-red-600" />
+                  </div>
+                  <p className="text-xs text-red-600 font-medium mt-1">
+                    {aggregatedFees.overdueCount} overdue fee(s)
+                  </p>
+                </>
+              ) : aggregatedFees.totalBalance > 0 ? (
+                <>
+                  <div className="text-2xl font-bold text-orange-600">
+                    {formatCurrency(aggregatedFees.totalBalance)}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Pending dues
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-green-600">All Clear</div>
+                  <p className="text-xs text-muted-foreground">
+                    No pending fees
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {/* Today's Online Classes */}
@@ -202,6 +252,73 @@ export default function ParentDashboard() {
         </div>
       )}
 
+      {/* Fee Overview Section */}
+      {children && children.length > 0 && aggregatedFees.totalBalance > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-2xl font-bold text-gray-900">Fee Overview</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {children.map((child) => {
+              const childFeeSummary = childrenSummaries.find(
+                (summary: any) => summary.student_id === child.id
+              );
+              if (!childFeeSummary || childFeeSummary.total_balance === 0) return null;
+
+              return (
+                <Card key={child.id} className="hover:shadow-lg transition-shadow">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="text-lg">{child.full_name}</CardTitle>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {child.sections?.grade && child.sections?.section
+                            ? `Grade ${child.sections.grade} - ${child.sections.section}`
+                            : 'Grade information not available'}
+                        </p>
+                      </div>
+                      {childFeeSummary.overdue_count > 0 && (
+                        <Badge variant="destructive" className="flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          Overdue
+                        </Badge>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Total Balance</span>
+                        <span className="text-lg font-bold text-orange-600">
+                          {formatCurrency(childFeeSummary.total_balance)}
+                        </span>
+                      </div>
+                      {childFeeSummary.overdue_amount > 0 && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-red-600">Overdue Amount</span>
+                          <span className="text-sm font-semibold text-red-600">
+                            {formatCurrency(childFeeSummary.overdue_amount)}
+                          </span>
+                        </div>
+                      )}
+                      <div className="pt-2 border-t">
+                        <div className="flex justify-between text-xs text-muted-foreground mb-2">
+                          <span>{childFeeSummary.paid_count || 0} paid</span>
+                          <span>{childFeeSummary.pending_count || 0} pending</span>
+                        </div>
+                      </div>
+                      <Link href={`/parent/fees/${child.id}`}>
+                        <Button className="w-full" size="sm">
+                          View Details
+                        </Button>
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Current Child Info */}
       {currentChild && (
         <Card>
@@ -243,47 +360,74 @@ export default function ParentDashboard() {
 
         {/* Quick Actions */}
         <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-blue-600" />
-                View Attendance
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600">
-                Check daily attendance records and patterns for your children.
-              </p>
-            </CardContent>
-          </Card>
+          <Link href="/parent/attendance/enhanced">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-blue-600" />
+                  View Attendance
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600">
+                  Check daily attendance records and patterns for your children.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
 
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BookOpen className="h-5 w-5 text-green-600" />
-                Review Homework
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600">
-                View assigned homework and submission status.
-              </p>
-            </CardContent>
-          </Card>
+          <Link href="/parent/homework">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-green-600" />
+                  Review Homework
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600">
+                  View assigned homework and submission status.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
 
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-purple-600" />
-                Academic Progress
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600">
-                Track academic performance and progress reports.
-              </p>
-            </CardContent>
-          </Card>
+          <Link href="/parent/fees">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wallet className="h-5 w-5 text-orange-600" />
+                  Fee Management
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600">
+                  View fee details, payment history, and make online payments.
+                </p>
+                {aggregatedFees.overdueCount > 0 && (
+                  <Badge variant="destructive" className="mt-2">
+                    {aggregatedFees.overdueCount} Overdue
+                  </Badge>
+                )}
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/parent/reports">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-purple-600" />
+                  Academic Progress
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600">
+                  Track academic performance and progress reports.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
       </div>
 

@@ -488,4 +488,221 @@ export const useParentAnnouncements = (parentId?: string) => {
     },
     enabled: !!parentId,
   });
+};
+
+// Get child's fee demands
+export const useChildFeeDemands = (studentId?: string, academicYear?: string) => {
+  return useQuery({
+    queryKey: ['child-fee-demands', studentId, academicYear],
+    queryFn: async () => {
+      if (!studentId) return [];
+
+      const params = new URLSearchParams();
+      if (academicYear) {
+        params.append('academic_year', academicYear);
+      }
+
+      const url = `/api/parent/fees/${studentId}${params.toString() ? `?${params.toString()}` : ''}`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch fee demands');
+      }
+
+      const data = await response.json();
+      return data.demands || [];
+    },
+    enabled: !!studentId,
+  });
+};
+
+// Get child's fee summary
+export const useChildFeeSummary = (studentId?: string, academicYear?: string) => {
+  return useQuery({
+    queryKey: ['child-fee-summary', studentId, academicYear],
+    queryFn: async () => {
+      if (!studentId) return null;
+
+      const params = new URLSearchParams();
+      if (academicYear) {
+        params.append('academic_year', academicYear);
+      }
+
+      const url = `/api/parent/fees/${studentId}/summary${params.toString() ? `?${params.toString()}` : ''}`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch fee summary');
+      }
+
+      const data = await response.json();
+      return data.summary || null;
+    },
+    enabled: !!studentId,
+  });
+};
+
+// Get child's payment history
+export const useChildPaymentHistory = (studentId?: string, academicYear?: string, limit = 100, offset = 0) => {
+  return useQuery({
+    queryKey: ['child-payment-history', studentId, academicYear, limit, offset],
+    queryFn: async () => {
+      if (!studentId) return { receipts: [], demands: [], transactions: [], total: 0 };
+
+      const params = new URLSearchParams();
+      if (academicYear) {
+        params.append('academic_year', academicYear);
+      }
+      params.append('limit', limit.toString());
+      params.append('offset', offset.toString());
+
+      const url = `/api/parent/fees/${studentId}/history?${params.toString()}`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch payment history');
+      }
+
+      const data = await response.json();
+      return {
+        receipts: data.receipts || [],
+        demands: data.demands || [],
+        transactions: data.transactions || [],
+        total: data.total || 0,
+      };
+    },
+    enabled: !!studentId,
+  });
+};
+
+// Get payment gateway status
+export const usePaymentGatewayStatus = () => {
+  return useQuery({
+    queryKey: ['payment-gateway-status'],
+    queryFn: async () => {
+      const response = await fetch('/api/parent/fees/payment-gateway-status');
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch payment gateway status');
+      }
+
+      const data = await response.json();
+      return {
+        enabled: data.enabled || false,
+        gateway: data.gateway || null,
+      };
+    },
+  });
+};
+
+// Initiate payment
+export const useInitiatePayment = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      student_id,
+      fee_demand_ids,
+      amount,
+    }: {
+      student_id: string;
+      fee_demand_ids: string[];
+      amount: number;
+    }) => {
+      const response = await fetch('/api/parent/fees/initiate-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          student_id,
+          fee_demand_ids,
+          amount,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to initiate payment');
+      }
+
+      const data = await response.json();
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['child-fee-demands'] });
+      queryClient.invalidateQueries({ queryKey: ['child-fee-summary'] });
+    },
+  });
+};
+
+// Get aggregated fee summary for all children
+export const useAllChildrenFeeSummary = () => {
+  return useQuery({
+    queryKey: ['all-children-fee-summary'],
+    queryFn: async () => {
+      const response = await fetch('/api/parent/fees/all-children-summary');
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch all children fee summary');
+      }
+
+      const data = await response.json();
+      return {
+        summary: data.summary || {
+          total_balance: 0,
+          overdue_count: 0,
+          overdue_amount: 0,
+          total_paid: 0,
+          total_demand: 0,
+        },
+        children_summaries: data.children_summaries || [],
+      };
+    },
+  });
+};
+
+// Verify payment
+export const useVerifyPayment = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      transaction_id,
+      gateway_payment_id,
+      gateway_signature,
+      gateway_response,
+    }: {
+      transaction_id: string;
+      gateway_payment_id: string;
+      gateway_signature?: string;
+      gateway_response?: any;
+    }) => {
+      const response = await fetch('/api/parent/fees/verify-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          transaction_id,
+          gateway_payment_id,
+          gateway_signature,
+          gateway_response,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to verify payment');
+      }
+
+      const data = await response.json();
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['child-fee-demands'] });
+      queryClient.invalidateQueries({ queryKey: ['child-fee-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['child-payment-history'] });
+    },
+  });
 }; 
