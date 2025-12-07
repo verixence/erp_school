@@ -18,8 +18,19 @@ export function useSchoolBrand() {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ["school-brand", user?.school_id],
+    queryKey: ["school-brand", user?.school_id, user?.role],
     queryFn: async () => {
+      // For parents, use the API route that bypasses RLS
+      if (user?.role === 'parent') {
+        const response = await fetch('/api/parent/school-info');
+        if (!response.ok) {
+          throw new Error('Failed to fetch school info');
+        }
+        const data = await response.json();
+        return data.primary_school as SchoolBrand;
+      }
+
+      // For staff/admin, query directly (they have school_id)
       const { data, error } = await supabase
         .from("schools")
         .select("logo_url, theme_colors, font_family")
@@ -30,6 +41,6 @@ export function useSchoolBrand() {
 
       return data as SchoolBrand;
     },
-    enabled: !!user?.school_id,
+    enabled: !!user && (!!user?.school_id || user?.role === 'parent'),
   });
 } 
