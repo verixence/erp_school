@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase-client';
 import { Mail, Lock, Loader2, GraduationCap, Eye, EyeOff, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 
 export default function LoginPage() {
   const [loginId, setLoginId] = useState(''); // Can be email or username
@@ -132,15 +131,14 @@ export default function LoginPage() {
         <div className="bg-white rounded-2xl shadow-xl p-8 space-y-6">
           {/* Header */}
           <div className="text-center space-y-2">
-            <div className="mx-auto w-44 h-44 flex items-center justify-center relative">
-              <Image
+            <div className="mx-auto w-44 h-44 flex items-center justify-center">
+              <img
                 src="/logo.png"
                 alt="CampusHoster Logo"
-                width={160}
-                height={160}
-                className="object-contain"
-                priority
-                unoptimized
+                width="160"
+                height="160"
+                className="w-40 h-40 object-contain"
+                loading="eager"
               />
             </div>
             <div>
