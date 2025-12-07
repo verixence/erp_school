@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase-server';
+import { createClient, createAdminClient } from '@/lib/supabase-server';
 import { z } from 'zod';
 
 // Validation schema for fee structure
@@ -22,7 +22,17 @@ const feeStructureSchema = z.object({
 // GET /api/admin/fees/structures - List fee structures
 export async function GET(request: NextRequest) {
   try {
+    // First, authenticate the user
     const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const schoolId = searchParams.get('school_id');
     const academicYear = searchParams.get('academic_year');
@@ -35,7 +45,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    let query = supabase
+    // Verify user belongs to the requested school
+    const { data: userData } = await supabase
+      .from('users')
+      .select('school_id, role')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData || userData.school_id !== schoolId) {
+      return NextResponse.json(
+        { error: 'Access denied to this school' },
+        { status: 403 }
+      );
+    }
+
+    // Use admin client to bypass RLS (after authentication)
+    const adminClient = createAdminClient();
+    let query = adminClient
       .from('fee_structures')
       .select(`
         *,
@@ -81,7 +107,17 @@ export async function GET(request: NextRequest) {
 // POST /api/admin/fees/structures - Create fee structure
 export async function POST(request: NextRequest) {
   try {
+    // First, authenticate the user
     const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { searchParams } = new URL(request.url);
     const schoolId = searchParams.get('school_id');
@@ -93,11 +129,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Verify user belongs to the requested school
+    const { data: userData } = await supabase
+      .from('users')
+      .select('school_id, role')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData || userData.school_id !== schoolId) {
+      return NextResponse.json(
+        { error: 'Access denied to this school' },
+        { status: 403 }
+      );
+    }
+
     // Validate input
     const validatedData = feeStructureSchema.parse(body);
 
+    // Use admin client to bypass RLS (after authentication)
+    const adminClient = createAdminClient();
+
     // Check if fee category exists and belongs to the school
-    const { data: category, error: categoryError } = await supabase
+    const { data: category, error: categoryError } = await adminClient
       .from('fee_categories')
       .select('id')
       .eq('id', validatedData.fee_category_id)
@@ -112,7 +165,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for duplicate structure (same school, year, grade, and category)
-    const { data: existingStructure } = await supabase
+    const { data: existingStructure } = await adminClient
       .from('fee_structures')
       .select('id')
       .eq('school_id', schoolId)
@@ -129,7 +182,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the structure
-    const { data: structure, error } = await supabase
+    const { data: structure, error } = await adminClient
       .from('fee_structures')
       .insert({
         school_id: schoolId,
@@ -157,7 +210,7 @@ export async function POST(request: NextRequest) {
     // Auto-assign this fee structure to all students in the grade
     try {
       // Get all students in this grade for the school
-      const { data: students, error: studentsError } = await supabase
+      const { data: students, error: studentsError } = await adminClient
         .from('students')
         .select('id')
         .eq('school_id', schoolId)
@@ -167,9 +220,6 @@ export async function POST(request: NextRequest) {
         console.error('Error fetching students for auto-assignment:', studentsError);
         // Don't fail the request, just log the error
       } else if (students && students.length > 0) {
-        // Get current user for audit
-        const { data: { user } } = await supabase.auth.getUser();
-
         // Create student_fee_demands for all students
         const demands = students.map(student => ({
           school_id: schoolId,
@@ -180,10 +230,10 @@ export async function POST(request: NextRequest) {
           discount_amount: 0,
           discount_reason: '',
           demand_amount: validatedData.amount,
-          created_by: user?.id || null
+          created_by: user.id
         }));
 
-        const { error: demandsError } = await supabase
+        const { error: demandsError } = await adminClient
           .from('student_fee_demands')
           .insert(demands);
 
