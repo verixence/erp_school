@@ -133,7 +133,7 @@ export default function LoginPage() {
           <div className="text-center space-y-2">
             <div className="mx-auto w-44 h-44 flex items-center justify-center">
               <img
-                src="/logo.png"
+                src="/logo.png?v=2"
                 alt="CampusHoster Logo"
                 width="160"
                 height="160"

@@ -1,5 +1,12 @@
 {
   "installCommand": "cd .. && pnpm install",
   "buildCommand": "pnpm build",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "routes": [
+    {
+      "src": "/logo.png",
+      "dest": "/logo.png"
+    }
+  ]
 } 
