@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase-server';
 
 // GET /api/parent/fees/[childId]/history - Get complete payment history with receipts
 export async function GET(
@@ -14,7 +13,7 @@ export async function GET(
     const limit = parseInt(searchParams.get('limit') || '100');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = await createClient();
 
     // Get current user
     const { data: { user } } = await supabase.auth.getUser();

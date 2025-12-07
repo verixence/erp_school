@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase-server';
 
 // GET /api/parent/fees/[childId]/summary - Get fee summary statistics for a child
 export async function GET(
@@ -12,7 +11,7 @@ export async function GET(
     const searchParams = request.nextUrl.searchParams;
     const academicYear = searchParams.get('academic_year');
 
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = await createClient();
 
     // Get current user
     const { data: { user } } = await supabase.auth.getUser();
