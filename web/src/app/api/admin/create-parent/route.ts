@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       school_id,
       children = [],
       password, // Allow custom password or generate temp
-      useUsername = true // New flag to enable username mode
+      useUsername = false // New flag to enable username mode (default: use real email)
     } = await request.json();
 
     // Validate required fields

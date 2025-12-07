@@ -61,16 +61,16 @@ async function generateTeacherUsername(schoolId: string, employeeId?: string): P
 
 export async function POST(request: NextRequest) {
   try {
-    const { 
-      first_name, 
-      last_name, 
-      email, 
-      phone, 
-      employee_id, 
-      subjects, 
+    const {
+      first_name,
+      last_name,
+      email,
+      phone,
+      employee_id,
+      subjects,
       password,
       school_id,
-      useUsername = true // New flag to enable username mode
+      useUsername = false // New flag to enable username mode (default: use real email)
     } = await request.json();
 
     // Validate input
