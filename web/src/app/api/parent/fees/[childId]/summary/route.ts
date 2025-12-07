@@ -81,7 +81,7 @@ export async function GET(
       summary.total_demand += Number(demand.demand_amount) || 0;
       summary.total_paid += Number(demand.paid_amount) || 0;
       summary.total_balance += Number(demand.balance_amount) || 0;
-      summary.total_discount += Number(demand.discount_amount) || 0;
+      summary.total_discount += Number(demand.adjustment_amount) || 0;
 
       // Count by status
       if (demand.payment_status === 'paid') {

@@ -263,9 +263,14 @@ export default function ChildFeeDetailPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       {formatCurrency(demand.demand_amount)}
-                      {demand.discount_amount > 0 && (
+                      {demand.adjustment_amount > 0 && demand.adjustment_type === 'discount' && (
                         <div className="text-xs text-green-600">
-                          -{formatCurrency(demand.discount_amount)} discount
+                          -{formatCurrency(demand.adjustment_amount)} discount
+                        </div>
+                      )}
+                      {demand.adjustment_amount > 0 && demand.adjustment_type === 'increase' && (
+                        <div className="text-xs text-orange-600">
+                          +{formatCurrency(demand.adjustment_amount)} additional charge
                         </div>
                       )}
                     </TableCell>
