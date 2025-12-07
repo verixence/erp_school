@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
         demand_amount,
         paid_amount,
         balance_amount,
-        discount_amount,
+        adjustment_amount,
         payment_status,
         due_date
       `)
@@ -77,12 +77,12 @@ export async function GET(request: NextRequest) {
       const demandAmount = Number(demand.demand_amount || 0);
       const paidAmount = Number(demand.paid_amount || 0);
       const balanceAmount = Number(demand.balance_amount || 0);
-      const discountAmount = Number(demand.discount_amount || 0);
+      const adjustmentAmount = Number(demand.adjustment_amount || 0);
 
       totalDemand += demandAmount;
       totalPaid += paidAmount;
       totalBalance += balanceAmount;
-      totalDiscount += discountAmount;
+      totalDiscount += adjustmentAmount;
 
       const isOverdue = demand.due_date && new Date(demand.due_date) < now && demand.payment_status !== 'paid';
 
@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
       childrenSummaries[studentId].total_demand += demandAmount;
       childrenSummaries[studentId].total_paid += paidAmount;
       childrenSummaries[studentId].total_balance += balanceAmount;
-      childrenSummaries[studentId].total_discount += discountAmount;
+      childrenSummaries[studentId].total_discount += adjustmentAmount;
 
       if (isOverdue) {
         childrenSummaries[studentId].overdue_count++;
