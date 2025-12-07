@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase-server';
+import { createAdminClient } from '@/lib/supabase-server';
 
 // GET /api/admin/fees/structures/summary - Get fee structure summary (total per class)
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
     const schoolId = searchParams.get('school_id');
     const academicYear = searchParams.get('academic_year');
@@ -15,6 +14,10 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Use admin client to bypass RLS
+    // Route is protected by Next.js middleware/auth
+    const supabase = createAdminClient();
 
     // Get all fee structures for the school
     let query = supabase
