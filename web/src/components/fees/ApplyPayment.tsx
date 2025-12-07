@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Search, Download, Printer, ExternalLink } from 'lucide-react';
+import { Search, Download, Printer, ExternalLink, IndianRupee } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase-client';
 
@@ -262,13 +262,44 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
   const { data: sectionsData } = useQuery({
     queryKey: ['sections', schoolId, selectedClass],
     queryFn: async () => {
-      // Query by grade (numeric or text) - sections table has a 'grade' column
-      const { data, error } = await supabase
+      // Determine if selectedClass is numeric or text (for pre-primary grades like LKG, UKG)
+      const isNumericGrade = !isNaN(Number(selectedClass));
+
+      let query = supabase
         .from('sections')
         .select('id, section, grade, grade_text')
-        .eq('school_id', schoolId)
-        .eq('grade', selectedClass)
-        .order('section', { ascending: true });
+        .eq('school_id', schoolId);
+
+      // Filter by appropriate column based on grade type
+      if (isNumericGrade) {
+        query = query.eq('grade', parseInt(selectedClass));
+      } else {
+        query = query.eq('grade_text', selectedClass);
+      }
+
+      let { data, error } = await query.order('section', { ascending: true });
+
+      // Fall back to students table if sections is empty
+      if (!data || data.length === 0) {
+        const { data: studentsData, error: studentsError } = await supabase
+          .from('students')
+          .select('section')
+          .eq('school_id', schoolId)
+          .eq('grade', selectedClass)
+          .not('section', 'is', null)
+          .eq('status', 'active');
+
+        if (studentsError) throw studentsError;
+
+        // Get unique sections from students
+        const uniqueSections = [...new Set(studentsData?.map(s => s.section).filter(Boolean))];
+        data = uniqueSections.sort().map(section => ({
+          id: '',
+          section: section!,
+          grade: isNumericGrade ? parseInt(selectedClass) : null,
+          grade_text: isNumericGrade ? null : selectedClass
+        }));
+      }
 
       if (error) throw error;
       return { data };
@@ -369,7 +400,9 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
               fee_structure_id: selectedDemand.fee_structure_id,
               academic_year: new Date().getFullYear().toString(),
               original_amount: selectedDemand.total_amount,
-              discount_amount: 0,
+              adjustment_type: 'discount',
+              adjustment_amount: 0,
+              adjustment_reason: '',
               demand_amount: selectedDemand.total_amount
             }]
           })
@@ -547,6 +580,16 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
       notes: ''
     });
     setSelectedDemand(null);
+  };
+
+  const resetForNewPayment = () => {
+    // Reset student selection to allow selecting a new student
+    setSelectedStudent(null);
+    setSearchTerm('');
+    setSelectedDemands(new Set());
+    setManualAllocations({});
+    resetPaymentForm();
+    // Keep class and section filters so user can quickly select another student from same class
   };
 
   const handleSubmitPayment = (e: React.FormEvent) => {
@@ -917,7 +960,13 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
       </Dialog>
 
       {/* Receipt Dialog */}
-      <Dialog open={showReceiptDialog} onOpenChange={(open) => setShowReceiptDialog(open)}>
+      <Dialog open={showReceiptDialog} onOpenChange={(open) => {
+        setShowReceiptDialog(open);
+        if (!open) {
+          // When closing the receipt dialog, reset for new payment
+          resetForNewPayment();
+        }
+      }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" onPointerDownOutside={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>Payment Receipt</DialogTitle>
@@ -1025,10 +1074,10 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
             </div>
           )}
 
-          <DialogFooter>
-            <Button 
-              type="button" 
-              variant="outline" 
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1037,8 +1086,22 @@ export default function ApplyPayment({ schoolId }: { schoolId: string }) {
             >
               Close
             </Button>
-            <Button 
-              type="button" 
+            <Button
+              type="button"
+              variant="default"
+              className="bg-green-600 hover:bg-green-700"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowReceiptDialog(false);
+                // resetForNewPayment() will be called by onOpenChange
+              }}
+            >
+              <IndianRupee className="h-4 w-4 mr-2" />
+              New Payment
+            </Button>
+            <Button
+              type="button"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();

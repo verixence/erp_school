@@ -64,14 +64,15 @@ export async function GET(request: NextRequest) {
       student_id: demand.student_id,
       academic_year: demand.academic_year,
       original_amount: demand.original_amount || 0,
-      discount_amount: demand.discount_amount || 0,
-      discount_reason: demand.discount_reason || '',
+      adjustment_type: demand.adjustment_type || 'discount',
+      adjustment_amount: demand.adjustment_amount || 0,
+      adjustment_reason: demand.adjustment_reason || '',
       demand_amount: demand.demand_amount || 0,
       due_date: demand.due_date || null,
       // Additional fields for ApplyPayment compatibility
       fee_type: demand.fee_structures?.fee_categories?.name || 'Unknown',
       total_amount: demand.original_amount || 0, // Map to ApplyPayment interface
-      discount: demand.discount_amount || 0, // Map to ApplyPayment interface
+      discount: demand.adjustment_type === 'discount' ? demand.adjustment_amount || 0 : 0, // Map to ApplyPayment interface
       paid_amount: demand.paid_amount || 0,
       balance_amount: demand.balance_amount || 0,
       payment_status: demand.payment_status || 'pending'
@@ -93,9 +94,10 @@ const demandSchema = z.object({
   student_id: z.string().uuid(),
   fee_structure_id: z.string().uuid(),
   academic_year: z.string().min(1),
-  original_amount: z.number().positive(),
-  discount_amount: z.number().min(0),
-  discount_reason: z.string().optional(),
+  original_amount: z.number().min(0), // Allow 0 for fee structures that start at 0
+  adjustment_type: z.enum(['discount', 'increase']).default('discount'),
+  adjustment_amount: z.number().min(0),
+  adjustment_reason: z.string().optional(),
   demand_amount: z.number().min(0), // Allow 0 when discount equals original amount
   due_date: z.string().optional() // Optional due date in YYYY-MM-DD format
 });
@@ -143,8 +145,9 @@ export async function POST(request: NextRequest) {
       fee_structure_id: demand.fee_structure_id,
       academic_year: demand.academic_year,
       original_amount: demand.original_amount,
-      discount_amount: demand.discount_amount,
-      discount_reason: demand.discount_reason || '',
+      adjustment_type: demand.adjustment_type || 'discount',
+      adjustment_amount: demand.adjustment_amount,
+      adjustment_reason: demand.adjustment_reason || '',
       demand_amount: demand.demand_amount,
       due_date: demand.due_date || null,
       updated_by: user?.id || null

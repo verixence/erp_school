@@ -76,13 +76,23 @@ export default function FeeStatusExport({ schoolId }: FeeStatusExportProps) {
 
   const loadSections = async () => {
     try {
+      // Determine if gradeFilter is numeric or text (for pre-primary grades like LKG, UKG)
+      const isNumericGrade = !isNaN(Number(gradeFilter));
+
       // Try sections table first
-      let { data: sectionsData } = await supabase
+      let query = supabase
         .from('sections')
         .select('section')
-        .eq('school_id', schoolId)
-        .eq('grade', gradeFilter)
-        .order('section');
+        .eq('school_id', schoolId);
+
+      // Filter by appropriate column based on grade type
+      if (isNumericGrade) {
+        query = query.eq('grade', parseInt(gradeFilter!));
+      } else {
+        query = query.eq('grade_text', gradeFilter);
+      }
+
+      let { data: sectionsData } = await query.order('section');
 
       // Fall back to students table if sections is empty
       if (!sectionsData || sectionsData.length === 0) {

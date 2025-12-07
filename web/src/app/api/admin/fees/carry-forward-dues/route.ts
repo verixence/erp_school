@@ -91,8 +91,9 @@ export async function POST(request: NextRequest) {
         fee_structure_id: demand.fee_structure_id,
         academic_year: to_academic_year,
         original_amount: parseFloat(demand.balance_amount), // Carry forward only the balance
-        discount_amount: 0,
-        discount_reason: `Carried forward from ${from_academic_year}`,
+        adjustment_type: 'discount',
+        adjustment_amount: 0,
+        adjustment_reason: `Carried forward from ${from_academic_year}`,
         demand_amount: parseFloat(demand.balance_amount),
         payment_status: 'pending',
         created_by: user.id,

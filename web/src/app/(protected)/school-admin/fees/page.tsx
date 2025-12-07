@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
+import { formatINR } from '@/lib/utils';
 import FeeStructureList from '@/components/fees/FeeStructureList';
 import FeeDemandManagement from '@/components/fees/FeeDemandManagement';
 import PaymentScheduleManagement from '@/components/fees/PaymentScheduleManagement';
@@ -167,13 +168,13 @@ export default function FeeManagementUnified() {
 
   // Quick stats for cards
   const quickStats = dashboardStats ? [
-    { label: 'Total Outstanding', value: `₹${(dashboardStats.total_outstanding || 0).toLocaleString()}`, icon: DollarSign, color: 'text-red-600' },
-    { label: 'Monthly Collections', value: `₹${(dashboardStats.monthly_collections || 0).toLocaleString()}`, icon: TrendingUp, color: 'text-green-600' },
+    { label: 'Total Outstanding', value: formatINR(dashboardStats.total_outstanding || 0), icon: DollarSign, color: 'text-red-600' },
+    { label: 'Monthly Collections', value: formatINR(dashboardStats.monthly_collections || 0), icon: TrendingUp, color: 'text-green-600' },
     { label: 'Total Students', value: (dashboardStats.total_students || 0).toString(), icon: Building2, color: 'text-blue-600' },
     { label: 'Pending Invoices', value: (dashboardStats.pending_invoices || 0).toString(), icon: FileText, color: 'text-orange-600' }
   ] : [
-    { label: 'Total Outstanding', value: '₹0', icon: DollarSign, color: 'text-red-600' },
-    { label: 'Monthly Collections', value: '₹0', icon: TrendingUp, color: 'text-green-600' },
+    { label: 'Total Outstanding', value: formatINR(0), icon: DollarSign, color: 'text-red-600' },
+    { label: 'Monthly Collections', value: formatINR(0), icon: TrendingUp, color: 'text-green-600' },
     { label: 'Total Students', value: '0', icon: Building2, color: 'text-blue-600' },
     { label: 'Pending Invoices', value: '0', icon: FileText, color: 'text-orange-600' }
   ];
@@ -544,14 +545,14 @@ export default function FeeManagementUnified() {
                         <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                         <span className="text-sm">Collected</span>
                       </div>
-                      <span className="text-sm font-semibold">₹{dashboardStats.total_collected.toLocaleString()}</span>
+                      <span className="text-sm font-semibold">{formatINR(dashboardStats.total_collected)}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 bg-red-500 rounded-full"></div>
                         <span className="text-sm">Outstanding</span>
                       </div>
-                      <span className="text-sm font-semibold">₹{dashboardStats.total_outstanding.toLocaleString()}</span>
+                      <span className="text-sm font-semibold">{formatINR(dashboardStats.total_outstanding)}</span>
                     </div>
                   </div>
                 </div>

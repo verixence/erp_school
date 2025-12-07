@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase-client';
+import { formatIndianCurrency } from '@/lib/utils';
 
 interface Student {
   id: string;
@@ -35,8 +36,9 @@ interface FeeDemand {
   id?: string;
   fee_structure_id: string;
   original_amount: number;
-  discount_amount: number;
-  discount_reason: string;
+  adjustment_type: 'discount' | 'increase';
+  adjustment_amount: number;
+  adjustment_reason: string;
   demand_amount: number;
 }
 
@@ -207,8 +209,9 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
             id: demand.id,
             fee_structure_id: demand.fee_structure_id,
             original_amount: parseFloat(demand.original_amount) || 0,
-            discount_amount: parseFloat(demand.discount_amount) || 0,
-            discount_reason: demand.discount_reason || '',
+            adjustment_type: demand.adjustment_type || 'discount',
+            adjustment_amount: parseFloat(demand.adjustment_amount) || 0,
+            adjustment_reason: demand.adjustment_reason || '',
             demand_amount: parseFloat(demand.demand_amount) || 0
           });
         });
@@ -220,8 +223,9 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
             demandsMap.set(structure.id, {
               fee_structure_id: structure.id,
               original_amount: amount,
-              discount_amount: 0,
-              discount_reason: '',
+              adjustment_type: 'discount',
+              adjustment_amount: 0,
+              adjustment_reason: '',
               demand_amount: amount
             });
           }
@@ -241,18 +245,31 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
     }
   };
 
-  const updateDemand = (feeStructureId: string, field: 'discount_amount' | 'discount_reason', value: string | number) => {
+  const updateDemand = (feeStructureId: string, field: 'adjustment_type' | 'adjustment_amount' | 'adjustment_reason', value: string | number) => {
     const newDemands = new Map(demands);
     const demand = newDemands.get(feeStructureId);
 
     if (demand) {
       const updatedDemand = { ...demand };
 
-      if (field === 'discount_amount') {
-        updatedDemand.discount_amount = Number(value);
-        updatedDemand.demand_amount = updatedDemand.original_amount - updatedDemand.discount_amount;
+      if (field === 'adjustment_type') {
+        updatedDemand.adjustment_type = value as 'discount' | 'increase';
+        // Recalculate demand_amount based on new type
+        if (updatedDemand.adjustment_type === 'discount') {
+          updatedDemand.demand_amount = updatedDemand.original_amount - updatedDemand.adjustment_amount;
+        } else {
+          updatedDemand.demand_amount = updatedDemand.original_amount + updatedDemand.adjustment_amount;
+        }
+      } else if (field === 'adjustment_amount') {
+        updatedDemand.adjustment_amount = Number(value);
+        // Recalculate demand_amount based on type
+        if (updatedDemand.adjustment_type === 'discount') {
+          updatedDemand.demand_amount = updatedDemand.original_amount - updatedDemand.adjustment_amount;
+        } else {
+          updatedDemand.demand_amount = updatedDemand.original_amount + updatedDemand.adjustment_amount;
+        }
       } else {
-        updatedDemand.discount_reason = value as string;
+        updatedDemand.adjustment_reason = value as string;
       }
 
       newDemands.set(feeStructureId, updatedDemand);
@@ -291,8 +308,9 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
             fee_structure_id: demand.fee_structure_id,
             academic_year: selectedAcademicYear,
             original_amount: demand.original_amount,
-            discount_amount: demand.discount_amount,
-            discount_reason: demand.discount_reason || '',
+            adjustment_type: demand.adjustment_type,
+            adjustment_amount: demand.adjustment_amount,
+            adjustment_reason: demand.adjustment_reason || '',
             demand_amount: demand.demand_amount
           };
         })
@@ -325,14 +343,16 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
   const selectedStudentData = students.find(s => s.id === selectedStudent);
 
   const totalOriginal = Array.from(demands.values()).reduce((sum, d) => sum + d.original_amount, 0);
-  const totalDiscount = Array.from(demands.values()).reduce((sum, d) => sum + d.discount_amount, 0);
+  const totalAdjustment = Array.from(demands.values()).reduce((sum, d) => {
+    return sum + (d.adjustment_type === 'discount' ? -d.adjustment_amount : d.adjustment_amount);
+  }, 0);
   const totalDemand = Array.from(demands.values()).reduce((sum, d) => sum + d.demand_amount, 0);
 
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-xl font-semibold text-blue-600">Fee Demand Management</h3>
-        <p className="text-muted-foreground">Customize fee amounts and discounts for individual students</p>
+        <p className="text-muted-foreground">Customize fee amounts with discounts or additional charges for individual students</p>
       </div>
 
       {/* Search Filters */}
@@ -438,8 +458,9 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
                   <tr>
                     <th className="px-4 py-3 text-left font-medium">Fee Type</th>
                     <th className="px-4 py-3 text-right font-medium">Original Amount</th>
-                    <th className="px-4 py-3 text-right font-medium">Discount Amount</th>
-                    <th className="px-4 py-3 text-left font-medium">Reason for Discount</th>
+                    <th className="px-4 py-3 text-left font-medium">Adjustment Type</th>
+                    <th className="px-4 py-3 text-right font-medium">Adjustment Amount</th>
+                    <th className="px-4 py-3 text-left font-medium">Reason</th>
                     <th className="px-4 py-3 text-right font-medium">Demand Amount</th>
                   </tr>
                 </thead>
@@ -458,29 +479,42 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
                       <tr key={structure.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-medium">{feeCategoryName}</td>
                         <td className="px-4 py-3 text-right font-mono">
-                          {(demand.original_amount || 0).toFixed(2)}
+                          {formatIndianCurrency(demand.original_amount || 0)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Select
+                            value={demand.adjustment_type}
+                            onValueChange={(value) => updateDemand(structure.id, 'adjustment_type', value)}
+                          >
+                            <SelectTrigger className="w-[160px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="discount">Discount</SelectItem>
+                              <SelectItem value="increase">Additional Charge</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </td>
                         <td className="px-4 py-3">
                           <Input
                             type="number"
                             min="0"
-                            max={demand.original_amount}
                             step="0.01"
                             className="text-right font-mono"
-                            value={demand.discount_amount ?? 0}
-                            onChange={(e) => updateDemand(structure.id, 'discount_amount', e.target.value)}
+                            value={demand.adjustment_amount ?? 0}
+                            onChange={(e) => updateDemand(structure.id, 'adjustment_amount', e.target.value)}
                           />
                         </td>
                         <td className="px-4 py-3">
                           <Input
                             type="text"
                             placeholder="Enter reason (optional)"
-                            value={demand.discount_reason ?? ''}
-                            onChange={(e) => updateDemand(structure.id, 'discount_reason', e.target.value)}
+                            value={demand.adjustment_reason ?? ''}
+                            onChange={(e) => updateDemand(structure.id, 'adjustment_reason', e.target.value)}
                           />
                         </td>
                         <td className="px-4 py-3 text-right font-mono font-medium">
-                          {(demand.demand_amount || 0).toFixed(2)}
+                          {formatIndianCurrency(demand.demand_amount || 0)}
                         </td>
                       </tr>
                     );
@@ -489,10 +523,15 @@ export default function FeeDemandManagement({ schoolId }: FeeDemandManagementPro
                 <tfoot className="bg-gray-100 font-bold">
                   <tr>
                     <td className="px-4 py-3">Total Amount</td>
-                    <td className="px-4 py-3 text-right font-mono">{totalOriginal.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-mono">{totalDiscount.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono">{formatIndianCurrency(totalOriginal)}</td>
                     <td className="px-4 py-3"></td>
-                    <td className="px-4 py-3 text-right font-mono">{totalDemand.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono">
+                      <span className={totalAdjustment < 0 ? 'text-green-600' : totalAdjustment > 0 ? 'text-red-600' : ''}>
+                        {totalAdjustment < 0 ? '-' : '+'}{formatIndianCurrency(Math.abs(totalAdjustment))}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3"></td>
+                    <td className="px-4 py-3 text-right font-mono">{formatIndianCurrency(totalDemand)}</td>
                   </tr>
                 </tfoot>
               </table>
