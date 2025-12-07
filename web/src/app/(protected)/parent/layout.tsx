@@ -24,11 +24,32 @@ export default function ParentLayout({
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Fetch brand data for the school with timeout and error handling
+  // Fetch brand data - for parents, use API route that gets school through children
   const { data: brand, isLoading: brandLoading, error: brandError } = useQuery({
-    queryKey: ['school-brand', user?.school_id],
-    queryFn: () => getBrandForSchool(user!.school_id!),
-    enabled: !!user?.school_id,
+    queryKey: ['school-brand', user?.id, user?.role],
+    queryFn: async () => {
+      // For parents, fetch school info through API route
+      const response = await fetch('/api/parent/school-info');
+      if (!response.ok) {
+        throw new Error('Failed to fetch school info');
+      }
+      const data = await response.json();
+      const schoolBrand = data.primary_school;
+
+      if (!schoolBrand) return null;
+
+      // Transform to Brand format expected by injectBrandCSS
+      return {
+        id: schoolBrand.id,
+        name: schoolBrand.name,
+        logo: schoolBrand.logo_url,
+        primary: schoolBrand.primary_color,
+        secondary: schoolBrand.secondary_color,
+        accent: schoolBrand.accent_color,
+        address: schoolBrand.address
+      };
+    },
+    enabled: !!user,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
     retry: 2,
@@ -131,8 +152,8 @@ export default function ParentLayout({
             <div className="p-6 border-b border-border">
               <div className="flex items-center mb-3">
                 <img
-                  src="/logo.png"
-                  alt="CampusHoster Logo"
+                  src={brand?.logo || '/logo.png'}
+                  alt={brand?.name || 'School Logo'}
                   className="w-20 h-20 object-contain mr-3"
                 />
                 <h2 className="text-xl font-bold text-foreground">Parent Portal</h2>
