@@ -52,7 +52,20 @@ export async function GET(request: NextRequest) {
       .filter(Boolean)
       .filter((school, index, self) =>
         index === self.findIndex((s) => s.id === school.id)
-      ) || [];
+      )
+      .map((school: any) => {
+        // Format address object to string
+        const addressParts = [];
+        if (school.address?.street) addressParts.push(school.address.street);
+        if (school.address?.city) addressParts.push(school.address.city);
+        if (school.address?.state) addressParts.push(school.address.state);
+        if (school.address?.country) addressParts.push(school.address.country);
+
+        return {
+          ...school,
+          address: addressParts.join(', ') || 'School Address'
+        };
+      }) || [];
 
     return NextResponse.json({
       schools,
