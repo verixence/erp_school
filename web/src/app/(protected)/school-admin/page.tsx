@@ -55,8 +55,10 @@ async function fetchDashboardStats(schoolId: string): Promise<DashboardStats> {
     supabase.from('users').select('id', { count: 'exact' }).eq('school_id', schoolId).eq('role', 'teacher'),
     supabase.from('users').select('id', { count: 'exact' }).eq('school_id', schoolId).eq('role', 'parent'),
     supabase.from('sections').select('id', { count: 'exact' }).eq('school_id', schoolId),
-    // Get real announcements count
-    supabase.from('announcements').select('id', { count: 'exact' }).eq('school_id', schoolId).eq('is_active', true),
+    // Get published announcements count
+    supabase.from('announcements').select('id', { count: 'exact' })
+      .eq('school_id', schoolId)
+      .eq('is_published', true),
     // Get upcoming exams (if exam_papers table exists)
     supabase.from('exam_papers').select('id', { count: 'exact' })
       .eq('school_id', schoolId)

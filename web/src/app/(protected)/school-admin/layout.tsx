@@ -23,9 +23,30 @@ export default function SchoolAdminLayout({
 
   // Fetch brand data for the school with error handling
   const { data: brand, isLoading: brandLoading, error: brandError } = useQuery({
-    queryKey: ['school-brand', user?.school_id],
-    queryFn: () => getBrandForSchool(user!.school_id!),
-    enabled: !!user?.school_id,
+    queryKey: ['school-brand', user?.id, user?.role],
+    queryFn: async () => {
+      // For school admins, fetch school info through API route
+      const response = await fetch('/api/school-admin/school-info');
+      if (!response.ok) {
+        throw new Error('Failed to fetch school info');
+      }
+      const data = await response.json();
+      const schoolBrand = data.school;
+
+      if (!schoolBrand) return null;
+
+      // Transform to Brand format expected by injectBrandCSS
+      return {
+        id: schoolBrand.id,
+        name: schoolBrand.name,
+        logo: schoolBrand.logo_url,
+        primary: schoolBrand.primary_color,
+        secondary: schoolBrand.secondary_color,
+        accent: schoolBrand.accent_color,
+        address: schoolBrand.address
+      };
+    },
+    enabled: !!user,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
     retry: 2,
