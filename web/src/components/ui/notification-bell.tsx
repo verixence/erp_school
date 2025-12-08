@@ -10,14 +10,14 @@ import {
   PopoverContent, 
   PopoverTrigger 
 } from '@/components/ui/popover';
-import { 
-  useNotifications, 
-  useUnreadNotificationsCount, 
+import {
+  useNotifications,
+  useUnreadNotificationsCount,
   useMarkNotificationAsRead,
   useMarkAllNotificationsAsRead,
   useDeleteNotification,
-  type Notification 
-} from '@erp/common';
+  type Notification
+} from '@/hooks/use-notifications';
 import { useAuth } from '@/hooks/use-auth';
 import { formatDistanceToNow } from 'date-fns';
 import { useRouter } from 'next/navigation';
