@@ -24,12 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from './select';
-import { 
-  useCreatePost, 
-  uploadMedia, 
-  CreatePostData, 
-  MediaObject 
-} from '@erp/common';
+import { useCreatePost, uploadMedia } from '@/hooks/use-community';
+import type { CreatePostData, MediaObject } from '@erp/common';
 import { useAuth } from '@/hooks/use-auth';
 
 interface CreatePostModalProps {

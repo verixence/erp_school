@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { useCommunityAnnouncements, useCreateAnnouncement } from '@erp/common';
+import { useCommunityAnnouncements, useCreateAnnouncement } from '@/hooks/use-announcements';
 import { Megaphone, Users, Upload, X, Plus, AlertCircle, Bell } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
@@ -51,8 +51,7 @@ export default function TeacherAnnouncementsPage() {
         content: content.trim(),
         target_audience: targetAudience,
         priority,
-        is_published: true,
-        created_by: user?.id || ''
+        is_published: true
       });
 
       toast.success('Announcement created successfully!');

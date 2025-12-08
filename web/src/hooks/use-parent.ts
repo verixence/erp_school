@@ -443,48 +443,24 @@ export const useParentAnnouncements = (parentId?: string) => {
     queryFn: async () => {
       if (!parentId) return [];
 
-      // Get parent's school through children
-      const { data: studentParents, error: spError } = await supabase
-        .from('student_parents')
-        .select('student_id')
-        .eq('parent_id', parentId)
-        .limit(1);
+      // Use API route to fetch announcements
+      const response = await fetch('/api/announcements');
 
-      if (spError) throw spError;
-      if (!studentParents || studentParents.length === 0) return [];
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to fetch announcements');
+      }
 
-      const { data: student, error: studentError } = await supabase
-        .from('students')
-        .select(`
-          sections!inner(
-            school_id
-          )
-        `)
-        .eq('id', studentParents[0].student_id)
-        .single();
+      const data = await response.json();
 
-      if (studentError) throw studentError;
-      if (!student?.sections) throw new Error('Student section not found');
+      // Filter for published announcements targeting parents or all
+      const filteredAnnouncements = data.announcements.filter((announcement: any) => {
+        return announcement.is_published &&
+               (announcement.target_audience === 'all' ||
+                announcement.target_audience === 'parents');
+      });
 
-      // Extract school_id from the joined data
-      const schoolId = (student.sections as any)[0]?.school_id || (student.sections as any).school_id;
-      if (!schoolId) throw new Error('School ID not found');
-
-      // Get announcements that are:
-      // 1. Published
-      // 2. For this school
-      // 3. Target audience is 'all', 'parents', or null
-      const { data, error } = await supabase
-        .from('announcements')
-        .select('*')
-        .eq('school_id', schoolId)
-        .eq('is_published', true)
-        .in('target_audience', ['all', 'parents'])
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) throw error;
-      return data || [];
+      return filteredAnnouncements;
     },
     enabled: !!parentId,
   });

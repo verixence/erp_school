@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { usePosts, useCreatePost, uploadMedia } from '@erp/common';
+import { usePosts, useCreatePost, uploadMedia } from '@/hooks/use-community';
 import { 
   MessageSquare, 
   Heart, 

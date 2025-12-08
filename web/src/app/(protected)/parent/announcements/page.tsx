@@ -217,7 +217,7 @@ export default function ParentAnnouncements() {
         <CardContent>
           {filteredAnnouncements.length > 0 ? (
             <div className="space-y-4">
-              {filteredAnnouncements.map((announcement) => (
+              {filteredAnnouncements.map((announcement: Announcement) => (
                 <div
                   key={announcement.id}
                   className={`border-l-4 rounded-lg p-4 ${getPriorityColor(announcement.priority)}`}

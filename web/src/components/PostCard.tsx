@@ -23,7 +23,8 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
-import { useToggleReaction, useCreateComment, usePostComments, updatePost, deletePost, uploadMedia, type CommunityPost } from '@erp/common';
+import { useToggleReaction, useCreateComment, usePostComments, updatePost, deletePost, uploadMedia } from '@/hooks/use-community';
+import type { CommunityPost } from '@erp/common';
 
 interface PostCardProps {
   post: CommunityPost;

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { usePosts } from '@erp/common';
+import { usePosts } from '@/hooks/use-community';
 import { MessageSquare, Heart, Search, Users, Calendar, Filter } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import PostCard from '@/components/PostCard';

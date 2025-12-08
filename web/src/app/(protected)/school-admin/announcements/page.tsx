@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/use-auth';
-import { useAllAnnouncements, createAnnouncement, deleteAnnouncement, updateAnnouncement } from '@erp/common';
+import { useAllAnnouncements, createAnnouncement, deleteAnnouncement, updateAnnouncement } from '@/hooks/use-announcements';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
