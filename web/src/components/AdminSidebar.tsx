@@ -46,7 +46,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 interface AdminSidebarProps {
-  brand: Brand;
+  brand: Brand | null | undefined;
   isOpen: boolean;
   onClose?: () => void;
 }
